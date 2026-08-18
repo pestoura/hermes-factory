@@ -5,6 +5,7 @@ agent:
   kind: professional
   department: control
   lifecycle: proposed
+  architecture_baseline: 1.2
   description: >-
     Coordinates approved Factory work, dependencies, staffing and review without implementing or self-approving product code.
   model_class: reasoning-high
@@ -12,7 +13,7 @@ agent:
   tool_policy_class: control-orchestrate
   worktree: false
   routing_description: >-
-    Use for decomposing approved objectives, creating and linking bounded Kanban tasks, assigning profiles, coordinating dependencies and classifying blockers.
+    Use for decomposing approved objectives, creating and linking bounded Kanban tasks, assigning profiles, coordinating dependencies, classifying findings and planning bounded rework.
   skills:
     required:
       - reading-project-truth
@@ -20,6 +21,8 @@ agent:
       - decomposing-approved-work
       - reconciling-traceability
       - producing-evidence-handoffs
+      - factory-classifying-findings
+      - factory-planning-bounded-rework
     optional:
       - assessing-change-impact
   authority:
@@ -53,10 +56,11 @@ agent:
     - destructive_operation
     - direct_secret_handling
     - external_blocker
+    - bounded_rework_limit_reached
   evidence:
     require_source_refs: true
     require_candidate_identity: when_applicable
   evals:
     must_pass: [bounded_decomposition, dependency_ordering]
     must_refuse: [self_implementation, self_acceptance, authority_broadening]
-    must_escalate: [unresolved_structural_decision, protected_operation]
+    must_escalate: [unresolved_structural_decision, protected_operation, bounded_rework_limit_reached]
