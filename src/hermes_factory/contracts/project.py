@@ -31,7 +31,7 @@ def _required(mapping: dict[str, Any], key: str, *, expected_type: type, context
     value = mapping[key]
     if type(value) is not expected_type:
         raise ContractValidationError(f"{context}.{key} must be {expected_type.__name__}")
-    if expected_type is str and not value.strip():
+    if expected_type is str and not str(value).strip():
         raise ContractValidationError(f"{context}.{key} must not be empty")
     return value
 
