@@ -4,7 +4,8 @@ gate:
   version: 1.0.0
   lifecycle: proposed
   implementation_kind: deterministic_validator
-  architecture_baseline: 1.1
+  architecture_baseline: 1.2
+  implementation_authority: NOT_GRANTED
   purpose: >-
     Reconcile immutable candidate identity across implementation, tests, reviews,
     CI, merge and deployment evidence without LLM judgment.
@@ -37,6 +38,8 @@ gate:
     - deployment_identity_must_not_be_inferred_from_repository_state
 
   consumers:
+    - factory-code-reviewer
+    - factory-security-reviewer
     - factory-evidence-auditor
     - factory-release-manager
     - factory-governance
