@@ -43,6 +43,7 @@ _BASE_DIMENSIONS = (
     "no_internal_mcp_dependency",
     "independent_review",
 )
+_KNOWN_DIMENSIONS = frozenset((*_BASE_DIMENSIONS, "native_cron_projection"))
 
 
 class ProfileEvalHarness:
@@ -54,11 +55,35 @@ class ProfileEvalHarness:
         *,
         scheduled_duties: bool,
     ) -> ProfileEvalRecord:
+        if not profile_id.strip():
+            raise ProfileAdmissionError("Profile identity is required")
+        if not profile_digest.strip():
+            raise ProfileAdmissionError("Profile digest is required")
+
+        observed: dict[str, ProfileEvalState] = {}
+        for record in evidence:
+            if record.profile_id != profile_id:
+                raise ProfileAdmissionError("evidence belongs to another Profile")
+            if record.profile_digest != profile_digest:
+                raise ProfileAdmissionError("evidence Profile digest does not match candidate")
+            if record.dimension not in _KNOWN_DIMENSIONS:
+                raise ProfileAdmissionError(
+                    f"unknown Profile evaluation dimension: {record.dimension}"
+                )
+            if record.dimension in observed:
+                raise ProfileAdmissionError(
+                    f"duplicate Profile evaluation dimension: {record.dimension}"
+                )
+            if not record.evidence_ref.strip() or not record.evaluator.strip():
+                raise ProfileAdmissionError("Profile evaluation evidence provenance is required")
+            if record.dimension == "independent_review" and record.evaluator == profile_id:
+                raise ProfileAdmissionError("independent review cannot be self-review")
+            observed[record.dimension] = record.state
+
         required = list(_BASE_DIMENSIONS)
         if scheduled_duties:
             required.append("native_cron_projection")
 
-        observed = {record.dimension: record.state for record in evidence}
         required_states = {
             dimension: observed.get(dimension, ProfileEvalState.NOT_RUN)
             for dimension in required
