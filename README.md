@@ -2,109 +2,97 @@
 
 > A reusable autonomous engineering organization built natively on Hermes/Jarvas.
 
-**Status:** Architecture Review **v1.1 — ACCEPTED_WITH_CHANGES / PROPOSED FOR OWNER REVIEW**  
+**Current design:** Architecture **v1.2 — PROPOSED FOR OWNER APPROVAL**  
 **No product/runtime implementation is authorized by this branch.**
 
 ## Vision
 
-Hermes Software Factory (HSF) is a persistent engineering company inside the Hermes/Jarvas ecosystem. Pedro and ChatGPT design a project, persist approved decisions into canonical artifacts and hand the project to the Factory. HSF compiles that definition into semantic Work Packages, an isolated Hermes Kanban board, staffing, JDS-backed gates, traceability and evidence-derived acceptance.
+Hermes Software Factory (HSF) is a persistent engineering company inside Hermes/Jarvas. Approved project intent is compiled into semantic Work Packages, an isolated Hermes Kanban board, admitted Profiles/Skills, JDS-backed gates, UAT/corrective-action flow, traceability and evidence-derived acceptance.
 
-The v1.1 review deliberately reduces Factory infrastructure: Hermes/Jarvas already provides the execution substrate. The Factory concentrates on engineering semantics, workforce governance, project compilation, traceability and acceptance.
+HSF does not duplicate the Hermes/Jarvas execution substrate. It owns the semantic/organizational layer that turns intent into governed engineering work.
 
-```mermaid
-flowchart LR
-    Design[Pedro + ChatGPT\nDesign the project]
-    Repo[Canonical Project Repo]
-    Factory[Hermes Software Factory]
-    JDS[JDS-001]
-    Kanban[Hermes Kanban]
-    Agents[Factory Profiles + Skills]
-    GitHub[GitHub / PR / CI]
-    Runtime[Runtime Evidence]
-    Accept[Acceptance]
-
-    Design --> Repo
-    Repo --> Factory
-    JDS --> Factory
-    Factory --> Kanban
-    Kanban --> Agents
-    Agents --> GitHub
-    GitHub --> Runtime
-    Runtime --> Accept
-    Accept --> Factory
-```
-
-## v1.1 architecture in one view
+## v1.2 architecture in one view
 
 ```text
 Project repository          = product intent + implementation
+.factory/project.yaml       = Factory identity/sources/workflow/autonomy
+.factory/acceptance.yaml    = acceptance/UAT/HITL/runtime semantics
 .jarvas/engineering.yml     = JDS generic engineering/quality gates
-Hermes Kanban               = operational work state
+Hermes Kanban + Dispatcher  = event-driven operational execution
 Hermes Profiles             = reusable employees
-Factory Skill Registry      = approved professional procedures/competences
-GitHub                      = SCM truth
+Hermes native Profile cron  = Factory-internal time-driven work
+Factory Skill Registry      = admitted professional methods/competences
+GitHub / CI                 = SCM and executed engineering evidence
 Runtime evidence            = live truth
 Jarvas Operations           = independent assurance/recovery
-RITMO                       = scheduled/recurring initiation
+RITMO                       = external governance/supervision scheduling only
 Hermes MCP Bridge           = northbound ChatGPT/external-client boundary
 Factory                     = compilation + staffing + traceability + governance + acceptance
-ChatGPT                     = independent Factory Governor
+ChatGPT                     = independent external Governor
 Pedro                       = owner / strategic HITL
 ```
 
-## Important v1.1 corrections
+## Canonical v1.2 corrections
 
-- **JDS-001 is the canonical generic quality/gate planner.** HSF consumes its Effective Gate Plan instead of building a second generic quality engine.
-- **The MCP Bridge is northbound only.** Internal Factory execution uses supported native Hermes/Jarvas interfaces.
-- **Factory Skills are Factory-owned.** Hermes provides the Skill mechanism; Factory controls the professional library, versions, evals and authorization.
-- **Exact-SHA is deterministic.** `factory-exact-sha-auditor` is replaced by a machine validator/gate.
-- **Generic Software Engineer.** `factory-python-engineer` is superseded by `factory-software-engineer`; language/framework expertise is normally supplied by approved Skills.
-- **Platform Engineer added.** CI/CD, containers, IaC, deployment/service configuration and observability implementation receive a real engineering profession, separate from Jarvas Operations.
-- **High-assurance Kanban starts fail-closed.** `auto_decompose=false` and `dispatch_approval_mode=structured` are the initial Factory baseline.
-- **Hermes upstream updates are governed.** The hardened fork is reconciled through tests/exact-SHA/staging rather than blindly tracking upstream.
-- **Factory UI extends Hermes Dashboard.** v1 does not justify another standalone web application.
+- **MCP Bridge is northbound only.** Internal Factory workers use supported native/local Hermes/Jarvas interfaces.
+- **JDS-001 owns generic engineering gate planning.** `.factory/quality.yaml` is superseded for that purpose.
+- **Exact-SHA is deterministic.** It is a gate, not an LLM Profile or Skill.
+- **17 Profile catalog.** `factory-software-engineer` replaces the Python-specific base role; `factory-platform-engineer` is included; filesystem directory presence never implies Profile admission.
+- **Factory-owned Skills.** Canonical runtime IDs use `factory-*`; installation does not imply authorization; proposed/not-run Skills are not ACTIVE.
+- **Continuous execution.** Ordinary stage transitions use structured machine/policy authorization; `structured approval` does not mean human approval.
+- **Atomic handoff.** Outcome, artifacts, evidence/freshness, candidate identity where applicable, Finding/review state and next prerequisites commit before the next stage becomes READY.
+- **First-class UAT.** Approved UAT/acceptance baselines cannot be edited by implementers merely to obtain PASS.
+- **Corrective action is bounded.** Findings are classified, rework is evidence-driven and infinite retry is forbidden.
+- **HITL is asynchronous and revision-bound.** Valid human decisions become governance evidence; stale/replayed/expired decisions cannot unlock work.
+- **Native scheduling only.** Event work uses Kanban/Dispatcher; Factory time-driven work uses Hermes native Profile/Agent cron. RITMO is external governance scheduling, not an internal worker scheduler.
+- **Jarvas CLI is the first greenfield Factory product.** HSL follows as first complex brownfield onboarding, then an unrelated project proves portability.
 
 ## Canonical reading order
 
-1. **[Executive Proposal](docs/00-executive-proposal.md)** — product/business case.
-2. **[Architecture Review v1.1](docs/14-architecture-review-v1.1.md)** — accepted corrections against the original v1 proposal.
-3. **[Canonical Design v1.1](docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.1.md)** — current consolidated architecture.
-4. **[ADR-0014 — Internal Native Execution Boundary](docs/adr/ADR-0014-internal-native-execution-boundary.md)**.
-5. **[ADR-0015 — Factory-Owned Skills on Hermes Native Skill Model](docs/adr/ADR-0015-factory-owned-skills-on-hermes-native-model.md)**.
-6. **[Agent Admission & Catalog Governance](docs/08-agent-admission-and-catalog-governance.md)**.
-7. **[Agent DNA Runtime Configuration](docs/09-agent-dna-runtime-configuration.md)**.
-8. **[Skills Architecture v1](docs/12-skills-architecture-v1.md)** and **[Skill Eval Plan](docs/13-skill-eval-plan-v1.md)** — historical v1 material still applicable where not superseded by v1.1.
-9. **[Jarvas CLI Control-Plane Proposal](docs/15-jarvas-cli-control-plane-proposal.md)** — proposed local ecosystem/Factory client.
-10. Original v1 documents (`01`–`07`, v1 spec, v1 agent catalog/Souls) remain design history; **v1.1 wins on conflict**.
+1. [Architecture Review v1.2](docs/16-architecture-review-v1.2.md)
+2. [Canonical Design v1.2](docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.2.md)
+3. [ADR-0014 — Internal Native Execution Boundary](docs/adr/ADR-0014-internal-native-execution-boundary.md)
+4. [ADR-0015 — Factory-Owned Skills on Hermes Native Skill Model](docs/adr/ADR-0015-factory-owned-skills-on-hermes-native-model.md)
+5. [ADR-0016 — Autonomous Continuous Stage Handoff](docs/adr/ADR-0016-autonomous-continuous-stage-handoff.md)
+6. [ADR-0017 — First-Class UAT and Corrective Action Loop](docs/adr/ADR-0017-first-class-uat-and-corrective-action-loop.md)
+7. [ADR-0018 — Asynchronous HITL through Hermes Gateway](docs/adr/ADR-0018-asynchronous-hitl-through-hermes-gateway.md)
+8. [ADR-0019 — Jarvas CLI as First Factory Product](docs/adr/ADR-0019-jarvas-cli-first-factory-product.md)
+9. [ADR-0020 — Native Hermes Scheduling Only](docs/adr/ADR-0020-native-hermes-scheduling-only.md)
+10. [Project Contract & Traceability](docs/04-project-contract-traceability.md)
+11. [Product Sequence & Roadmap](docs/06-pilot-and-roadmap.md)
+12. [Foundational Decisions](docs/07-proposed-architecture-decisions.md)
+13. [Jarvas CLI Product Direction](docs/15-jarvas-cli-control-plane-proposal.md)
 
-## v1.1 executable design sources
+Historical v1/v1.1 documents remain useful design history. **v1.2 wins on conflict.** A historical file does not become current machine authority merely because it remains in the repository.
+
+## v1.2 executable design sources
 
 ```text
 agents/
-├── catalog-v1.1.yaml
-├── _shared/
-├── factory-software-engineer/
-├── factory-platform-engineer/
-└── factory-*/
+├── catalog-v1.2.yaml                 # authoritative admission/compilation catalog
+└── _shared/runtime-policies.yaml     # native/local worker authority model
+
+skills/
+├── registry.yaml                     # canonical Factory Skill registry
+└── registry-policy-v1.2.yaml
 
 gates/
 └── exact-sha/gate.yaml
 
-skills/
-├── registry.yaml
-├── registry-policy-v1.1.yaml
-└── <category>/<skill>/SKILL.md
-
 policies/
-├── kanban-high-assurance-v1.1.yaml
+├── kanban-high-assurance-v1.2.yaml
+├── continuous-handoff-v1.2.yaml
+├── uat-corrective-action-v1.2.yaml
+├── hitl-v1.2.yaml
+├── native-scheduling-v1.2.yaml
 └── hermes-upstream-reconciliation-v1.1.yaml
 ```
 
-The source files are **design candidates**, not installed/runtime Profiles or active policies.
+These files remain **design candidates**, not installed runtime Profiles/policies/schedules.
 
-## v1.1 workforce
+## v1.2 workforce
 
-The base reusable catalog contains 17 active-candidate Profiles:
+The authoritative active-candidate catalog contains 17 reusable professions:
 
 ```text
 factory-orchestrator
@@ -126,81 +114,72 @@ factory-runtime-truth-observer
 factory-release-manager
 ```
 
-This is a company roster, not a permanently running swarm.
+`factory-python-engineer` and `factory-exact-sha-auditor` are superseded historical definitions and are not eligible through v1.2 admission.
 
-## Factory-native project contract v1.1
+## Skills
+
+Factory owns professional Skill content and admission. Hermes provides the native Skill mechanism. Runtime/global installation is not authorization.
 
 ```text
-.factory/
-├── project.yaml
-└── acceptance.yaml
-
-.jarvas/
-└── engineering.yml
+effective_skills = agent.required_skills ∪ task.approved_skills
 ```
 
-Responsibilities:
+Both sets must be registered/admitted. New Skill lifecycle remains:
 
 ```text
-.factory/project.yaml     = Factory identity, canonical sources, board/workflow/autonomy
-.factory/acceptance.yaml  = Factory acceptance classes and HITL/runtime rules
-.jarvas/engineering.yml   = JDS-001 capabilities, criticality and generic engineering gates
+0.1.0 PROPOSED
+-> baseline RED
+-> Skill GREEN
+-> variation/pressure evals
+-> independent review
+-> 1.0.0 ACTIVE
 ```
 
-## Target project handoff
+New v1.2 drafts for UAT/Finding/Rework are all `proposed / not_run`.
+
+## Continuous lifecycle
 
 ```text
-1. Design the project with Pedro + ChatGPT
-2. Commit approved requirements/architecture/ADRs/Epics
-3. Maintain .factory project/acceptance contract + .jarvas/engineering.yml
-4. "Entrega à Factory"
-5. Project Compiler reads canonical sources + JDS plan + ecosystem inventory
-6. Factory reconciles Work Packages, Kanban and staffing
-7. Hermes executes approved work continuously under policy
-8. GitHub/CI/runtime evidence determines acceptance
-9. True HITL/blockers are escalated
-10. ChatGPT periodically audits/reopens through the northbound control surface
+approved canonical intent
+-> Project Compiler
+-> Work Packages / dependencies / staffing
+-> Hermes Kanban READY
+-> admitted Profile + Skills
+-> stage execution
+-> atomic handoff
+-> automatic next stage when policy permits
+-> Finding / bounded rework on failure
+-> true HITL only at explicit authority boundaries
+-> JDS / review / Exact-SHA / UAT / runtime evidence as required
+-> evidence-derived AcceptanceDecision
 ```
 
-## Quality principle
-
-The Factory never accepts `agent says done` as proof.
+## Product sequence
 
 ```text
-approved intent
-+
-JDS/Factory required gates
-+
-independent review where required
-+
-exact candidate identity
-+
-runtime evidence where required
-=
-ACCEPTED
+1. Approve Architecture v1.2
+2. Write separate Factory runtime implementation plan
+3. Build minimum Factory runtime through TDD/CI/exact-SHA
+4. Deliver Jarvas CLI as first greenfield Factory product
+5. Onboard Hermes Security Labs as first complex brownfield client
+6. Onboard an unrelated project to prove portability
 ```
 
-`NOT_RUN != PASS`; repository proof never silently becomes runtime proof.
+The Factory must not depend on the Jarvas CLI to build the first Jarvas CLI release.
 
-## First pilot
+## Current gate
 
-`pestoura/hermes-security-labs` remains the first proposed client because it stresses architecture, ADRs, change governance, CI/exact-SHA, runtime evidence, HITL, trust and multi-repository dependencies.
+The repository is currently in **design reconciliation/audit**, not implementation.
 
-It is not the Factory architecture. A second materially different project is required to prove portability.
-
-## Current review gate
-
-Review **Architecture v1.1** and the canonical v1.1 spec before implementation planning.
-
-Only after owner acceptance should the repository move to:
+Only after a clean branch audit and explicit owner approval of v1.2 should work move to:
 
 ```text
-design/spec
--> implementation plan
+design/spec APPROVED
+-> runtime implementation plan
 -> TDD RED
 -> minimal GREEN
 -> hardening
 -> CI/exact-SHA
 -> merge
--> post-merge verification
+-> post-merge/runtime verification
 ```
