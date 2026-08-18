@@ -1,0 +1,40 @@
+schema: hermes.factory/platform-reconciliation-policy/v1
+policy:
+  id: hermes-upstream-reconciliation
+  version: 1.1.0
+  lifecycle: proposed
+  architecture_baseline: 1.1
+
+  fork:
+    repository: pestoura/hermes-agent
+  upstream:
+    repository: NousResearch/hermes-agent
+
+  production_tracking:
+    moving_upstream_branch_allowed: false
+    accepted_exact_sha_required: true
+
+  required_stages:
+    - detect_upstream_release_or_selected_commit
+    - create_reconciliation_candidate
+    - classify_upstream_vs_fork_delta
+    - preserve_local_security_and_governance_hardening
+    - run_upstream_tests
+    - run_fork_regression_tests
+    - run_dispatch_approval_parity_tests
+    - run_auto_decompose_containment_tests
+    - run_profile_kanban_compatibility_tests
+    - bind_candidate_with_exact_sha_gate
+    - stage_runtime_smoke
+    - record_accepted_platform_baseline
+
+  fail_closed_conditions:
+    - unresolved_hardening_conflict
+    - failed_or_not_run_required_test
+    - candidate_identity_unknown
+    - containment_regression
+    - dispatch_approval_regression
+
+  authority:
+    automatic_production_promotion: false
+    owner_or_governance_gate_required: true
