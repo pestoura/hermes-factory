@@ -124,3 +124,46 @@ def test_projection_rejects_incomplete_semantic_identity_before_native_write() -
         )
 
     assert not any(name == "create_task" for name, _ in native.calls)
+
+
+def test_board_reconciliation_uses_native_idempotent_board_api() -> None:
+    native = FakeNativeKanban()
+    adapter = HermesKanbanAdapter(native)
+
+    first = adapter.ensure_board(
+        slug="jarvas-cli",
+        name="Jarvas CLI",
+        description="First Factory greenfield project",
+        default_workdir="/srv/jarvas-cli",
+        project_id="jarvas-cli",
+    )
+    second = adapter.ensure_board(
+        slug="jarvas-cli",
+        name="Jarvas CLI",
+        description="First Factory greenfield project",
+        default_workdir="/srv/jarvas-cli",
+        project_id="jarvas-cli",
+    )
+
+    assert first["slug"] == second["slug"] == "jarvas-cli"
+    creates = [payload for name, payload in native.calls if name == "create_board"]
+    assert creates == [
+        (
+            "jarvas-cli",
+            {
+                "name": "Jarvas CLI",
+                "description": "First Factory greenfield project",
+                "default_workdir": "/srv/jarvas-cli",
+                "project_id": "jarvas-cli",
+            },
+        ),
+        (
+            "jarvas-cli",
+            {
+                "name": "Jarvas CLI",
+                "description": "First Factory greenfield project",
+                "default_workdir": "/srv/jarvas-cli",
+                "project_id": "jarvas-cli",
+            },
+        ),
+    ]
