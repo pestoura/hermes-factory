@@ -2,7 +2,6 @@ from hermes_factory.adapters.hermes_gateway import (
     GatewayHITLProjectionError,
     HermesGatewayHITLAdapter,
 )
-
 from hermes_factory.workflow import HITLRequest, HITLState
 
 
