@@ -1,0 +1,85 @@
+schema: hermes.factory/uat-corrective-action/v1.2
+status: proposed_for_owner_review
+implementation_authority: NOT_GRANTED
+
+uat:
+  first_class: true
+  execution_states: [NOT_REQUIRED, NOT_RUN, PASS, FAIL, BLOCKED, INCONCLUSIVE, STALE]
+  execution_modes: [AUTOMATED, ASSISTED, MANUAL]
+  not_run_equals_pass: false
+  stale_evidence_satisfies_acceptance: false
+  entities:
+    - Requirement
+    - AcceptanceCriterion
+    - UATScenario
+    - UATExecution
+    - UATEvidence
+    - AcceptanceDecision
+
+baseline:
+  approved_acceptance_is_versioned: true
+  implementer_may_edit_frozen_acceptance_to_make_pass: false
+  change_requires:
+    - Finding
+    - authorized_requirement_or_product_decision
+    - explicit_rebaseline_event
+    - new_baseline_version
+
+finding:
+  classifications:
+    - IMPLEMENTATION_DEFECT
+    - TEST_DEFECT
+    - REQUIREMENT_DEFECT
+    - ARCHITECTURE_DEFECT
+    - SECURITY_DEFECT
+    - PLATFORM_DEFECT
+    - CONFIGURATION_DEFECT
+    - ENVIRONMENT_DEFECT
+    - TEST_DATA_DEFECT
+    - DOCUMENTATION_DEFECT
+    - DEPENDENCY_DEFECT
+    - PRODUCT_DECISION_REQUIRED
+    - EXTERNAL_BLOCKER
+  required_fields:
+    - finding_id
+    - finding_version
+    - source
+    - affected_requirement_or_wp
+    - stage
+    - candidate_or_context_identity
+    - classification
+    - impact
+    - root_cause_state
+    - corrective_action_owner_or_capability
+    - verification_requirements
+    - lifecycle_state
+
+corrective_action:
+  flow:
+    - classify_and_analyze
+    - create_bounded_rework_order
+    - staff_admitted_profile
+    - correct
+    - targeted_verification
+    - regression_if_applicable
+    - rerun_all_affected_gates_and_uat
+    - refresh_evidence
+    - resume_only_when_prerequisites_satisfied
+  producer_self_certification_when_independence_required: forbidden
+
+rework:
+  autonomous: true
+  bounded: true
+  threshold: policy_configured
+  infinite_retry: forbidden
+  reset_by_superficial_reclassification: forbidden
+  repeated_unresolved_same_cause_outcomes:
+    - ESCALATE_DIAGNOSIS
+    - HITL_REQUIRED
+    - EXTERNAL_BLOCKED
+
+invariants:
+  - original_failure_history_is_preserved
+  - corrective_work_produces_new_evidence
+  - affected_candidate_or_context_change_stales_old_evidence
+  - acceptance_is_evidence_derived
