@@ -38,7 +38,10 @@ def test_agent_compiles_to_native_hermes_distribution_without_internal_mcp(tmp_p
     compile_profile_distribution(agent, "# Reviewer Soul\n", registry, out, cron_jobs=[])
     manifest = yaml.safe_load((out / "distribution.yaml").read_text())
     assert manifest["name"] == "factory-code-reviewer"
-    assert manifest["hermes_requires"] == ">=0.20.0,<0.21.0"
+    # Hermes 0.20.x profile_distribution.check_hermes_requires accepts one
+    # comparator only; comma-separated ranges are not a supported manifest
+    # contract and fail native semver parsing.
+    assert manifest["hermes_requires"] == ">=0.20.0"
     assert json.loads((out / "mcp.json").read_text()) == {}
     assert yaml.safe_load((out / "config.yaml").read_text())["tool_policy_class"] == "review"
     assert (out / "skills" / "factory-reading-project-truth.skillref").exists()
