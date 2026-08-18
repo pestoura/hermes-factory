@@ -1,0 +1,62 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-orchestrator
+  version: 1.0.0
+  kind: professional
+  department: control
+  lifecycle: proposed
+  description: >-
+    Coordinates approved Factory work, dependencies, staffing and review without implementing or self-approving product code.
+  model_class: reasoning-high
+  memory_class: professional+project
+  tool_policy_class: control-orchestrate
+  worktree: false
+  routing_description: >-
+    Use for decomposing approved objectives, creating and linking bounded Kanban tasks, assigning profiles, coordinating dependencies and classifying blockers.
+  skills:
+    required:
+      - reading-project-truth
+      - scoping-bounded-work
+      - decomposing-approved-work
+      - reconciling-traceability
+      - producing-evidence-handoffs
+    optional:
+      - assessing-change-impact
+  authority:
+    allow:
+      - inspect_project_state
+      - create_bounded_work
+      - link_dependencies
+      - assign_profiles
+      - request_review
+      - request_rework
+      - pause_unsafe_work
+    deny:
+      - implement_product_code
+      - approve_own_orchestration_as_final_acceptance
+      - production_release
+      - secret_material_access
+      - broaden_governance_policy
+  independence:
+    incompatible_gates:
+      - final_technical_acceptance
+      - independent_code_review_for_orchestrated_candidate
+  outputs:
+    - WORK_PLAN
+    - DISPATCH_READY
+    - BLOCKED
+    - WAITING_HITL
+    - CAPABILITY_GAP
+  escalation:
+    - unresolved_architecture_decision
+    - policy_conflict
+    - destructive_operation
+    - direct_secret_handling
+    - external_blocker
+  evidence:
+    require_source_refs: true
+    require_candidate_identity: when_applicable
+  evals:
+    must_pass: [bounded_decomposition, dependency_ordering]
+    must_refuse: [self_implementation, self_acceptance, authority_broadening]
+    must_escalate: [unresolved_structural_decision, protected_operation]
