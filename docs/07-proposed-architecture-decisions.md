@@ -116,6 +116,31 @@ This document makes the architectural choices visible before implementation. Acc
 
 ---
 
+## D-013 — Permanent Agent Admission Gate
+
+**Decision proposed:** every new Factory profile must pass a permanent Agent Admission Gate before entering the active workforce catalog. Capability gaps may propose expansion but never create a new profile or new authority silently.
+
+**Decision outcomes include:**
+
+```text
+USE_EXISTING_PROFILE
+ADD_SKILL_TO_EXISTING_PROFILE
+ADD_RUNBOOK
+ADD_TASK_TEMPLATE
+CREATE_ROUTINE_PROFILE
+CREATE_PROFESSIONAL_PROFILE
+DEFER
+REJECT
+```
+
+**Why:** a profile is persistent organizational configuration with Soul, memory, tools, authority, cost and maintenance burden. The Factory must distinguish real professional specialization from work that belongs in a Skill, Runbook or existing role.
+
+**Initial catalog consequence:** add `factory-workforce-architect`, `factory-product-designer` and `factory-documentation-engineer`; keep additional specializations demand-driven.
+
+**Segregation rule:** the Workforce Architect may propose Agent DNA changes but must not solely approve its own authority-increasing proposals.
+
+---
+
 ## Decision review checklist
 
 Owner review should explicitly determine whether each decision is:
