@@ -1,66 +1,144 @@
-schema: hermes.factory/skills/v1
+schema: hermes.factory/skills/v1.2
 registry:
+  version: 1.2.0
+  lifecycle: proposed_for_owner_review
+  implementation_authority: NOT_GRANTED
+
   policy:
-    source_of_truth: skills
+    canonical_source: pestoura/hermes-factory
+    runtime_mirror: HermesJarvasServer
+    managed_by: hermes-factory
+    canonical_id_prefix: factory-
     new_skill_version: 0.1.0
     active_baseline_version: 1.0.0
-    promotion_requires: [baseline_red, skill_green, variation_eval, review]
-    description_max_chars: 60
-    model: nous-hermes-skill-md
+    promotion_requires: [baseline_red, skill_green, variation_eval, pressure_eval, independent_review]
+    active_without_successful_evals: forbidden
+    server_wide_install_implies_factory_authorization: false
+    worker_self_skill_selection: forbidden
+    effective_skills: agent_required_union_task_approved
+    both_sets_must_be_registered_and_admitted: true
+
+  # Existing unprefixed SKILL.md drafts are design-history source aliases. They
+  # are not runtime-installable Factory IDs. The Agent/Skill compiler must
+  # compile admitted content to the canonical factory-* identity before runtime.
+  legacy_source_aliases:
+    reading-project-truth: factory-reading-project-truth
+    scoping-bounded-work: factory-scoping-bounded-work
+    producing-evidence-handoffs: factory-producing-evidence-handoffs
+    reconciling-traceability: factory-reconciling-traceability
+    assessing-change-impact: factory-assessing-change-impact
+    decomposing-approved-work: factory-decomposing-approved-work
+    governing-agent-admission: factory-governing-agent-admission
+    baselining-requirements: factory-baselining-requirements
+    making-architecture-decisions: factory-making-architecture-decisions
+    threat-modeling-changes: factory-threat-modeling-changes
+    designing-product-experience: factory-designing-product-experience
+    authoring-repository-documentation: factory-authoring-repository-documentation
+    validating-documentation-consistency: factory-validating-documentation-consistency
+    writing-causal-red-tests: factory-writing-causal-red-tests
+    implementing-minimal-green: factory-implementing-minimal-green
+    implementing-python-changes: factory-implementing-python-changes
+    reviewing-code-independently: factory-reviewing-code-independently
+    verifying-integration-behavior: factory-verifying-integration-behavior
+    reviewing-security-independently: factory-reviewing-security-independently
+    inspecting-fail-closed-behavior: factory-inspecting-fail-closed-behavior
+    auditing-evidence-provenance: factory-auditing-evidence-provenance
+    observing-runtime-truth: factory-observing-runtime-truth
+    coordinating-governed-releases: factory-coordinating-governed-releases
+
+  superseded_skill_concepts:
+    verifying-exact-sha:
+      replaced_by: gate:factory-exact-sha
+      reason: exact candidate identity is deterministic and must not rely on an LLM Skill verdict
 
   core:
-    - reading-project-truth
-    - scoping-bounded-work
-    - producing-evidence-handoffs
-    - reconciling-traceability
-    - assessing-change-impact
+    - factory-reading-project-truth
+    - factory-scoping-bounded-work
+    - factory-producing-evidence-handoffs
+    - factory-reconciling-traceability
+    - factory-assessing-change-impact
 
   control_workforce:
-    - decomposing-approved-work
-    - governing-agent-admission
+    - factory-decomposing-approved-work
+    - factory-governing-agent-admission
+    - factory-classifying-findings
+    - factory-planning-bounded-rework
 
   product_architecture:
-    - baselining-requirements
-    - making-architecture-decisions
-    - threat-modeling-changes
-    - designing-product-experience
+    - factory-baselining-requirements
+    - factory-making-architecture-decisions
+    - factory-threat-modeling-changes
+    - factory-designing-product-experience
+    - factory-designing-user-acceptance-tests
 
   documentation:
-    - authoring-repository-documentation
-    - validating-documentation-consistency
+    - factory-authoring-repository-documentation
+    - factory-validating-documentation-consistency
 
   engineering_quality:
-    - writing-causal-red-tests
-    - implementing-minimal-green
-    - implementing-python-changes
-    - reviewing-code-independently
-    - verifying-integration-behavior
+    - factory-writing-causal-red-tests
+    - factory-implementing-minimal-green
+    - factory-implementing-python-changes
+    - factory-performing-root-cause-analysis
+    - factory-reviewing-code-independently
+    - factory-verifying-integration-behavior
+    - factory-executing-user-acceptance-tests
+    - factory-verifying-corrective-actions
 
   security_assurance:
-    - reviewing-security-independently
-    - inspecting-fail-closed-behavior
+    - factory-reviewing-security-independently
+    - factory-inspecting-fail-closed-behavior
 
   governance_operations:
-    - verifying-exact-sha
-    - auditing-evidence-provenance
-    - observing-runtime-truth
-    - coordinating-governed-releases
+    - factory-auditing-evidence-provenance
+    - factory-observing-runtime-truth
+    - factory-coordinating-governed-releases
+
+  proposed_v1_2_skills:
+    factory-designing-user-acceptance-tests: {version: 0.1.0, lifecycle: proposed, test_status: not_run}
+    factory-executing-user-acceptance-tests: {version: 0.1.0, lifecycle: proposed, test_status: not_run}
+    factory-classifying-findings: {version: 0.1.0, lifecycle: proposed, test_status: not_run}
+    factory-performing-root-cause-analysis: {version: 0.1.0, lifecycle: proposed, test_status: not_run}
+    factory-planning-bounded-rework: {version: 0.1.0, lifecycle: proposed, test_status: not_run}
+    factory-verifying-corrective-actions: {version: 0.1.0, lifecycle: proposed, test_status: not_run}
 
   consumers:
-    factory-orchestrator: [reading-project-truth, scoping-bounded-work, decomposing-approved-work, reconciling-traceability, producing-evidence-handoffs]
-    factory-workforce-architect: [reading-project-truth, governing-agent-admission, producing-evidence-handoffs]
-    factory-requirements-engineer: [reading-project-truth, baselining-requirements, assessing-change-impact, producing-evidence-handoffs]
-    factory-software-architect: [reading-project-truth, making-architecture-decisions, assessing-change-impact, reconciling-traceability, producing-evidence-handoffs]
-    factory-security-architect: [reading-project-truth, threat-modeling-changes, assessing-change-impact, producing-evidence-handoffs]
-    factory-product-designer: [reading-project-truth, designing-product-experience, assessing-change-impact, producing-evidence-handoffs]
-    factory-documentation-engineer: [reading-project-truth, authoring-repository-documentation, validating-documentation-consistency, assessing-change-impact, producing-evidence-handoffs]
-    factory-tdd-red: [reading-project-truth, scoping-bounded-work, writing-causal-red-tests, producing-evidence-handoffs]
-    factory-python-engineer: [reading-project-truth, scoping-bounded-work, implementing-minimal-green, implementing-python-changes, assessing-change-impact, producing-evidence-handoffs]
-    factory-code-reviewer: [reading-project-truth, reviewing-code-independently, verifying-exact-sha, producing-evidence-handoffs]
-    factory-security-reviewer: [reading-project-truth, reviewing-security-independently, verifying-exact-sha, producing-evidence-handoffs]
-    factory-fail-closed-inspector: [reading-project-truth, inspecting-fail-closed-behavior, producing-evidence-handoffs]
-    factory-integration-tester: [reading-project-truth, verifying-integration-behavior, producing-evidence-handoffs]
-    factory-exact-sha-auditor: [verifying-exact-sha, producing-evidence-handoffs]
-    factory-evidence-auditor: [reading-project-truth, auditing-evidence-provenance, producing-evidence-handoffs]
-    factory-runtime-truth-observer: [observing-runtime-truth, producing-evidence-handoffs]
-    factory-release-manager: [reading-project-truth, coordinating-governed-releases, verifying-exact-sha, reconciling-traceability, producing-evidence-handoffs]
+    factory-orchestrator:
+      required: [factory-reading-project-truth, factory-scoping-bounded-work, factory-decomposing-approved-work, factory-reconciling-traceability, factory-producing-evidence-handoffs, factory-classifying-findings, factory-planning-bounded-rework]
+    factory-workforce-architect:
+      required: [factory-reading-project-truth, factory-governing-agent-admission, factory-producing-evidence-handoffs]
+    factory-requirements-engineer:
+      required: [factory-reading-project-truth, factory-baselining-requirements, factory-designing-user-acceptance-tests, factory-assessing-change-impact, factory-producing-evidence-handoffs]
+    factory-software-architect:
+      required: [factory-reading-project-truth, factory-making-architecture-decisions, factory-assessing-change-impact, factory-reconciling-traceability, factory-producing-evidence-handoffs]
+    factory-security-architect:
+      required: [factory-reading-project-truth, factory-threat-modeling-changes, factory-assessing-change-impact, factory-producing-evidence-handoffs]
+    factory-product-designer:
+      required: [factory-reading-project-truth, factory-designing-product-experience, factory-assessing-change-impact, factory-producing-evidence-handoffs]
+    factory-documentation-engineer:
+      required: [factory-reading-project-truth, factory-authoring-repository-documentation, factory-validating-documentation-consistency, factory-assessing-change-impact, factory-producing-evidence-handoffs]
+    factory-tdd-red:
+      required: [factory-reading-project-truth, factory-scoping-bounded-work, factory-writing-causal-red-tests, factory-producing-evidence-handoffs]
+    factory-software-engineer:
+      required: [factory-reading-project-truth, factory-scoping-bounded-work, factory-implementing-minimal-green, factory-assessing-change-impact, factory-producing-evidence-handoffs]
+      task_optional: [factory-implementing-python-changes, factory-performing-root-cause-analysis]
+    factory-platform-engineer:
+      required: [factory-reading-project-truth, factory-scoping-bounded-work, factory-assessing-change-impact, factory-producing-evidence-handoffs]
+      task_optional: [factory-performing-root-cause-analysis]
+    factory-code-reviewer:
+      required: [factory-reading-project-truth, factory-reviewing-code-independently, factory-producing-evidence-handoffs]
+      deterministic_gates: [factory-exact-sha]
+    factory-security-reviewer:
+      required: [factory-reading-project-truth, factory-reviewing-security-independently, factory-producing-evidence-handoffs]
+      deterministic_gates: [factory-exact-sha]
+    factory-fail-closed-inspector:
+      required: [factory-reading-project-truth, factory-inspecting-fail-closed-behavior, factory-producing-evidence-handoffs]
+    factory-integration-tester:
+      required: [factory-reading-project-truth, factory-verifying-integration-behavior, factory-executing-user-acceptance-tests, factory-verifying-corrective-actions, factory-producing-evidence-handoffs]
+    factory-evidence-auditor:
+      required: [factory-reading-project-truth, factory-auditing-evidence-provenance, factory-producing-evidence-handoffs]
+    factory-runtime-truth-observer:
+      required: [factory-observing-runtime-truth, factory-producing-evidence-handoffs]
+    factory-release-manager:
+      required: [factory-reading-project-truth, factory-coordinating-governed-releases, factory-reconciling-traceability, factory-producing-evidence-handoffs]
+      deterministic_gates: [factory-exact-sha]
