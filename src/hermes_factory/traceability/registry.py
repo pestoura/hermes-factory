@@ -380,6 +380,12 @@ class SemanticRegistry:
         payload: dict[str, Any],
     ) -> None:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        event_payload = {
+            "candidate": candidate,
+            "evidence_id": evidence_id,
+            "kind": kind,
+            "state": state,
+        }
         with self._connect() as db:
             existing = db.execute(
                 "SELECT kind, state, candidate, payload_json FROM evidence WHERE evidence_id=?",
@@ -395,19 +401,51 @@ class SemanticRegistry:
                 )
                 if current != value:
                     raise EvidenceConflict(f"evidence {evidence_id} is immutable")
-                return
-            db.execute(
-                "INSERT INTO evidence(evidence_id, kind, state, candidate, payload_json) VALUES (?, ?, ?, ?, ?)",
-                (evidence_id, *value),
+            else:
+                db.execute(
+                    "INSERT INTO evidence(evidence_id, kind, state, candidate, payload_json) VALUES (?, ?, ?, ?, ?)",
+                    (evidence_id, *value),
+                )
+            self._append_event_db(
+                db,
+                f"evidence:{evidence_id}:recorded",
+                kind="EVIDENCE_RECORDED",
+                entity_id=None,
+                revision=candidate,
+                payload=event_payload,
             )
 
     def mark_evidence_stale_for_candidate(self, candidate: str) -> int:
+        changed = 0
         with self._connect() as db:
-            cursor = db.execute(
-                "UPDATE evidence SET state='STALE' WHERE candidate=? AND state!='STALE'",
+            rows = db.execute(
+                "SELECT evidence_id, state, candidate FROM evidence "
+                "WHERE candidate=? AND state!='STALE' ORDER BY evidence_id",
                 (candidate,),
-            )
-            return cursor.rowcount
+            ).fetchall()
+            for row in rows:
+                cursor = db.execute(
+                    "UPDATE evidence SET state='STALE' "
+                    "WHERE evidence_id=? AND state=?",
+                    (row["evidence_id"], row["state"]),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                changed += 1
+                self._append_event_db(
+                    db,
+                    f"evidence:{row['evidence_id']}:state:STALE",
+                    kind="EVIDENCE_STATE_CHANGED",
+                    entity_id=None,
+                    revision=row["candidate"],
+                    payload={
+                        "candidate": row["candidate"],
+                        "evidence_id": row["evidence_id"],
+                        "from_state": row["state"],
+                        "to_state": "STALE",
+                    },
+                )
+        return changed
 
     def get_evidence(self, evidence_id: str) -> dict[str, Any]:
         with self._connect() as db:
