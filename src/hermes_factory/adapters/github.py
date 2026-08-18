@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -218,7 +219,7 @@ class GitHubSCMAdapter:
         return value.strip()
 
     @staticmethod
-    def _digest(payload: dict[str, object]) -> str:
+    def _digest(payload: Mapping[str, object]) -> str:
         try:
             encoded = json.dumps(
                 payload,
