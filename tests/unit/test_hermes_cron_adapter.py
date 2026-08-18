@@ -34,14 +34,14 @@ def test_scheduled_duty_projects_only_to_native_hermes_cron_create_job() -> None
 
 def test_cron_projection_is_deterministic_and_spec_digest_changes_with_duty_spec() -> None:
     adapter = HermesProfileCronAdapter(redact_text=lambda value: value)
-    base = dict(
-        profile_id="factory-evidence-auditor",
-        duty_id="audit-evidence",
-        schedule="0 * * * *",
-        prompt="Audit Factory evidence freshness.",
-        skills=("factory-auditing-evidence",),
-        enabled_toolsets=("filesystem",),
-    )
+    base = {
+        "profile_id": "factory-evidence-auditor",
+        "duty_id": "audit-evidence",
+        "schedule": "0 * * * *",
+        "prompt": "Audit Factory evidence freshness.",
+        "skills": ("factory-auditing-evidence",),
+        "enabled_toolsets": ("filesystem",),
+    }
 
     first = adapter.project_duty(**base)
     second = adapter.project_duty(**base)
