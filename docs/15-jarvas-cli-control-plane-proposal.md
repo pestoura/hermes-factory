@@ -1,235 +1,76 @@
-# Jarvas CLI — Ecosystem Control-Plane Proposal
+# Jarvas CLI — Ecosystem Control-Plane Product Direction
 
-**Status:** PROPOSED  
-**Date:** 2026-08-18  
-**Implementation authority:** NOT GRANTED
+**Architecture status:** ACCEPTED AS FIRST FACTORY PRODUCT by ADR-0019  
+**Product implementation status:** NOT STARTED / NOT AUTHORIZED  
+**Date:** 2026-08-18
 
-## Why this exists
+## Product role
 
 The Hermes/Jarvas ecosystem already has strong local CLIs:
 
-- `hermes` for the Hermes runtime, Profiles, Skills, Kanban, tools, gateway, hooks, projects, sessions and diagnostics;
-- `jarvas-ops` for independent host/service assurance, health, safe-mode, bounded recovery and controlled Hermes upgrades;
-- project-specific scripts/CLIs for engineering gates and individual services.
+- `hermes` for Hermes runtime, Profiles, Skills, Kanban, tools, Gateway, projects and diagnostics;
+- `jarvas-ops` for independent host/service assurance, safe-mode, bounded recovery and controlled operations;
+- JDS/project-specific deterministic engineering interfaces.
 
-What is missing is a coherent **ecosystem/operator client** that answers cross-component questions and drives Factory semantics without forcing the operator to remember which repository or script owns each concern.
-
-The proposed command is:
-
-```text
-jarvas
-```
-
-It is a composition/control client, not another execution engine.
-
-## Boundary
+The accepted `jarvas` product fills the cross-component **ecosystem/Factory control-plane client** gap. It composes existing authorities; it is not another execution engine or generic shell.
 
 ```text
 hermes ...
-  Native Hermes agent/runtime operations
+  = Hermes runtime/profile/kanban/skill/tool operations
 
 jarvas-ops ...
-  Independent operations assurance/recovery
+  = independent operations assurance/recovery
 
 jarvas ...
-  Portfolio, Factory, inventory, traceability and reconciliation
+  = ecosystem/Factory inventory, traceability, reconciliation and governed control client
 ```
 
-`jarvas` MUST delegate to supported component interfaces and preserve each component's authority boundary. It MUST NOT become a generic unrestricted shell facade.
+## First-product constraint
 
-## Highest-value command groups
+Jarvas CLI is the **first greenfield product to be delivered through Hermes Software Factory** after the Factory minimum runtime is accepted.
 
-### 1. `jarvas status`
+The Factory MUST NOT depend on Jarvas CLI to build/test/review/accept the first Jarvas CLI release. Bootstrap uses supported native/local Hermes/Jarvas/JDS/Git interfaces. Only an independently accepted CLI may later become a convenience interface for Factory deterministic helpers.
 
-One read-only answer to "what state is my ecosystem in?"
+## Priority command families
 
-Should aggregate, without inventing PASS:
-
-- Jarvas host/operations state;
-- Hermes runtime/version/profile/gateway state;
-- Factory state;
-- active project boards;
-- RITMO state;
-- major service readiness;
-- unresolved blockers/HITL;
-- deployed-vs-repository version drift;
-- evidence freshness.
-
-Structured output should support `--json`.
-
-### 2. `jarvas doctor`
-
-Cross-component diagnostic that complements, not replaces, `hermes doctor` and `jarvas-ops preflight`.
-
-It should detect integration failures such as:
-
-- Hermes profile exists but required Factory Skill is absent;
-- board references a missing Profile;
-- Factory contract points to an unavailable repository;
-- JDS configuration is invalid/unresolvable;
-- runtime baseline SHA differs from accepted ecosystem inventory;
-- Factory-managed Skill differs from its canonical source;
-- required service dependency is unavailable;
-- upstream fork drift exceeds accepted baseline.
-
-### 3. `jarvas ecosystem`
+### P0 — prove the control plane
 
 ```text
-jarvas ecosystem inventory
-jarvas ecosystem diff
-jarvas ecosystem capability <id>
-jarvas ecosystem component <id>
-jarvas ecosystem refresh
+jarvas status
+jarvas doctor
+jarvas ecosystem inventory|diff|capability|component
+jarvas project list|show|compile --dry-run|reconcile --dry-run|blockers
+jarvas gate status|explain|exact-sha|jds
+jarvas evidence list|show|verify|freshness|chain
 ```
 
-This is the CLI projection of Hermes Ecosystem Architecture machine inventory.
-
-It should make questions such as these deterministic:
+### P1 — workforce/repository/service diagnostics
 
 ```text
-What is implemented?
-What is deployed?
-What is live?
-What is planned?
-What is blocked?
-Which exact revision is accepted?
+jarvas agent list|show|installed|diff --runtime|evals
+jarvas skill list|show|provenance|diff --runtime|evals|consumers
+jarvas repo status|drift|jds-plan|upstream
+jarvas service list|show|status|logs|evidence
+jarvas work list|show|trace|blockers
+jarvas release status|candidate|evidence|blockers
 ```
 
-### 4. `jarvas project`
+### P2 — bounded mutations after governance proof
 
-Factory-semantic project management, distinct from Hermes Desktop `hermes project` workspace management.
+Examples may include:
 
 ```text
-jarvas project list
-jarvas project show <project>
-jarvas project onboard <path|repo>
-jarvas project compile <project> --dry-run
-jarvas project reconcile <project> --dry-run
-jarvas project blockers <project>
+jarvas factory pause|resume
+jarvas work reopen --reason ...
+jarvas agent promote|deprecate
+jarvas skill promote
 ```
 
-Mutation/dispatch remains separately gated.
-
-### 5. `jarvas factory`
-
-```text
-jarvas factory status
-jarvas factory portfolio
-jarvas factory pause <project>
-jarvas factory resume <project>
-jarvas factory reconcile --all --dry-run
-```
-
-This is company-level control, not per-agent shell execution.
-
-### 6. `jarvas work`
-
-```text
-jarvas work list --project <id>
-jarvas work show <wp>
-jarvas work trace <wp>
-jarvas work blockers <wp>
-jarvas work reopen <wp> --reason <...>
-```
-
-The CLI should display both Factory state and the bound Hermes Kanban Task instead of collapsing them into one status.
-
-### 7. `jarvas agent`
-
-```text
-jarvas agent list
-jarvas agent show <id>
-jarvas agent installed
-jarvas agent diff <id> --runtime
-jarvas agent evals <id>
-jarvas agent promote <id>@<version>
-jarvas agent deprecate <id>
-```
-
-This is Agent DNA lifecycle control. Installation/promotion must preserve approval and runtime validation gates.
-
-### 8. `jarvas skill`
-
-Factory Skill governance rather than general Hermes Skill browsing.
-
-```text
-jarvas skill list
-jarvas skill show <id>
-jarvas skill provenance <id>
-jarvas skill diff <id> --runtime
-jarvas skill evals <id>
-jarvas skill test <id>
-jarvas skill promote <id>@<version>
-jarvas skill consumers <id>
-```
-
-General non-Factory Skill management remains `hermes skills ...`.
-
-### 9. `jarvas gate`
-
-```text
-jarvas gate status <wp>
-jarvas gate explain <wp> <gate>
-jarvas gate exact-sha <wp>
-jarvas gate jds <project|wp>
-```
-
-This should expose why something is blocked, including `NOT_RUN`, `STALE`, `FAILED` and `NOT_REQUIRED` distinctly.
-
-### 10. `jarvas evidence`
-
-```text
-jarvas evidence list <wp|project>
-jarvas evidence show <id>
-jarvas evidence verify <id>
-jarvas evidence freshness <wp>
-jarvas evidence chain <acceptance-id>
-```
-
-The command must return provenance/references, not secret contents.
-
-### 11. `jarvas repo`
-
-Cross-repository governance and platform drift:
-
-```text
-jarvas repo status <repo>
-jarvas repo drift <repo>
-jarvas repo jds-plan <repo>
-jarvas repo upstream <repo>
-jarvas repo reconcile-hermes-upstream --dry-run
-```
-
-The last command is especially valuable for the hardened `pestoura/hermes-agent` fork.
-
-### 12. `jarvas service`
-
-A read-mostly service catalog over known Jarvas services:
-
-```text
-jarvas service list
-jarvas service show <service>
-jarvas service status <service>
-jarvas service logs <service> --tail 100
-jarvas service evidence <service>
-```
-
-Do not duplicate recovery commands already governed by `jarvas-ops`. A mutating service action should route through the authoritative operations plane and require its policy.
-
-### 13. `jarvas release`
-
-```text
-jarvas release status <project>
-jarvas release candidate <project>
-jarvas release evidence <project>
-jarvas release blockers <project>
-```
-
-Release execution remains policy/HITL controlled.
+Every mutation must route through the underlying authority and its policy/HITL boundary; the CLI itself does not invent authority.
 
 ## Machine-first contract
 
-Every read command should support stable structured output:
+Read commands should provide stable structured output:
 
 ```text
 --json
@@ -240,52 +81,85 @@ Every read command should support stable structured output:
 --exact-sha
 ```
 
-Exit codes should be stable and meaningful, for example:
+Exit-state design must preserve meaningful distinctions such as healthy/satisfied, degraded/findings/stale, blocked/failed policy, invalid input/configuration and external dependency unavailable/inconclusive.
 
-```text
-0 = requested state satisfied / healthy
-1 = degraded / findings / stale
-2 = blocked / failed policy or gate
-3 = invalid input/configuration
-4 = external dependency unavailable / inconclusive
-```
+Unknown or `NOT_RUN` must never be converted into success for convenience.
 
-Do not reuse an exit code where the difference matters to automation.
+## `jarvas status`
+
+Aggregate without collapsing truth boundaries:
+
+- Jarvas host/operations assurance state;
+- Hermes runtime/version/Profile/Gateway state;
+- Factory/project state;
+- active Hermes boards;
+- external governance schedule state where relevant;
+- major service readiness;
+- unresolved blockers/HITL;
+- deployed-versus-repository drift;
+- evidence freshness.
+
+External schedule state (including RITMO) must not be interpreted as proof that internal Factory work executed.
+
+## `jarvas doctor`
+
+Complement rather than replace `hermes doctor`, JDS validators and `jarvas-ops` preflight. Detect cross-system inconsistencies such as:
+
+- required Profile absent or not admitted;
+- board references an ineligible/missing Profile;
+- required Factory Skill absent/not admitted/not evaluated;
+- Factory-managed Skill runtime copy differs from canonical provenance;
+- invalid project contract or JDS plan;
+- accepted SHA differs from repository/deployed identity;
+- Agent DNA differs from compiled runtime distribution;
+- upstream Hermes fork drift exceeds accepted baseline;
+- gate reported PASS while required execution evidence is absent;
+- runtime-required acceptance has repository proof but no fresh runtime proof.
 
 ## Safety requirements
 
 - read-only by default;
-- `--dry-run` for reconciliation/planning commands;
-- no `--yolo` equivalent at the Jarvas control-plane level;
-- mutations require explicit policy and, where applicable, HITL;
-- no generic arbitrary shell command;
+- dry-run for planning/reconciliation;
+- no Jarvas-level `--yolo`;
+- no generic arbitrary shell facade;
 - no secret-value output;
-- exact candidate identity for release/promotion actions;
-- underlying component remains authoritative for the mutation;
-- JSON output never turns unknown state into success.
+- mutations require explicit policy and true HITL where applicable;
+- exact candidate identity for release/promotion;
+- underlying component remains authoritative;
+- stable JSON never invents PASS.
 
 ## Implementation preference
 
-`jarvas` should be a thin Python CLI/client package that composes supported local APIs/CLIs/libraries. It should avoid parsing human-formatted output where a JSON/native interface exists.
-
-Suggested resolution order:
+The CLI should be thin and deterministic, resolving in this order when practical:
 
 ```text
 native library/API
-    > stable JSON CLI
-    > documented local HTTP endpoint
-    > human CLI parsing (avoid)
+> stable machine-readable CLI
+> documented local HTTP interface
+> human-formatted CLI parsing (avoid)
 ```
 
-## Why this is strategically useful
+Internal Factory execution still follows ADR-0014 and MUST NOT be routed through Hermes MCP Bridge merely because an external control surface exists.
 
-A coherent Jarvas CLI creates one stable local control surface for:
+## Scheduling boundary
 
-- human operators on the server;
-- scripts/systemd/RITMO jobs;
-- Factory internal deterministic helpers;
-- troubleshooting;
-- future remote projections;
-- reproducible evidence collection.
+Jarvas CLI may be called by operators or governed automation, but it is not a scheduler. Factory-internal time-driven activity uses **native Hermes Profile/Agent cron** under ADR-0020. External governance schedules may invoke northbound control independently.
 
-It also reduces pressure to expose every internal operation through MCP. MCP remains valuable for external semantic clients such as ChatGPT; local deterministic automation can use the Jarvas CLI/native interfaces.
+## Acceptance target
+
+The first CLI release is valuable precisely because it lets the Factory prove its own lifecycle:
+
+```text
+requirements/acceptance baseline
+-> Work Packages
+-> causal TDD RED
+-> minimal GREEN
+-> independent review
+-> JDS/Exact-SHA
+-> UAT
+-> Finding/Rework when required
+-> release evidence
+-> ACCEPTED
+```
+
+Only after this evidence chain succeeds should the Factory dogfood the accepted CLI as a local control client.
