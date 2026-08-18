@@ -1,29 +1,31 @@
 # Hermes Software Factory
 
-> A reusable autonomous engineering organization built natively on Hermes Agent.
+> A reusable autonomous engineering organization built natively on Hermes/Jarvas.
 
-**Status:** Architecture & Operating Model v1 — **PROPOSED FOR REVIEW**  
-**No product implementation is approved by this branch.**
+**Status:** Architecture Review **v1.1 — ACCEPTED_WITH_CHANGES / PROPOSED FOR OWNER REVIEW**  
+**No product/runtime implementation is authorized by this branch.**
 
 ## Vision
 
-Hermes Software Factory (HSF) is not an automation for one repository. It is a persistent engineering company inside the Hermes/Jarvas ecosystem.
+Hermes Software Factory (HSF) is a persistent engineering company inside the Hermes/Jarvas ecosystem. Pedro and ChatGPT design a project, persist approved decisions into canonical artifacts and hand the project to the Factory. HSF compiles that definition into semantic Work Packages, an isolated Hermes Kanban board, staffing, JDS-backed gates, traceability and evidence-derived acceptance.
 
-The owner and ChatGPT design a project, persist the approved decisions into canonical project artifacts and then hand the project to the Factory. HSF compiles that definition into an isolated Hermes Kanban board, a dependency graph, governed Work Packages, staffing and quality gates. Persistent specialized Hermes profiles execute the work; other profiles review it; GitHub/CI/runtime evidence proves it; ChatGPT performs independent periodic governance.
+The v1.1 review deliberately reduces Factory infrastructure: Hermes/Jarvas already provides the execution substrate. The Factory concentrates on engineering semantics, workforce governance, project compilation, traceability and acceptance.
 
 ```mermaid
 flowchart LR
     Design[Pedro + ChatGPT\nDesign the project]
     Repo[Canonical Project Repo]
     Factory[Hermes Software Factory]
+    JDS[JDS-001]
     Kanban[Hermes Kanban]
-    Agents[Persistent Agent Workforce]
+    Agents[Factory Profiles + Skills]
     GitHub[GitHub / PR / CI]
     Runtime[Runtime Evidence]
     Accept[Acceptance]
 
     Design --> Repo
     Repo --> Factory
+    JDS --> Factory
     Factory --> Kanban
     Kanban --> Agents
     Agents --> GitHub
@@ -32,175 +34,165 @@ flowchart LR
     Accept --> Factory
 ```
 
-## Key idea
+## v1.1 architecture in one view
 
 ```text
-Project repository = product intent + implementation
-Hermes Kanban      = operational work state
-Hermes profiles    = reusable employees
-Hermes skills      = procedures/competences
-GitHub              = SCM truth
-Runtime evidence    = live truth
-Factory             = compilation + staffing + quality + governance
-ChatGPT             = independent Factory Governor
-Pedro               = owner / strategic HITL
+Project repository          = product intent + implementation
+.jarvas/engineering.yml     = JDS generic engineering/quality gates
+Hermes Kanban               = operational work state
+Hermes Profiles             = reusable employees
+Factory Skill Registry      = approved professional procedures/competences
+GitHub                      = SCM truth
+Runtime evidence            = live truth
+Jarvas Operations           = independent assurance/recovery
+RITMO                       = scheduled/recurring initiation
+Hermes MCP Bridge           = northbound ChatGPT/external-client boundary
+Factory                     = compilation + staffing + traceability + governance + acceptance
+ChatGPT                     = independent Factory Governor
+Pedro                       = owner / strategic HITL
 ```
 
-The Factory deliberately reuses Hermes native profiles, `SOUL.md`, skills, Kanban, dispatcher, review flows, worktrees, memory and scheduling rather than creating a competing runtime.
+## Important v1.1 corrections
 
-## Recommended reading order
+- **JDS-001 is the canonical generic quality/gate planner.** HSF consumes its Effective Gate Plan instead of building a second generic quality engine.
+- **The MCP Bridge is northbound only.** Internal Factory execution uses supported native Hermes/Jarvas interfaces.
+- **Factory Skills are Factory-owned.** Hermes provides the Skill mechanism; Factory controls the professional library, versions, evals and authorization.
+- **Exact-SHA is deterministic.** `factory-exact-sha-auditor` is replaced by a machine validator/gate.
+- **Generic Software Engineer.** `factory-python-engineer` is superseded by `factory-software-engineer`; language/framework expertise is normally supplied by approved Skills.
+- **Platform Engineer added.** CI/CD, containers, IaC, deployment/service configuration and observability implementation receive a real engineering profession, separate from Jarvas Operations.
+- **High-assurance Kanban starts fail-closed.** `auto_decompose=false` and `dispatch_approval_mode=structured` are the initial Factory baseline.
+- **Hermes upstream updates are governed.** The hardened fork is reconciled through tests/exact-SHA/staging rather than blindly tracking upstream.
+- **Factory UI extends Hermes Dashboard.** v1 does not justify another standalone web application.
 
-1. **[Executive Proposal](docs/00-executive-proposal.md)** — the business/product case and the idea in one view.
-2. **[Reference Architecture](docs/01-reference-architecture.md)** — system boundaries and technical components.
-3. **[Operating Model](docs/02-operating-model.md)** — how projects flow from design to accepted delivery.
-4. **[Agent Workforce & Agent DNA](docs/03-agent-workforce.md)** — the reusable engineering organization and workforce model.
-5. **[Project Contract & Traceability](docs/04-project-contract-traceability.md)** — how Epics, Issues, WPs, Kanban tasks, PRs, SHAs, CI and runtime evidence stay connected.
-6. **[Security, Quality & Governance](docs/05-security-quality-governance.md)** — fail-closed policy, evidence, segregation of duties and HITL.
-7. **[Pilot & Roadmap](docs/06-pilot-and-roadmap.md)** — implementation phases and Hermes Security Labs as first pilot.
-8. **[Proposed Foundational Decisions](docs/07-proposed-architecture-decisions.md)** — the decisions to accept/change/defer/reject before implementation.
-9. **[Agent Admission & Catalog Governance](docs/08-agent-admission-and-catalog-governance.md)** — permanent Profile-vs-Skill gate and workforce lifecycle.
-10. **[Agent DNA Runtime Configuration](docs/09-agent-dna-runtime-configuration.md)** — canonical `agent.yaml`, Hermes Profile Distribution projection, model/tool/MCP/memory policy.
-11. **[Base Agent Catalog v1](docs/10-base-agent-catalog-v1.md)** — detailed configuration of the 17 bootstrap profiles.
-12. **[Base Agent Souls v1](docs/11-base-agent-souls-v1.md)** — Factory Constitution plus the proposed professional Soul of every bootstrap profile.
-13. **[Skills Architecture v1](docs/12-skills-architecture-v1.md)** — native Hermes Skill model, shared/specific Skills, Skill Admission and version policy.
-14. **[Skill Eval Plan v1](docs/13-skill-eval-plan-v1.md)** — RED/GREEN promotion evidence required before Skills reach `1.0.0 ACTIVE`.
-15. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
+## Canonical reading order
 
-## Executable design sources
+1. **[Executive Proposal](docs/00-executive-proposal.md)** — product/business case.
+2. **[Architecture Review v1.1](docs/14-architecture-review-v1.1.md)** — accepted corrections against the original v1 proposal.
+3. **[Canonical Design v1.1](docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.1.md)** — current consolidated architecture.
+4. **[ADR-0014 — Internal Native Execution Boundary](docs/adr/ADR-0014-internal-native-execution-boundary.md)**.
+5. **[ADR-0015 — Factory-Owned Skills on Hermes Native Skill Model](docs/adr/ADR-0015-factory-owned-skills-on-hermes-native-model.md)**.
+6. **[Agent Admission & Catalog Governance](docs/08-agent-admission-and-catalog-governance.md)**.
+7. **[Agent DNA Runtime Configuration](docs/09-agent-dna-runtime-configuration.md)**.
+8. **[Skills Architecture v1](docs/12-skills-architecture-v1.md)** and **[Skill Eval Plan](docs/13-skill-eval-plan-v1.md)** — historical v1 material still applicable where not superseded by v1.1.
+9. **[Jarvas CLI Control-Plane Proposal](docs/15-jarvas-cli-control-plane-proposal.md)** — proposed local ecosystem/Factory client.
+10. Original v1 documents (`01`–`07`, v1 spec, v1 agent catalog/Souls) remain design history; **v1.1 wins on conflict**.
 
-The proposal now includes source-form Agent and Skill definitions, not only narrative architecture:
+## v1.1 executable design sources
 
 ```text
 agents/
-├── README.md
+├── catalog-v1.1.yaml
 ├── _shared/
-│   ├── FACTORY_CONSTITUTION.md
-│   └── runtime-policies.yaml
+├── factory-software-engineer/
+├── factory-platform-engineer/
 └── factory-*/
-    ├── agent.yaml
-    └── SOUL.md
+
+gates/
+└── exact-sha/gate.yaml
 
 skills/
-├── README.md
 ├── registry.yaml
+├── registry-policy-v1.1.yaml
 └── <category>/<skill>/SKILL.md
+
+policies/
+├── kanban-high-assurance-v1.1.yaml
+└── hermes-upstream-reconciliation-v1.1.yaml
 ```
 
-The 17 base Agent contracts are `1.0.0 / PROPOSED`. The 24 initial Skills are intentionally `0.1.0 / PROPOSED / NOT_RUN` until Skill TDD proves their behavioral value.
+The source files are **design candidates**, not installed/runtime Profiles or active policies.
 
-## Target project handoff
+## v1.1 workforce
 
-The target experience is intentionally simple:
+The base reusable catalog contains 17 active-candidate Profiles:
 
 ```text
-1. Design the project with Pedro + ChatGPT
-2. Commit approved requirements/architecture/ADRs/Epics
-3. Add/maintain .factory project contract
-4. "Entrega à Factory"
-5. Factory compiles/reconciles project
-6. Hermes board and staffing are created
-7. Work executes continuously under policy
-8. Real HITL/blockers are escalated
-9. Evidence determines acceptance
-10. ChatGPT periodically audits/reopens as needed
+factory-orchestrator
+factory-workforce-architect
+factory-requirements-engineer
+factory-software-architect
+factory-security-architect
+factory-product-designer
+factory-documentation-engineer
+factory-tdd-red
+factory-software-engineer
+factory-platform-engineer
+factory-code-reviewer
+factory-security-reviewer
+factory-fail-closed-inspector
+factory-integration-tester
+factory-evidence-auditor
+factory-runtime-truth-observer
+factory-release-manager
 ```
 
-## Factory-native project contract
+This is a company roster, not a permanently running swarm.
 
-A client repository is expected to expose a small machine-readable boundary:
+## Factory-native project contract v1.1
 
 ```text
 .factory/
 ├── project.yaml
-├── quality.yaml
 └── acceptance.yaml
+
+.jarvas/
+└── engineering.yml
 ```
 
-The contract points to canonical project sources; it does not duplicate them and it does not contain the global Factory workforce.
+Responsibilities:
 
-## Traceability target
-
-```mermaid
-flowchart LR
-    Project --> Epic
-    Epic --> WP[Work Package]
-    Issue[GitHub Issue] --> WP
-    WP --> Task[Hermes Task]
-    Task --> Execution
-    WP --> Branch
-    Branch --> PR
-    PR --> SHA
-    SHA --> CI
-    SHA --> Deployment
-    Deployment --> RuntimeEvidence
-    CI --> Acceptance
-    RuntimeEvidence --> Acceptance
+```text
+.factory/project.yaml     = Factory identity, canonical sources, board/workflow/autonomy
+.factory/acceptance.yaml  = Factory acceptance classes and HITL/runtime rules
+.jarvas/engineering.yml   = JDS-001 capabilities, criticality and generic engineering gates
 ```
 
-This lets the Factory answer both:
+## Target project handoff
 
-- **"Why does this PR exist?"** — trace backwards to Work Package, Epic, requirement and decision.
-- **"What still blocks this Epic?"** — trace forwards to tasks, failed gates, HITL and runtime evidence.
+```text
+1. Design the project with Pedro + ChatGPT
+2. Commit approved requirements/architecture/ADRs/Epics
+3. Maintain .factory project/acceptance contract + .jarvas/engineering.yml
+4. "Entrega à Factory"
+5. Project Compiler reads canonical sources + JDS plan + ecosystem inventory
+6. Factory reconciles Work Packages, Kanban and staffing
+7. Hermes executes approved work continuously under policy
+8. GitHub/CI/runtime evidence determines acceptance
+9. True HITL/blockers are escalated
+10. ChatGPT periodically audits/reopens through the northbound control surface
+```
 
 ## Quality principle
 
 The Factory never accepts `agent says done` as proof.
 
 ```text
-IMPLEMENTED
+approved intent
 +
-required tests
+JDS/Factory required gates
 +
-independent review
+independent review where required
 +
-security gates where required
-+
-CI
-+
-exact-SHA coherence
+exact candidate identity
 +
 runtime evidence where required
 =
 ACCEPTED
 ```
 
-`NOT_RUN != PASS` and repository proof never silently becomes runtime proof.
-
-## Workforce growth principle
-
-The Factory workforce is intentionally extensible but not allowed to grow without discipline. Every proposed new profile passes the Agent Admission Gate and can be classified as:
-
-```text
-USE_EXISTING_PROFILE
-ADD_SKILL_TO_EXISTING_PROFILE
-ADD_RUNBOOK
-ADD_TASK_TEMPLATE
-CREATE_ROUTINE_PROFILE
-CREATE_PROFESSIONAL_PROFILE
-DEFER
-REJECT
-```
-
-A missing capability may trigger a proposal; it never silently creates a new agent or new authority.
+`NOT_RUN != PASS`; repository proof never silently becomes runtime proof.
 
 ## First pilot
 
-`pestoura/hermes-security-labs` is proposed as the first client because it already exercises ADRs, change records, CI/exact-SHA, runtime evidence, HITL, secrets/trust and multi-repository dependencies.
+`pestoura/hermes-security-labs` remains the first proposed client because it stresses architecture, ADRs, change governance, CI/exact-SHA, runtime evidence, HITL, trust and multi-repository dependencies.
 
-It is **not** the architecture of the Factory. The portability proof is a second materially different project onboarded without redesigning Factory core.
+It is not the Factory architecture. A second materially different project is required to prove portability.
 
 ## Current review gate
 
-Review Architecture & Operating Model v1 and classify the foundational decisions as:
+Review **Architecture v1.1** and the canonical v1.1 spec before implementation planning.
 
-```text
-ACCEPTED
-ACCEPTED_WITH_CHANGES
-DEFERRED
-REJECTED
-```
-
-Only after that review should this repository move to an implementation plan and the normal gated delivery lifecycle:
+Only after owner acceptance should the repository move to:
 
 ```text
 design/spec
