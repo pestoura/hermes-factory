@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 SUPPORTED_ENTITY_TYPES = frozenset(
     {
@@ -124,6 +124,27 @@ class SemanticRegistry:
                     "ON entity_versions(entity_id, sequence)"
                 )
                 db.execute("INSERT INTO schema_migrations(version) VALUES (2)")
+                current = 2
+            if current < 3:
+                db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS registry_events (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                        event_id TEXT NOT NULL UNIQUE,
+                        kind TEXT NOT NULL,
+                        entity_id TEXT,
+                        revision TEXT,
+                        payload_json TEXT NOT NULL,
+                        recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(entity_id) REFERENCES entities(entity_id)
+                    )
+                    """
+                )
+                db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_registry_events_entity "
+                    "ON registry_events(entity_id, sequence)"
+                )
+                db.execute("INSERT INTO schema_migrations(version) VALUES (3)")
 
     def schema_version(self) -> int:
         with self._connect() as db:
@@ -154,6 +175,95 @@ class SemanticRegistry:
         if entity_type not in SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"unsupported trace entity type: {entity_type}")
         return EntityRepository(self, entity_type)
+
+    def _append_event_db(
+        self,
+        db: sqlite3.Connection,
+        event_id: str,
+        *,
+        kind: str,
+        entity_id: str | None,
+        revision: str | None,
+        payload: dict[str, Any],
+    ) -> None:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        existing = db.execute(
+            "SELECT kind, entity_id, revision, payload_json FROM registry_events "
+            "WHERE event_id=?",
+            (event_id,),
+        ).fetchone()
+        value = (kind, entity_id, revision, encoded)
+        if existing is not None:
+            current = (
+                existing["kind"],
+                existing["entity_id"],
+                existing["revision"],
+                existing["payload_json"],
+            )
+            if current != value:
+                raise EntityConflict(f"event {event_id} is immutable")
+            return
+        db.execute(
+            "INSERT INTO registry_events(event_id, kind, entity_id, revision, payload_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (event_id, kind, entity_id, revision, encoded),
+        )
+
+    def append_event(
+        self,
+        event_id: str,
+        *,
+        kind: str,
+        payload: dict[str, Any],
+        entity_id: str | None = None,
+        revision: str | None = None,
+    ) -> None:
+        if not event_id.strip():
+            raise ValueError("event_id is required")
+        if not kind.strip():
+            raise ValueError("event kind is required")
+        with self._connect() as db:
+            self._append_event_db(
+                db,
+                event_id,
+                kind=kind,
+                entity_id=entity_id,
+                revision=revision,
+                payload=payload,
+            )
+
+    def list_events(
+        self,
+        *,
+        entity_id: str | None = None,
+        kind: str | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        values: list[str] = []
+        if entity_id is not None:
+            clauses.append("entity_id=?")
+            values.append(entity_id)
+        if kind is not None:
+            clauses.append("kind=?")
+            values.append(kind)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT event_id, kind, entity_id, revision, payload_json, recorded_at "
+                f"FROM registry_events{where} ORDER BY sequence",
+                tuple(values),
+            ).fetchall()
+        return [
+            {
+                "event_id": row["event_id"],
+                "kind": row["kind"],
+                "entity_id": row["entity_id"],
+                "revision": row["revision"],
+                "payload": json.loads(row["payload_json"]),
+                "recorded_at": row["recorded_at"],
+            }
+            for row in rows
+        ]
 
     def record_entity_version(
         self,
@@ -195,11 +305,19 @@ class SemanticRegistry:
                     raise EntityConflict(
                         f"entity {entity_id} revision {revision} is immutable"
                     )
-                return
-            db.execute(
-                "INSERT INTO entity_versions(entity_id, entity_type, revision, payload_json) "
-                "VALUES (?, ?, ?, ?)",
-                (entity_id, entity_type, revision, encoded),
+            else:
+                db.execute(
+                    "INSERT INTO entity_versions(entity_id, entity_type, revision, payload_json) "
+                    "VALUES (?, ?, ?, ?)",
+                    (entity_id, entity_type, revision, encoded),
+                )
+            self._append_event_db(
+                db,
+                f"entity:{entity_id}:{revision}",
+                kind="ENTITY_VERSION_RECORDED",
+                entity_id=entity_id,
+                revision=revision,
+                payload={"entity_type": entity_type},
             )
 
     def get_entity_version(self, entity_id: str, revision: str) -> dict[str, Any]:
