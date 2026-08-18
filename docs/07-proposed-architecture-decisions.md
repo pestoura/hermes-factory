@@ -1,212 +1,135 @@
 # Hermes Software Factory — Foundational Decisions
 
-**Status:** MIXED — D-014 and D-015 are formally ACCEPTED; remaining proposed decisions stay subject to owner review unless separately promoted into ADRs.
+**Status:** RECONCILED THROUGH v1.2  
+**Implementation authority:** NOT GRANTED
 
-This document makes the architectural choices visible before implementation. Acceptance of a design decision does not automatically approve future implementation mutations.
+This index summarizes the current architectural decision set. Formal ADRs take precedence over earlier proposal wording. Where v1/v1.1 text conflicts with Architecture v1.2, the v1.2 canonical specification wins.
 
 ## D-001 — Build on Hermes native primitives
 
-**Decision proposed:** HSF is an edge-layer product over Hermes Agent, reusing native profiles, SOULs, skills, Kanban, dispatcher, worktrees, review and scheduling.
+HSF is a semantic/organizational layer over Hermes native Profiles, Skills, Kanban, Dispatcher, worktrees, review and cron. It is not a second agent runtime.
 
-**Why:** avoids duplicating a mature execution substrate and keeps the Factory aligned with Hermes' narrow-core/edge-extension philosophy.
+## D-002 — One isolated Hermes board per client project
 
-**Rejected direction:** create a second agent runtime/board/dispatcher beside Hermes.
-
----
-
-## D-002 — One Hermes board per client project
-
-**Decision proposed:** every Factory-managed project receives an isolated Hermes Kanban board.
-
-**Why:** durable operational state, project isolation, worker scoping and clean multi-project portfolio boundaries.
-
-**Consequence:** portfolio reporting aggregates boards; it does not merge all projects into one global task table view for execution.
-
----
+Hermes Kanban remains operational work truth; portfolio views aggregate project boards rather than collapsing execution into one global queue.
 
 ## D-003 — Global workforce lives in the Factory
 
-**Decision proposed:** enterprise agent profiles, Souls, Factory-owned skills, runbooks, policies and evals live with HSF/Hermes, not inside client repositories.
+Agent DNA, Factory-owned Skills, policies and evals are reusable organizational assets owned by HSF, not copied into every client repo.
 
-**Why:** agents represent reusable company employees, not project-specific prompt fragments.
+## D-004 — Declarative project contract — UPDATED v1.2
 
-**Client repository responsibility:** project-specific context such as `AGENTS.md` / `.hermes.md` and Factory contract.
+Current recommended contract:
 
-**Clarification:** Factory-owned Skills use the native Hermes Skill model but are governed by the Factory Skill Registry; see D-015 / ADR-0015.
+```text
+.factory/project.yaml
+.factory/acceptance.yaml
+.jarvas/engineering.yml
+```
 
----
+`.factory/quality.yaml` from the original v1 proposal is **SUPERSEDED** for generic engineering gates. JDS-001 owns generic gate planning.
 
-## D-004 — Project repositories expose a declarative Factory contract
+## D-005 — Semantic traceability graph — UPDATED v1.2
 
-**Decision proposed:** `.factory/project.yaml`, `.factory/quality.yaml` and `.factory/acceptance.yaml` provide the machine-readable handoff boundary.
-
-**Why:** allows the Factory to understand a project deterministically while canonical documents remain canonical.
-
-**Rejected direction:** make chat transcripts or Factory database copies the only durable source of project intent.
-
----
-
-## D-005 — Use a semantic traceability graph
-
-**Decision proposed:** preserve Project, Requirement, ADR, Epic, Change, Issue, Work Package, Task, Execution, Branch, PR, SHA, CI, Deployment, Runtime Evidence and Acceptance as distinct entities linked by provenance.
-
-**Why:** prevents the Kanban from becoming a lossy replacement for architecture, SCM or runtime evidence.
-
----
+Preserve distinct entities including Project, Requirement, AcceptanceCriterion, UATScenario, ADR, Epic, Change, Issue, WorkPackage, KanbanTask, Execution, PR/SHA/CI, Deployment, RuntimeEvidence, UATExecution/UATEvidence, Finding, ReworkOrder, HITLRequest/HumanDecision and AcceptanceDecision.
 
 ## D-006 — Work Package is the Factory delivery unit
 
-**Decision proposed:** Epics are outcomes; Hermes tasks are operational executions; the Factory Work Package sits between them as the bounded governed delivery unit.
-
-**Why:** it can carry acceptance criteria, staffing, gates, traceability and dependencies without overloading either Epic or Kanban task semantics.
-
----
+Epics describe outcomes; Hermes tasks execute work; Work Packages carry bounded delivery semantics, staffing, evidence, dependencies and acceptance.
 
 ## D-007 — Agent DNA is versioned and evaluated
 
-**Decision proposed:** persistent Factory roles are versioned packages with Soul, authority, tools, methods, runbooks, invariants, output contract and evaluations.
-
-**Why:** behavior changes in agents must be auditable and regression-tested like software.
-
-**Consequence:** an execution records the agent/profile version used.
-
----
+Persistent roles are versioned packages compiled into Hermes Profile Distributions. SOUL is identity/reasoning context, not security enforcement.
 
 ## D-008 — Acceptance is evidence-derived
 
-**Decision proposed:** `done` is never sufficient. Required gates determine acceptance.
-
-**Mandatory invariants:**
+Mandatory invariants include:
 
 - `NOT_RUN != PASS`;
 - repository proof != runtime proof;
-- evidence for SHA-A != evidence for SHA-B;
-- an unexecuted gate cannot be PASS;
-- high-assurance producer/reviewer separation is enforced.
-
----
+- evidence for candidate A != evidence for changed candidate B;
+- required independent review cannot be self-certified;
+- stale evidence cannot silently satisfy acceptance.
 
 ## D-009 — ChatGPT is an independent external Factory Governor
 
-**Decision proposed:** the Factory remains operational through Hermes/Jarvas without an active ChatGPT conversation. ChatGPT performs second-line governance from outside the Jarvas execution boundary through the approved northbound control surface.
+The Factory continues to operate locally without an active ChatGPT conversation. ChatGPT reaches governance through the northbound Factory Control contract/Hermes MCP Bridge.
 
-**Boundary clarification:** the Hermes MCP Bridge belongs on the ChatGPT/external-client -> Hermes/Jarvas path. It is not a default internal Factory execution dependency. Internal Factory work uses native Hermes/Jarvas interfaces in accordance with D-014 / ADR-0014.
+## D-010 — Product sequence — UPDATED v1.2
 
-**Why:** continuous delivery must not depend on a browser conversation remaining alive, while independent validation still adds a stronger control layer.
-
----
-
-## D-010 — Hermes Security Labs is pilot, not architecture
-
-**Decision proposed:** HSL is the first Factory client because it is complex enough to stress the model. A second unrelated project is required to prove portability.
-
-**Success test:** no HSL-specific redesign of Factory core for the second onboarding.
-
----
+Jarvas CLI is the **first greenfield Factory product**. Hermes Security Labs becomes the **first complex brownfield onboarding**. A materially unrelated project follows as portability proof.
 
 ## D-011 — Bootstrap read-only, then increase authority deliberately
 
-**Decision proposed:** implementation starts with validation, read-only compilation and dry-run reconciliation before task creation/dispatch/runtime mutation.
-
-**Why:** the Factory is privileged orchestration software. Its first delivery path should demonstrate correct understanding before it gains authority.
-
----
+Implementation starts with validation/read-only/dry-run reconciliation before bounded task/SCM/runtime mutations.
 
 ## D-012 — Stable external Factory control surface
 
-**Decision proposed:** ChatGPT and other external governors use a dedicated versioned Factory control contract rather than private Hermes/Factory database schemas.
-
-**Transport clarification:** the existing Hermes MCP Bridge is the preferred northbound boundary for ChatGPT -> Hermes/Jarvas. The Factory control contract may be exposed through that boundary; the Factory itself does not call back through the Bridge for normal internal work.
-
-**Why:** preserves implementation freedom, least privilege, observability and a testable external contract without turning MCP into internal IPC.
-
----
+External governors use a versioned Factory control contract. MCP is an external boundary, not internal IPC.
 
 ## D-013 — Permanent Agent Admission Gate
 
-**Decision proposed:** every new Factory profile must pass a permanent Agent Admission Gate before entering the active workforce catalog. Capability gaps may propose expansion but never create a new profile or new authority silently.
-
-**Decision outcomes include:**
-
-```text
-USE_EXISTING_PROFILE
-ADD_SKILL_TO_EXISTING_PROFILE
-ADD_RUNBOOK
-ADD_TASK_TEMPLATE
-CREATE_ROUTINE_PROFILE
-CREATE_PROFESSIONAL_PROFILE
-DEFER
-REJECT
-```
-
-**Why:** a profile is persistent organizational configuration with Soul, memory, tools, authority, cost and maintenance burden. The Factory must distinguish real professional specialization from work that belongs in a Skill, Runbook or existing role.
-
-**Initial catalog consequence:** add `factory-workforce-architect`, `factory-product-designer` and `factory-documentation-engineer`; keep additional specializations demand-driven.
-
-**Segregation rule:** the Workforce Architect may propose Agent DNA changes but must not solely approve its own authority-increasing proposals.
-
----
+Capability gaps do not silently create Profiles/authority. Outcomes include reuse, Skill/runbook/task-template addition, governed Profile creation, defer or reject.
 
 ## D-014 — Internal native execution boundary
 
-**Status:** ACCEPTED — formalized as `docs/adr/ADR-0014-internal-native-execution-boundary.md`.
-
-**Decision:** the Hermes Software Factory executes inside Jarvas through the closest appropriate native Hermes/Jarvas interface. The Hermes MCP Bridge is a northbound external-control boundary, principally ChatGPT/external client -> Hermes/Jarvas, and is not the default substrate for internal Factory execution.
-
-**Canonical rule:**
+**Status:** ACCEPTED — `docs/adr/ADR-0014-internal-native-execution-boundary.md`
 
 ```text
-ChatGPT -> Hermes MCP Bridge -> external Factory control surface
-                              ================= Jarvas boundary
+ChatGPT -> Hermes MCP Bridge -> external Factory control
+                              ===== Jarvas boundary =====
                               -> Hermes Software Factory
                               -> native Hermes/Jarvas interfaces
 ```
 
-**Rejected direction:** `Factory -> MCP Bridge -> Hermes` when a supported local native interface exists.
+Internal `Factory -> MCP Bridge -> Hermes` loops are rejected where a supported local/native interface exists.
 
-**Consequence:** autonomous Factory execution remains independent of remote ChatGPT/MCP connectivity.
+## D-015 — Factory-owned Skills on Hermes native model
 
----
+**Status:** ACCEPTED — `docs/adr/ADR-0015-factory-owned-skills-on-hermes-native-model.md`
 
-## D-015 — Factory-owned Skills on the Hermes native Skill model
+Factory owns professional Skill content/admission/evals; Hermes supplies native Skill mechanics. Runtime/global installation does not imply Factory authorization.
 
-**Status:** ACCEPTED — formalized as `docs/adr/ADR-0015-factory-owned-skills-on-hermes-native-model.md`.
+Canonical runtime Skill identities use the `factory-*` namespace. Proposed/not-run Skills are not ACTIVE.
 
-**Decision:** the Factory adopts Hermes' native Skill format, loading, discovery, profile/task integration and lifecycle mechanics, but owns and governs its professional Skill content through a Factory Skill Registry.
+## D-016 — Autonomous continuous stage handoff
 
-**Key distinction:**
+**Status:** ACCEPTED — `docs/adr/ADR-0016-autonomous-continuous-stage-handoff.md`
+
+Ordinary stage transitions are authorized by structured machine/policy decisions and proceed automatically when prerequisites are satisfied. Structured approval does not imply a human click.
+
+Handoff is atomic over outcome, artifacts, evidence/freshness, candidate identity where applicable, Finding/review state and next-stage prerequisites.
+
+## D-017 — First-class UAT and corrective action
+
+**Status:** ACCEPTED — `docs/adr/ADR-0017-first-class-uat-and-corrective-action-loop.md`
+
+UAT, Findings and Rework are first-class. Frozen acceptance/UAT cannot be changed by an implementer merely to obtain PASS. Rework is autonomous but bounded; repeated same-cause failure escalates.
+
+## D-018 — Asynchronous revision-bound HITL
+
+**Status:** ACCEPTED — `docs/adr/ADR-0018-asynchronous-hitl-through-hermes-gateway.md`
+
+The Factory emits transport-independent `HITL_REQUEST` objects through Hermes Gateway. Telegram is a presentation adapter. Human decisions are request/context/candidate-version bound governance evidence; stale/replayed/expired responses cannot unlock work.
+
+## D-019 — Jarvas CLI first Factory product
+
+**Status:** ACCEPTED — `docs/adr/ADR-0019-jarvas-cli-first-factory-product.md`
+
+Jarvas CLI is the first greenfield product. The Factory must not depend on the CLI in order to build the first CLI release.
+
+## D-020 — Native Hermes scheduling only for Factory time-driven work
+
+**Status:** ACCEPTED — `docs/adr/ADR-0020-native-hermes-scheduling-only.md`
 
 ```text
-Hermes Skill Framework = technical substrate
-Factory Skill Registry  = approved professional library
-Jarvas Skill Catalog     = wider server toolbox/reference
+EVENT-DRIVEN FACTORY WORK -> Hermes Kanban + Dispatcher
+TIME-DRIVEN FACTORY WORK  -> native Hermes Profile/Agent cron
+EXTERNAL GOVERNANCE       -> RITMO/external schedule via northbound control
 ```
 
-Existing Hermes/Jarvas Skills are not automatically admitted to Factory work merely because they exist or overlap by name.
+RITMO, host crontab, systemd timers and a Factory-specific scheduler are not internal Factory worker scheduling mechanisms.
 
-**Source-of-truth rule for Factory-managed Skills:**
+## Current approval gate
 
-```text
-pestoura/hermes-factory = canonical source
-Hermes profile copy     = runtime projection
-HermesJarvasServer      = inventory/snapshot/backup
-```
-
-**Agent execution rule:** Factory Profiles use explicit approved Skill allowlists derived from Agent DNA plus task-approved Skills. Server-wide Skill availability does not imply Factory authorization.
-
-**Promotion rule:** new Factory Skills remain proposed until behaviour is demonstrated through appropriate RED/GREEN, variation/pressure evaluation and independent review. `NOT_RUN` is never `PASS`.
-
----
-
-## Decision review checklist
-
-For decisions not already marked ACCEPTED, owner review should explicitly determine whether each decision is:
-
-```text
-ACCEPTED
-ACCEPTED_WITH_CHANGES
-DEFERRED
-REJECTED
-```
-
-Accepted items should be promoted into formal ADR files before implementation begins.
+Architecture v1.2 remains `PROPOSED_FOR_OWNER_APPROVAL` until the clean branch audit proves the current human-readable and machine-readable sources are coherent. Approval of architecture will still not imply runtime mutation; a separate implementation plan follows.
