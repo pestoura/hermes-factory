@@ -26,7 +26,7 @@ class EngineeringProfileReference:
     digest: str
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "EngineeringProfileReference":
+    def from_yaml(cls, path: Path) -> EngineeringProfileReference:
         raw = _load_mapping(path)
         api_version = _required(
             raw, "apiVersion", expected_type=str, context="engineering"
