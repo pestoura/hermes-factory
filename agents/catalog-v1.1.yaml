@@ -1,11 +1,14 @@
 schema: hermes.factory/agent-catalog/v1
 catalog:
   version: 1.1.0
-  lifecycle: proposed_for_owner_review
+  lifecycle: superseded
+  superseded_by: agents/catalog-v1.2.yaml
+  authoritative_for_admission_and_compilation: false
   architecture_review: docs/14-architecture-review-v1.1.md
   canonical_spec: docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.1.md
+  implementation_authority: NOT_GRANTED
 
-  active_candidates:
+  historical_active_candidates:
     - factory-orchestrator
     - factory-workforce-architect
     - factory-requirements-engineer
@@ -24,27 +27,13 @@ catalog:
     - factory-runtime-truth-observer
     - factory-release-manager
 
-  superseded_profiles:
+  historical_superseded_profiles:
     factory-python-engineer:
       replaced_by: factory-software-engineer
-      reason: >-
-        Language specialization belongs in approved task/Profile Skills by default;
-        a language-specific persistent profession requires a future Agent Admission Gate.
     factory-exact-sha-auditor:
       replaced_by: gate:factory-exact-sha
-      reason: >-
-        Candidate/SHA equality and freshness classification are mechanically decidable
-        and must be enforced by a deterministic validator rather than an LLM profession.
-
-  added_profiles:
-    factory-platform-engineer:
-      reason: >-
-        Platform implementation is a recurring engineering profession distinct from
-        software implementation, release coordination and independent operations assurance.
 
   invariants:
-    - catalog_is_not_running_fleet
-    - profiles_are_staffed_on_demand
-    - agent_admission_gate_required_for_new_profile
-    - language_framework_specialization_prefers_skill_first
-    - deterministic_controls_prefer_validator_over_agent
+    - historical_catalog_is_not_runtime_authority
+    - catalog_v1_2_is_authoritative_for_current_admission
+    - directory_presence_does_not_imply_eligibility
