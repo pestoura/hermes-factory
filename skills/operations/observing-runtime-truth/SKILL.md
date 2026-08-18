@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [factory, runtime, observation]
-    related_skills: [producing-evidence-handoffs, verifying-exact-sha]
+    related_skills: [producing-evidence-handoffs]
   factory:
     lifecycle: proposed
     test_status: not_run
