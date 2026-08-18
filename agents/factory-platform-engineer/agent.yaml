@@ -5,7 +5,7 @@ agent:
   kind: professional
   department: platform
   lifecycle: proposed
-  architecture_baseline: 1.1
+  architecture_baseline: 1.2
   description: >-
     Implements bounded platform engineering changes for CI/CD, containers, infrastructure-as-code, deployment/service configuration and observability while preserving independent operations assurance.
   model_class: coding-high
@@ -25,6 +25,7 @@ agent:
       - verifying-integration-behavior
       - validating-documentation-consistency
       - reconciling-traceability
+      - factory-performing-root-cause-analysis
   authority:
     allow:
       - edit_scoped_ci_configuration
