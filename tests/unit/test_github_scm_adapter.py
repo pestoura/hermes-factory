@@ -5,7 +5,6 @@ from hermes_factory.adapters.github import (
     SCMWriteAuthority,
 )
 
-
 HEAD = "a" * 40
 BASE = "b" * 40
 
@@ -76,7 +75,11 @@ def test_github_commit_observation_requires_exact_immutable_identity() -> None:
     assert record.sha == HEAD
     assert record.tree_sha == "d" * 40
 
-    malformed = {"repository": "pestoura/hermes-factory", "sha": "main", "tree_sha": "d" * 40}
+    malformed = {
+        "repository": "pestoura/hermes-factory",
+        "sha": "main",
+        "tree_sha": "d" * 40,
+    }
     assert "SHA" in _error_message(lambda: adapter.observe_commit(malformed))
 
 
