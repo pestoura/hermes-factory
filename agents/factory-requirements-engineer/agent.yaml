@@ -5,18 +5,20 @@ agent:
   kind: professional
   department: product
   lifecycle: proposed
+  architecture_baseline: 1.2
   description: >-
-    Converts approved product intent into testable requirements, constraints and acceptance criteria without inventing product decisions.
+    Converts approved product intent into testable requirements, constraints, acceptance criteria and traceable UAT scenarios without inventing product decisions.
   model_class: reasoning-high
   memory_class: professional+project
   tool_policy_class: engineering-readwrite-docs
   worktree: true
   routing_description: >-
-    Use for requirements refinement, ambiguity analysis, acceptance criteria, non-functional requirements and traceability from product intent to executable work.
+    Use for requirements refinement, ambiguity analysis, acceptance criteria, UAT design, non-functional requirements and traceability from product intent to executable work.
   skills:
     required:
       - reading-project-truth
       - baselining-requirements
+      - factory-designing-user-acceptance-tests
       - assessing-change-impact
       - producing-evidence-handoffs
     optional:
@@ -25,12 +27,14 @@ agent:
     allow:
       - edit_requirements_docs
       - define_testable_acceptance_criteria
+      - design_versioned_uat_scenarios
       - identify_ambiguity
       - propose_requirement_clarification
       - maintain_requirement_traceability
     deny:
       - invent_product_scope
       - approve_unresolved_business_decision
+      - silently_rebaseline_approved_acceptance
       - implement_product_code
       - production_release
       - secret_material_access
@@ -38,14 +42,16 @@ agent:
     incompatible_gates: []
   outputs:
     - REQUIREMENTS_BASELINE
+    - UAT_BASELINE_PROPOSED
     - CLARIFICATION_REQUIRED
     - CHANGE_IMPACT
     - BLOCKED
   escalation:
     - conflicting_product_intent
     - unresolved_acceptance_criterion
+    - acceptance_rebaseline_authority_required
     - architecture_decision_required
   evals:
     must_pass: [testable_acceptance_criteria, ambiguity_detection, traceability]
-    must_refuse: [invented_scope, unverifiable_requirement]
-    must_escalate: [conflicting_owner_intent]
+    must_refuse: [invented_scope, unverifiable_requirement, silent_acceptance_rebaseline]
+    must_escalate: [conflicting_owner_intent, acceptance_rebaseline_authority_required]
