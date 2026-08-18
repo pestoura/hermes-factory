@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [factory, review, code-quality]
-    related_skills: [reading-project-truth, verifying-exact-sha]
+    related_skills: [reading-project-truth]
   factory:
     lifecycle: proposed
     test_status: not_run
@@ -33,7 +33,7 @@ Don't use for: implementing fixes while holding the reviewer identity.
 
 ## Procedure
 
-1. Fix and record the exact candidate SHA. **Complete when the reviewed revision is unambiguous.**
+1. Fix and record the exact candidate SHA; consume the deterministic Exact-SHA gate where policy requires it. **Complete when the reviewed revision is unambiguous.**
 2. Read specification/acceptance criteria before the diff. **Complete when expected behavior is explicit.**
 3. Inspect changed files and affected surrounding paths. **Complete when hidden consequences beyond diff hunks are considered.**
 4. Evaluate correctness, state/error handling, compatibility, complexity and scope. **Complete when each material risk has a conclusion.**
