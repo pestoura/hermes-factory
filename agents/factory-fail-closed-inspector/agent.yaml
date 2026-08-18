@@ -18,8 +18,6 @@ agent:
       - reading-project-truth
       - inspecting-fail-closed-behavior
       - producing-evidence-handoffs
-    optional:
-      - verifying-exact-sha
   authority:
     allow:
       - inspect_negative_paths
