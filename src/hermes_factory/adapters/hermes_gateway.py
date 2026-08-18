@@ -4,11 +4,18 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from hermes_factory.workflow import HITLRequest, HITLState
+from hermes_factory.workflow import HITLRequest, HITLState, HumanDecision
 
 
 class GatewayHITLProjectionError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class GatewayHITLCallback:
+    clarify_id: str
+    responder_identity: str
+    choice: str
 
 
 @dataclass(frozen=True)
@@ -84,6 +91,48 @@ class HermesGatewayHITLAdapter:
             question=question,
             choices=choices,
             allowed_responder=request.allowed_responder,
+        )
+
+    def decision_from_callback(
+        self,
+        request: HITLRequest,
+        projection: GatewayHITLProjection,
+        callback: GatewayHITLCallback,
+    ) -> HumanDecision:
+        if request.state is not HITLState.PENDING:
+            raise GatewayHITLProjectionError("only pending HITL requests can be decided")
+        expected_identity = (
+            request.request_id,
+            request.request_version,
+            request.context_revision,
+            request.candidate_revision,
+            request.allowed_responder,
+        )
+        projection_identity = (
+            projection.request_id,
+            projection.request_version,
+            projection.context_revision,
+            projection.candidate_revision,
+            projection.allowed_responder,
+        )
+        if projection_identity != expected_identity:
+            raise GatewayHITLProjectionError("HITL projection is stale or unbound")
+        if projection.clarify_id != self._clarify_id(request):
+            raise GatewayHITLProjectionError("HITL clarify identity does not match request")
+        if callback.clarify_id != projection.clarify_id:
+            raise GatewayHITLProjectionError("Gateway callback belongs to another prompt")
+        if callback.responder_identity != request.allowed_responder:
+            raise GatewayHITLProjectionError("Gateway callback responder is not authorized")
+        if callback.choice not in projection.choices:
+            raise GatewayHITLProjectionError("Gateway callback choice is not permitted")
+
+        return HumanDecision(
+            request_id=request.request_id,
+            request_version=request.request_version,
+            context_revision=request.context_revision,
+            candidate_revision=request.candidate_revision,
+            responder_identity=callback.responder_identity,
+            decision=callback.choice,
         )
 
     def _assert_public(self, value: str) -> None:
