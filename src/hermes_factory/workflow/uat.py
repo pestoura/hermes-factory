@@ -21,6 +21,6 @@ class UATExecution:
     def satisfies_acceptance(self) -> bool:
         if self.state is not UATState.PASS:
             return False
-        if self.mode is UATMode.AUTOMATED and not self.candidate_revision:
-            return False
-        return True
+        return not (
+            self.mode is UATMode.AUTOMATED and not self.candidate_revision
+        )
