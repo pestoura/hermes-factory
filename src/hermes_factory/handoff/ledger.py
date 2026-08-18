@@ -39,13 +39,16 @@ class SemanticHandoffLedger:
         current = HandoffState(stored["state"])
         if current is state:
             return
-        if current is HandoffState.HANDOFF_READY and state is HandoffState.HANDED_OFF:
-            if self._registry.transition_handoff(
+        if (
+            current is HandoffState.HANDOFF_READY
+            and state is HandoffState.HANDED_OFF
+            and self._registry.transition_handoff(
                 handoff_id,
                 expected_state=HandoffState.HANDOFF_READY.value,
                 new_state=HandoffState.HANDED_OFF.value,
-            ):
-                return
+            )
+        ):
+            return
         raise HandoffConflict(
             f"invalid handoff state transition {current.value} -> {state.value}"
         )
