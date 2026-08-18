@@ -1,8 +1,8 @@
-# Hermes Software Factory — Proposed Foundational Decisions
+# Hermes Software Factory — Foundational Decisions
 
-**Status:** PROPOSED — to be split into formal ADRs after owner review.
+**Status:** MIXED — D-014 and D-015 are formally ACCEPTED; remaining proposed decisions stay subject to owner review unless separately promoted into ADRs.
 
-This document makes the architectural choices visible before implementation. Acceptance of the design does not automatically approve future implementation mutations.
+This document makes the architectural choices visible before implementation. Acceptance of a design decision does not automatically approve future implementation mutations.
 
 ## D-001 — Build on Hermes native primitives
 
@@ -26,11 +26,13 @@ This document makes the architectural choices visible before implementation. Acc
 
 ## D-003 — Global workforce lives in the Factory
 
-**Decision proposed:** enterprise agent profiles, Souls, skills, runbooks, policies and evals live with HSF/Hermes, not inside client repositories.
+**Decision proposed:** enterprise agent profiles, Souls, Factory-owned skills, runbooks, policies and evals live with HSF/Hermes, not inside client repositories.
 
 **Why:** agents represent reusable company employees, not project-specific prompt fragments.
 
 **Client repository responsibility:** project-specific context such as `AGENTS.md` / `.hermes.md` and Factory contract.
+
+**Clarification:** Factory-owned Skills use the native Hermes Skill model but are governed by the Factory Skill Registry; see D-015 / ADR-0015.
 
 ---
 
@@ -84,9 +86,11 @@ This document makes the architectural choices visible before implementation. Acc
 
 ---
 
-## D-009 — ChatGPT is an independent Factory Governor
+## D-009 — ChatGPT is an independent external Factory Governor
 
-**Decision proposed:** the Factory remains operational through Hermes/Jarvas without an active ChatGPT conversation; ChatGPT periodically performs second-line governance via a stable Factory Control MCP.
+**Decision proposed:** the Factory remains operational through Hermes/Jarvas without an active ChatGPT conversation. ChatGPT performs second-line governance from outside the Jarvas execution boundary through the approved northbound control surface.
+
+**Boundary clarification:** the Hermes MCP Bridge belongs on the ChatGPT/external-client -> Hermes/Jarvas path. It is not a default internal Factory execution dependency. Internal Factory work uses native Hermes/Jarvas interfaces in accordance with D-014 / ADR-0014.
 
 **Why:** continuous delivery must not depend on a browser conversation remaining alive, while independent validation still adds a stronger control layer.
 
@@ -108,11 +112,13 @@ This document makes the architectural choices visible before implementation. Acc
 
 ---
 
-## D-012 — Stable Factory Control MCP
+## D-012 — Stable external Factory control surface
 
-**Decision proposed:** ChatGPT and other governors use a dedicated versioned Factory Control MCP rather than private Hermes/Factory database schemas.
+**Decision proposed:** ChatGPT and other external governors use a dedicated versioned Factory control contract rather than private Hermes/Factory database schemas.
 
-**Why:** preserves implementation freedom, least privilege, observability and a testable external contract.
+**Transport clarification:** the existing Hermes MCP Bridge is the preferred northbound boundary for ChatGPT -> Hermes/Jarvas. The Factory control contract may be exposed through that boundary; the Factory itself does not call back through the Bridge for normal internal work.
+
+**Why:** preserves implementation freedom, least privilege, observability and a testable external contract without turning MCP into internal IPC.
 
 ---
 
@@ -141,9 +147,60 @@ REJECT
 
 ---
 
+## D-014 — Internal native execution boundary
+
+**Status:** ACCEPTED — formalized as `docs/adr/ADR-0014-internal-native-execution-boundary.md`.
+
+**Decision:** the Hermes Software Factory executes inside Jarvas through the closest appropriate native Hermes/Jarvas interface. The Hermes MCP Bridge is a northbound external-control boundary, principally ChatGPT/external client -> Hermes/Jarvas, and is not the default substrate for internal Factory execution.
+
+**Canonical rule:**
+
+```text
+ChatGPT -> Hermes MCP Bridge -> external Factory control surface
+                              ================= Jarvas boundary
+                              -> Hermes Software Factory
+                              -> native Hermes/Jarvas interfaces
+```
+
+**Rejected direction:** `Factory -> MCP Bridge -> Hermes` when a supported local native interface exists.
+
+**Consequence:** autonomous Factory execution remains independent of remote ChatGPT/MCP connectivity.
+
+---
+
+## D-015 — Factory-owned Skills on the Hermes native Skill model
+
+**Status:** ACCEPTED — formalized as `docs/adr/ADR-0015-factory-owned-skills-on-hermes-native-model.md`.
+
+**Decision:** the Factory adopts Hermes' native Skill format, loading, discovery, profile/task integration and lifecycle mechanics, but owns and governs its professional Skill content through a Factory Skill Registry.
+
+**Key distinction:**
+
+```text
+Hermes Skill Framework = technical substrate
+Factory Skill Registry  = approved professional library
+Jarvas Skill Catalog     = wider server toolbox/reference
+```
+
+Existing Hermes/Jarvas Skills are not automatically admitted to Factory work merely because they exist or overlap by name.
+
+**Source-of-truth rule for Factory-managed Skills:**
+
+```text
+pestoura/hermes-factory = canonical source
+Hermes profile copy     = runtime projection
+HermesJarvasServer      = inventory/snapshot/backup
+```
+
+**Agent execution rule:** Factory Profiles use explicit approved Skill allowlists derived from Agent DNA plus task-approved Skills. Server-wide Skill availability does not imply Factory authorization.
+
+**Promotion rule:** new Factory Skills remain proposed until behaviour is demonstrated through appropriate RED/GREEN, variation/pressure evaluation and independent review. `NOT_RUN` is never `PASS`.
+
+---
+
 ## Decision review checklist
 
-Owner review should explicitly determine whether each decision is:
+For decisions not already marked ACCEPTED, owner review should explicitly determine whether each decision is:
 
 ```text
 ACCEPTED
@@ -152,4 +209,4 @@ DEFERRED
 REJECTED
 ```
 
-After Architecture v1 review, accepted items should be promoted into formal ADR files before implementation begins.
+Accepted items should be promoted into formal ADR files before implementation begins.
