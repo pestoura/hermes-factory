@@ -1,305 +1,218 @@
-# Hermes Software Factory — Pilot & Roadmap
+# Hermes Software Factory — Product Sequence & Roadmap
 
-**Status:** PROPOSED
+**Status:** RECONCILED FOR v1.2  
+**Implementation authority:** NOT GRANTED
 
 ## Strategy
 
-Hermes Security Labs will be the **first client project**, not the architectural center of the Factory.
+v1.2 changes the validation sequence so the Factory proves itself first on a bounded greenfield product and only then on a complex brownfield system.
 
-The pilot is successful only if the resulting Factory can onboard a second unrelated project without changing its core data model, worker model or governance model.
-
-## Why Hermes Security Labs is a strong pilot
-
-It already exercises most hard engineering cases:
-
-- multiple repositories and dependencies;
-- architecture decisions and ADRs;
-- governed change records;
-- long-running Epics and staged delivery;
-- CI and exact-SHA validation;
-- repository-vs-runtime evidence separation;
-- explicit HITL boundaries;
-- security-sensitive operations;
-- secrets/Vault integration;
-- runtime validation and known-state requirements;
-- strong fail-closed expectations.
-
-That makes it an effective stress test for the Factory rather than a simple demo.
-
-## Pilot objective
-
-Prove this end-to-end flow:
-
-```mermaid
-flowchart LR
-    HSL[Hermes Security Labs Repo] --> Contract[Factory Contract]
-    Contract --> Compile[Project Compiler]
-    Compile --> Board[HSL Hermes Board]
-    Board --> Staff[Factory Profiles]
-    Staff --> Work[Worktrees / Implementation]
-    Work --> GH[GitHub PR + CI]
-    GH --> Assure[Independent Assurance]
-    Assure --> Live[Runtime Gate where required]
-    Live --> Accept[Accepted Work]
-    Accept --> Gov[ChatGPT Governance Round]
-```
-
-## Pilot boundaries
-
-The pilot must not:
-
-- move global Factory Souls into the Labs repo;
-- use HSL-specific hard-coded status names in Factory core;
-- assume every project has CHG records or PTaaS concepts;
-- assume every project requires live/security gates;
-- mutate HSL runtime merely to demonstrate the Factory;
-- weaken existing HSL governance to simplify onboarding.
-
-## Proposed delivery phases
-
-### Phase 0 — Architecture approval
-
-Deliverables:
-
-- executive proposal;
-- reference architecture;
-- operating model;
-- Agent DNA model;
-- project contract/traceability model;
-- security/quality/governance model;
-- Agent Admission & Catalog Governance model;
-- approved ADRs for foundational decisions.
-
-Gate: owner approves the architecture before implementation planning.
-
-### Phase 1 — Factory bootstrap
-
-Goal: establish a runnable but non-autonomous Factory skeleton.
-
-Candidate deliverables:
-
-- `hermes-factory` package/service/plugin skeleton;
-- Factory configuration schema;
-- project contract schemas;
-- Factory state model;
-- read-only project compiler prototype;
-- read-only inspection of Hermes boards/profiles;
-- read-only GitHub reconciliation;
-- Factory Control MCP read operations;
-- tests and CI.
-
-No autonomous mutation/dispatch is required to prove this phase.
-
-### Phase 2 — Agent Workforce foundation
-
-Deliverables:
-
-- Agent DNA schema;
-- profile-distribution packaging convention;
-- Agent Admission Gate;
-- workforce lifecycle (`PROPOSED -> INCUBATING -> EVALUATING -> ACTIVE -> DEPRECATED -> RETIRED`);
-- initial enterprise professions;
-- initial routine agents;
-- agent version registry;
-- eval harness;
-- promotion/rollback model for Agent DNA;
-- overlap/deprecation review for the agent catalog.
-
-Suggested bootstrap workforce:
+Canonical sequence:
 
 ```text
-factory-orchestrator
-factory-workforce-architect
-factory-product-designer
-factory-requirements-engineer
-factory-software-architect
-factory-security-architect
-factory-documentation-engineer
-factory-tdd-red
-factory-python-engineer
-factory-code-reviewer
-factory-security-reviewer
-factory-fail-closed-inspector
-factory-integration-tester
-factory-exact-sha-auditor
-factory-evidence-auditor
-factory-runtime-truth-observer
-factory-release-manager
+Architecture v1.2 approval
+-> Factory runtime implementation plan
+-> Factory minimum runtime/bootstrap
+-> Jarvas CLI: first greenfield Factory product
+-> Hermes Security Labs: first complex brownfield onboarding
+-> unrelated non-Hermes project: portability proof
 ```
 
-The full catalog grows as real projects require additional professions. A detected capability gap may propose a new role, but the Factory must first attempt reuse of an existing Profile, Skill, Runbook or Task Template and must never create new organizational authority silently.
+This sequence does not authorize implementation by itself.
 
-### Phase 3 — Project Compiler + Kanban reconciliation
+## Why Jarvas CLI is first
 
-Deliverables:
+Jarvas CLI is a bounded control-plane client that can exercise the Factory lifecycle without inheriting the full historical/runtime complexity of HSL. It provides a strong first proof of:
 
-- parse/validate `.factory/` contract;
-- normalize project sources;
-- construct Epics/Work Packages/dependency graph;
-- stable/idempotent entity IDs;
-- create/reconcile isolated Hermes board;
-- staffing assignment;
-- task skill attachment;
-- capability-gap emission when staffing cannot be satisfied;
-- worktree policy;
-- no duplicate work under repeated compile.
+- project compilation and traceability;
+- TDD RED -> minimal GREEN;
+- independent code/security review where required;
+- JDS gate consumption;
+- deterministic Exact-SHA;
+- UAT and corrective-action flow;
+- Agent DNA / Factory Skill authorization;
+- autonomous stage handoff;
+- evidence-derived acceptance;
+- release governance and stable machine-readable interfaces.
 
-Gate: repeated compilation of unchanged project input yields no unintended mutations.
+The Factory MUST NOT depend on Jarvas CLI to build the first Jarvas CLI release. Bootstrap uses supported native Hermes/Jarvas/JDS/Git interfaces.
 
-### Phase 4 — GitHub traceability
+## Why HSL follows
 
-Deliverables:
+Hermes Security Labs remains an essential client because it stresses:
 
-- issue mapping;
-- branch/worktree mapping;
-- PR mapping;
-- candidate SHA tracking;
-- CI/check tracking;
-- merge SHA tracking;
-- stale evidence detection after candidate changes;
-- trace traversal Project -> Epic -> WP -> Task -> PR -> SHA -> CI.
+- multiple repositories/dependencies;
+- architecture decisions/change governance;
+- CI/exact-SHA;
+- repository versus runtime truth;
+- explicit HITL;
+- security-sensitive operations;
+- Vault/trust-plane constraints;
+- live runtime validation;
+- strong fail-closed expectations.
 
-### Phase 5 — Quality & rework automation
+That makes HSL the **first complex brownfield onboarding**, not the first greenfield product.
 
-Deliverables:
-
-- Definition of Done profiles;
-- gate engine;
-- TDD lifecycle support;
-- independent review assignments;
-- security/adversarial gates;
-- documentation-impact gate where required;
-- rework orders;
-- exact-SHA enforcement;
-- acceptance derivation.
-
-### Phase 6 — Runtime/evidence lane
+## Phase 0 — Architecture approval
 
 Deliverables:
 
-- runtime evidence model;
-- freshness rules;
-- policy/HITL integration;
-- deployment/runtime observer profiles;
-- known-state/recovery gate;
-- accepted-repo vs accepted-live distinction.
+- Architecture Review v1.2;
+- canonical design v1.2;
+- ADR-0014 through ADR-0020;
+- authoritative Agent catalog v1.2;
+- Factory Skill registry/policy v1.2;
+- Kanban/handoff/UAT/HITL/scheduling design policies;
+- clean branch audit.
 
-### Phase 7 — Continuous Factory operations
+Gate: owner approves Architecture v1.2 before runtime implementation planning.
 
-Deliverables:
+## Phase 1 — Factory minimum runtime
 
-- scheduling/dispatch policy;
-- locks/concurrency controls;
-- project pause/resume;
-- blocker/HITL escalation;
-- workforce health/catalog signals;
-- portfolio metrics;
-- compact project/factory status reports.
+After approval, write a separate implementation plan following:
 
-The worker loop runs in Hermes/Jarvas independently of ChatGPT connectivity.
+```text
+design/spec
+-> implementation plan
+-> TDD RED
+-> minimal GREEN
+-> hardening
+-> CI/exact-SHA
+-> merge
+-> post-merge verification
+```
 
-### Phase 8 — ChatGPT Factory Governor
+Initial implementation should remain read/dry-run first and prove:
 
-Deliverables:
+- schemas and configuration validation;
+- read-only Project Compiler;
+- Semantic Traceability Registry;
+- JDS adapter;
+- Hermes Kanban/Profile/Skill/native adapters;
+- Agent/Skill admission checks;
+- Git/GitHub read reconciliation;
+- deterministic gate/evidence model;
+- no internal MCP dependency;
+- no duplicate scheduler/dispatcher.
 
-- stable Factory Control MCP;
-- governance-round procedure;
-- project/portfolio inspection;
-- evidence challenge/reopen capability;
-- systemic agent-quality signals;
-- workforce-catalog review signals;
-- owner escalation contract.
+## Phase 2 — Governed continuous execution
 
-ChatGPT periodic automation may operate at the platform-supported schedule, while the Factory itself can run at a finer internal cadence through Hermes scheduling.
+Introduce bounded mutations only after read/dry-run truth is proven:
 
-### Phase 9 — HSL end-to-end pilot
+- Work Package -> Kanban reconciliation;
+- admitted staffing;
+- admitted Skill attachment;
+- isolated worktrees;
+- atomic stage handoff;
+- structured machine/policy transition authorization;
+- independent reviewer assignment;
+- bounded rework;
+- explicit HITL blocks.
 
-Onboard `pestoura/hermes-security-labs` through the same public Factory interfaces intended for every future project.
+Hermes Kanban/Dispatcher remains the sole operational execution queue.
 
-Suggested first action is **read-only reconciliation**:
+## Phase 3 — UAT / corrective action / acceptance
 
-1. load current canonical HSL project state;
-2. build desired Factory graph;
-3. compare against existing GitHub issues/PR history and current work;
-4. show the proposed board/work packages/staffing without dispatch;
-5. owner reviews compilation;
-6. enable bounded dispatch only after the graph is accepted.
+Implement first-class:
 
-### Phase 10 — Portability proof
+```text
+AcceptanceCriterion
+UATScenario
+UATExecution
+UATEvidence
+Finding
+ReworkOrder
+HumanDecision
+AcceptanceDecision
+```
 
-Onboard a second, materially different project.
+Required properties:
+
+- frozen UAT baseline cannot be changed by implementer to obtain PASS;
+- `NOT_RUN != PASS`;
+- changed candidate/context stales affected evidence;
+- repeated same-cause rework is bounded/escalated;
+- valid HITL response is revision-bound governance evidence;
+- acceptance is derived from current required evidence.
+
+## Phase 4 — Scheduling and external governance
+
+Internal Factory trigger model:
+
+```text
+EVENT-DRIVEN -> Hermes Kanban + Dispatcher
+TIME-DRIVEN  -> native Hermes Profile/Agent cron only
+```
+
+External independent governance such as scheduled ChatGPT audit may be initiated through RITMO/external scheduling and the northbound MCP control surface. RITMO does not schedule internal Factory workers.
+
+## Phase 5 — Jarvas CLI greenfield delivery
+
+Deliver Jarvas CLI as the first Factory product under the same governed lifecycle intended for future client projects.
+
+Initial product priorities:
+
+```text
+P0: status, doctor, ecosystem, project compile/reconcile --dry-run, gate, evidence
+P1: agent, skill, repo/service diagnostics
+P2: bounded controlled mutations after authority/evidence gates
+```
+
+Machine-first requirements include stable `--json`, explicit exit states, dry-run, no generic shell, no secret values and no Jarvas-level `--yolo`.
+
+Success gate: Jarvas CLI is accepted from evidence produced through the Factory lifecycle without being a bootstrap dependency of its own delivery.
+
+## Phase 6 — HSL brownfield onboarding
+
+Onboard `pestoura/hermes-security-labs` with read-only reconciliation first:
+
+1. load canonical HSL project state;
+2. compile desired Factory semantic graph;
+3. compare GitHub/history/runtime/evidence state;
+4. show proposed Work Packages/board/staffing/gates without dispatch;
+5. resolve capability and truth gaps;
+6. enable bounded dispatch only after onboarding model is accepted.
+
+Existing HSL governance must not be weakened to simplify the Factory.
+
+## Phase 7 — Portability proof
+
+Onboard a materially unrelated project.
 
 Success criteria:
 
-- no HSL-specific Factory core changes;
-- no redesign of traceability schema;
-- project-specific workflow selected via profiles/configuration;
-- existing enterprise agents reused where relevant;
-- new domain agents added at the edge through the Agent Admission Gate without changing core orchestration.
+- no Jarvas/HSL-specific core schema redesign;
+- same Agent/Skill admission model;
+- same UAT/Finding/Rework/HITL semantics;
+- same evidence/acceptance model;
+- project-specific behavior selected via contract/JDS/config rather than Factory core forks.
 
-## Architecture decision checkpoints
+## Factory v1 success criteria
 
-Before implementation, the following should become explicit ADRs:
+HSF is not successful because a dashboard is attractive. It succeeds when it can demonstrate:
 
-1. HSF is a native-edge extension over Hermes primitives, not a second agent runtime.
-2. Hermes Kanban is the operational task state engine; Factory adds richer semantic/gate state rather than replacing it.
-3. One isolated Hermes board per client project.
-4. Persistent professions are Hermes profiles/profile distributions.
-5. Global Agent DNA lives with the Factory, never in client repos.
-6. Client repos expose a `.factory/` contract and retain canonical product intent.
-7. GitHub remains canonical for issues/branches/PRs/commits/CI.
-8. Runtime state requires fresh runtime evidence.
-9. ChatGPT is an external independent Governor, not the only orchestrator keeping the Factory alive.
-10. Factory Control MCP is the stable governance interface.
-11. New Factory profiles require a permanent Agent Admission Gate; capability gaps never create agents or authority silently.
+- deterministic/idempotent project compilation;
+- traceability from product intent to exact delivered evidence;
+- admitted reusable Profiles and Skills;
+- no silent Profile/authority creation;
+- native Hermes continuous execution;
+- atomic handoffs;
+- producer/reviewer separation where required;
+- JDS + deterministic Exact-SHA correctness;
+- first-class UAT;
+- bounded corrective action;
+- stale evidence protection;
+- true HITL with revision-bound human evidence;
+- native Hermes cron for internal recurring work;
+- repository/runtime truth separation;
+- external ChatGPT governance without operational dependency;
+- successful greenfield Jarvas CLI and brownfield HSL delivery;
+- successful unrelated portability proof.
 
-## Initial implementation sequence
+## Explicitly deferred until core proof
 
-```mermaid
-flowchart TD
-    A[Approve Architecture v1] --> B[Write implementation plan]
-    B --> C[Factory schemas + read-only compiler]
-    C --> D[Traceability registry]
-    D --> E[Agent DNA + admission gate + profile distributions]
-    E --> F[Kanban read/reconcile]
-    F --> G[GitHub reconcile]
-    G --> H[Quality gates]
-    H --> I[Controlled dispatch]
-    I --> J[Runtime/evidence lane]
-    J --> K[Factory Control MCP]
-    K --> L[HSL read-only compile]
-    L --> M[HSL controlled pilot]
-    M --> N[Second-project portability proof]
-```
-
-## Definition of Factory v1 success
-
-HSF v1 is not complete because a dashboard looks impressive. It is complete when it can demonstrate:
-
-- one command/operation onboards a valid project contract;
-- project compilation is deterministic/idempotent;
-- the board is correctly reconciled;
-- work is traceable to product intent;
-- specialized reusable profiles are staffed automatically;
-- capability gaps are governed instead of silently spawning new agents;
-- producer/reviewer separation is enforced where required;
-- worktrees prevent unsafe checkout collisions;
-- PR/CI/SHA evidence is bound correctly;
-- invalid/stale gates prevent acceptance;
-- documentation-impact requirements prevent stale project docs where applicable;
-- runtime-required work cannot close on repository evidence alone;
-- true HITL stops are respected;
-- the Factory resumes safely after interruption;
-- ChatGPT can independently inspect and reopen work;
-- the model works for a second unrelated project.
-
-## Explicitly deferred
-
-Defer until the core workflow is proven:
-
-- elaborate financial costing/chargeback;
-- multi-user commercial SaaS tenancy;
-- non-Hermes agent runtimes;
-- sophisticated predictive delivery analytics;
-- automatic recruitment/generated professions without governance;
-- autonomous modification of Factory governance rules by worker agents.
+- elaborate cost/chargeback models;
+- broad autonomous authority expansion;
+- separate Factory web application;
+- generic replacement schedulers/workflow engines;
+- automatic promotion of proposed Skills/Profiles without eval evidence.
