@@ -1,0 +1,47 @@
+schema: hermes.factory/native-scheduling/v1.2
+status: proposed_for_owner_review
+implementation_authority: NOT_GRANTED
+
+trigger_model:
+  event_driven_factory_work:
+    mechanism: hermes_kanban_dispatcher
+  time_driven_factory_work:
+    mechanism: native_hermes_profile_agent_cron
+  external_governance_or_chatgpt_supervision:
+    mechanism: external_scheduler_or_ritmo_via_northbound_control
+
+factory_internal_time_scheduling:
+  allowed: [native_hermes_profile_agent_cron]
+  forbidden:
+    - factory_specific_scheduler
+    - host_crontab_as_factory_scheduler
+    - systemd_timer_as_factory_scheduler
+    - ritmo_as_internal_factory_worker_scheduler
+    - mcp_bridge_as_internal_scheduling_transport
+
+examples:
+  event_driven:
+    - next_stage_after_valid_handoff
+    - corrective_action_after_finding
+    - rework_after_review_failure
+    - unblock_after_valid_human_decision
+  time_driven:
+    - scheduled_skill_evaluation
+    - scheduled_agent_evaluation
+    - recurring_project_reconciliation
+    - periodic_upstream_check
+  external_governance:
+    - chatgpt_independent_audit
+    - external_portfolio_review
+    - owner_facing_supervision
+
+source_of_truth:
+  factory_profile_schedule: hermes_native_profile_distribution_cron
+  factory_semantic_registry_may_reference_schedule: true
+  factory_semantic_registry_is_scheduler: false
+  ritmo_state_proves_factory_execution_success: false
+
+invariants:
+  - not_run_is_not_pass
+  - schedule_provenance_belongs_to_admitted_profile_policy
+  - no_internal_mcp_or_ritmo_loop_for_factory_scheduling
