@@ -1,62 +1,24 @@
 schema: hermes.factory/skill-registry-policy/v1
 registry:
   version: 1.1.0
-  lifecycle: proposed_for_owner_review
+  lifecycle: superseded
+  superseded_by: skills/registry-policy-v1.2.yaml
+  authoritative_for_current_skill_admission: false
   architecture_baseline: 1.1
+  implementation_authority: NOT_GRANTED
 
-  technical_substrate: hermes-native-skill-model
-  canonical_source:
-    repository: pestoura/hermes-factory
-    path: skills/
-
-  runtime_projection:
-    target: hermes-profile-skill-directories
-    authoritative: false
-
-  jarvas_server_inventory:
-    repository: pestoura/HermesJarvasServer
-    role: inventory_snapshot_backup
-    authoritative_for_factory_authorship: false
-
-  admission:
-    existing_hermes_skill_is_reference_not_automatic_reuse: true
-    require_factory_review: true
-    outcomes:
-      - ADOPT_AS_IS
-      - REWRITE_AS_FACTORY_SKILL
-      - EXTEND_WITH_FACTORY_VARIANT
-      - USE_AS_REFERENCE_ONLY
-      - REJECT_FOR_FACTORY
-      - CREATE_NEW_FACTORY_SKILL
-
-  authorization:
-    effective_skills_formula: agent_required_union_task_approved
+  historical_principles:
+    technical_substrate: hermes-native-skill-model
+    canonical_source: pestoura/hermes-factory/skills
+    runtime_projection_authoritative: false
+    hermesjarvasserver_authoritative_for_factory_authorship: false
     server_wide_availability_implies_authorization: false
-    task_skills_must_resolve_in_factory_registry: true
-    agent_required_skills_must_resolve_in_factory_registry: true
-
-  lifecycle:
-    new_version: 0.1.0
-    active_baseline: 1.0.0
-    promotion_requires:
-      - baseline_red
-      - skill_green
-      - variation_or_pressure_eval
-      - independent_review
+    effective_skills_formula: agent_required_union_task_approved
     not_run_is_pass: false
+    deterministic_controls_prefer_validator: true
 
-  content_model:
-    required:
-      - SKILL.md
-    optional:
-      - references
-      - templates
-      - scripts
-      - assets
-      - evals
+  current_policy: skills/registry-policy-v1.2.yaml
 
-  deterministic_rule:
-    principle: >-
-      When a requirement is mechanically decidable, prefer a validator/tool/script
-      and use the Skill to teach interpretation/workflow rather than relying on prose
-      as the enforcement mechanism.
+  invariants:
+    - historical_policy_is_not_runtime_authority
+    - v1_2_policy_controls_current_admission_and_authorization
