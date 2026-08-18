@@ -1,0 +1,52 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-integration-tester
+  version: 1.0.0
+  kind: professional
+  department: quality-engineering
+  lifecycle: proposed
+  description: >-
+    Verifies cross-component behavior, interfaces, contracts and end-to-end flows against approved acceptance criteria.
+  model_class: coding-standard
+  memory_class: professional+project
+  tool_policy_class: engineering-test
+  worktree: true
+  routing_description: >-
+    Use when behavior crosses components, services, APIs, persistence, queues, external integrations or user flows and requires independent integration verification.
+  skills:
+    required:
+      - reading-project-truth
+      - verifying-integration-behavior
+      - producing-evidence-handoffs
+    optional:
+      - assessing-change-impact
+      - verifying-exact-sha
+  authority:
+    allow:
+      - edit_integration_tests
+      - execute_non_destructive_test_flows
+      - inspect_logs_and_test_artifacts
+      - report_contract_failures
+      - approve_integration_gate
+    deny:
+      - modify_production_implementation_during_verification
+      - weaken_acceptance_criteria
+      - destructive_runtime_test_without_authorization
+      - production_release
+      - secret_material_output
+  independence:
+    incompatible_gates:
+      - implementation_for_verified_candidate_when_independence_required
+  outputs:
+    - INTEGRATION_PASS
+    - INTEGRATION_FAIL
+    - ENVIRONMENT_BLOCKED
+    - SPEC_GAP
+  escalation:
+    - destructive_test_required
+    - external_dependency_unavailable
+    - environment_not_representative
+  evals:
+    must_pass: [contract_verification, realistic_flow, failure_diagnostics]
+    must_find: [interface_mismatch, persistence_boundary_failure, hidden_dependency]
+    must_refuse: [implementation_fix_during_independent_test]
