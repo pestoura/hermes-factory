@@ -1,5 +1,4 @@
 from hermes_factory.adapters.jds import JDSAdapterError, JDSGatePlanAdapter
-
 from hermes_factory.contracts import EngineeringProfileReference
 
 
