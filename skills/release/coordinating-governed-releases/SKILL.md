@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [factory, release, governance]
-    related_skills: [verifying-exact-sha, auditing-evidence-provenance, reconciling-traceability]
+    related_skills: [auditing-evidence-provenance, reconciling-traceability]
   factory:
     lifecycle: proposed
     test_status: not_run
@@ -36,7 +36,7 @@ Don't use for: bypassing missing gates or treating deployment success as runtime
 
 1. Resolve exact release candidate and target environment. **Complete when candidate identity is unambiguous.**
 2. Enumerate required gates, approvals and freshness requirements. **Complete when no implicit prerequisite remains.**
-3. Verify exact-SHA and evidence completeness using the relevant Skills. **Complete when stale/missing evidence blocks readiness.**
+3. Verify deterministic Exact-SHA gate state and evidence completeness. **Complete when stale/missing evidence blocks readiness.**
 4. Verify release procedure plus rollback/compensation preconditions where policy requires them. **Complete when recovery posture is known before mutation.**
 5. Request HITL and wait for valid approval when required. **Complete when approval identity/scope/expiry match the action.**
 6. Coordinate only the authorized bounded promotion. **Complete when release identity/result is recorded.**
