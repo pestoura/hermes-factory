@@ -52,7 +52,10 @@ def compile_profile_distribution(
         "name": agent_id,
         "version": str(agent.get("version", "0.0.0")),
         "description": str(agent.get("description", "")),
-        "hermes_requires": ">=0.20.0,<0.21.0",
+        # Hermes 0.20.x currently accepts one comparator in hermes_requires.
+        # Keep the native manifest installable instead of emitting a
+        # comma-separated range that its semver parser cannot consume.
+        "hermes_requires": ">=0.20.0",
         "author": "Hermes Software Factory",
         "distribution_owned": [
             "SOUL.md",
