@@ -4,6 +4,13 @@ from pathlib import Path
 from typing import Any
 
 
+CURRENT_SCHEMA_VERSION = 1
+
+
+class EntityConflict(RuntimeError):
+    pass
+
+
 class EvidenceConflict(RuntimeError):
     pass
 
@@ -22,41 +29,77 @@ class SemanticRegistry:
 
     def _init_schema(self) -> None:
         with self._connect() as db:
-            db.executescript(
+            db.execute(
                 """
-                CREATE TABLE IF NOT EXISTS entities (
-                    entity_id TEXT PRIMARY KEY,
-                    entity_type TEXT NOT NULL,
-                    payload_json TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS edges (
-                    source_id TEXT NOT NULL,
-                    target_id TEXT NOT NULL,
-                    relation TEXT NOT NULL,
-                    PRIMARY KEY (source_id, target_id, relation),
-                    FOREIGN KEY(source_id) REFERENCES entities(entity_id),
-                    FOREIGN KEY(target_id) REFERENCES entities(entity_id)
-                );
-                CREATE TABLE IF NOT EXISTS evidence (
-                    evidence_id TEXT PRIMARY KEY,
-                    kind TEXT NOT NULL,
-                    state TEXT NOT NULL,
-                    candidate TEXT,
-                    payload_json TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS handoffs (
-                    handoff_id TEXT PRIMARY KEY,
-                    state TEXT NOT NULL,
-                    payload_json TEXT NOT NULL
-                );
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
                 """
             )
+            row = db.execute(
+                "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations"
+            ).fetchone()
+            current = int(row["version"]) if row is not None else 0
+            if current > CURRENT_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"registry schema {current} is newer than supported "
+                    f"{CURRENT_SCHEMA_VERSION}"
+                )
+            if current < 1:
+                db.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS entities (
+                        entity_id TEXT PRIMARY KEY,
+                        entity_type TEXT NOT NULL,
+                        payload_json TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS edges (
+                        source_id TEXT NOT NULL,
+                        target_id TEXT NOT NULL,
+                        relation TEXT NOT NULL,
+                        PRIMARY KEY (source_id, target_id, relation),
+                        FOREIGN KEY(source_id) REFERENCES entities(entity_id),
+                        FOREIGN KEY(target_id) REFERENCES entities(entity_id)
+                    );
+                    CREATE TABLE IF NOT EXISTS evidence (
+                        evidence_id TEXT PRIMARY KEY,
+                        kind TEXT NOT NULL,
+                        state TEXT NOT NULL,
+                        candidate TEXT,
+                        payload_json TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS handoffs (
+                        handoff_id TEXT PRIMARY KEY,
+                        state TEXT NOT NULL,
+                        payload_json TEXT NOT NULL
+                    );
+                    """
+                )
+                db.execute("INSERT INTO schema_migrations(version) VALUES (1)")
+
+    def schema_version(self) -> int:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations"
+            ).fetchone()
+        return int(row["version"]) if row is not None else 0
 
     def add_entity(self, entity_id: str, entity_type: str, payload: dict[str, Any]) -> None:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         with self._connect() as db:
+            existing = db.execute(
+                "SELECT entity_type, payload_json FROM entities WHERE entity_id=?",
+                (entity_id,),
+            ).fetchone()
+            value = (entity_type, encoded)
+            if existing is not None:
+                current = (existing["entity_type"], existing["payload_json"])
+                if current != value:
+                    raise EntityConflict(f"entity {entity_id} is immutable")
+                return
             db.execute(
-                "INSERT OR REPLACE INTO entities(entity_id, entity_type, payload_json) VALUES (?, ?, ?)",
+                "INSERT INTO entities(entity_id, entity_type, payload_json) VALUES (?, ?, ?)",
                 (entity_id, entity_type, encoded),
             )
 
