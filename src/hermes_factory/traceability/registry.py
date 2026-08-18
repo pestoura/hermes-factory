@@ -4,7 +4,34 @@ from pathlib import Path
 from typing import Any
 
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
+
+SUPPORTED_ENTITY_TYPES = frozenset(
+    {
+        "Project",
+        "Requirement",
+        "AcceptanceCriterion",
+        "UATScenario",
+        "ADR",
+        "Epic",
+        "WorkPackage",
+        "KanbanTaskRef",
+        "Execution",
+        "Branch",
+        "PR",
+        "SHA",
+        "CI",
+        "Deployment",
+        "RuntimeEvidence",
+        "UATExecution",
+        "UATEvidence",
+        "Finding",
+        "ReworkOrder",
+        "HITLRequest",
+        "HumanDecision",
+        "AcceptanceDecision",
+    }
+)
 
 
 class EntityConflict(RuntimeError):
@@ -77,6 +104,27 @@ class SemanticRegistry:
                     """
                 )
                 db.execute("INSERT INTO schema_migrations(version) VALUES (1)")
+                current = 1
+            if current < 2:
+                db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS entity_versions (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                        entity_id TEXT NOT NULL,
+                        entity_type TEXT NOT NULL,
+                        revision TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(entity_id, revision),
+                        FOREIGN KEY(entity_id) REFERENCES entities(entity_id)
+                    )
+                    """
+                )
+                db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_entity_versions_identity "
+                    "ON entity_versions(entity_id, sequence)"
+                )
+                db.execute("INSERT INTO schema_migrations(version) VALUES (2)")
 
     def schema_version(self) -> int:
         with self._connect() as db:
@@ -102,6 +150,93 @@ class SemanticRegistry:
                 "INSERT INTO entities(entity_id, entity_type, payload_json) VALUES (?, ?, ?)",
                 (entity_id, entity_type, encoded),
             )
+
+    def repository(self, entity_type: str) -> "EntityRepository":
+        if entity_type not in SUPPORTED_ENTITY_TYPES:
+            raise ValueError(f"unsupported trace entity type: {entity_type}")
+        return EntityRepository(self, entity_type)
+
+    def record_entity_version(
+        self,
+        entity_id: str,
+        *,
+        entity_type: str,
+        revision: str,
+        payload: dict[str, Any],
+    ) -> None:
+        if entity_type not in SUPPORTED_ENTITY_TYPES:
+            raise ValueError(f"unsupported trace entity type: {entity_type}")
+        if not entity_id.strip():
+            raise ValueError("entity_id is required")
+        if not revision.strip():
+            raise ValueError("revision is required")
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        with self._connect() as db:
+            identity = db.execute(
+                "SELECT entity_type FROM entities WHERE entity_id=?",
+                (entity_id,),
+            ).fetchone()
+            if identity is None:
+                db.execute(
+                    "INSERT INTO entities(entity_id, entity_type, payload_json) VALUES (?, ?, ?)",
+                    (entity_id, entity_type, "{}"),
+                )
+            elif identity["entity_type"] != entity_type:
+                raise EntityConflict(f"entity {entity_id} type is immutable")
+
+            existing = db.execute(
+                "SELECT entity_type, payload_json FROM entity_versions "
+                "WHERE entity_id=? AND revision=?",
+                (entity_id, revision),
+            ).fetchone()
+            value = (entity_type, encoded)
+            if existing is not None:
+                current = (existing["entity_type"], existing["payload_json"])
+                if current != value:
+                    raise EntityConflict(
+                        f"entity {entity_id} revision {revision} is immutable"
+                    )
+                return
+            db.execute(
+                "INSERT INTO entity_versions(entity_id, entity_type, revision, payload_json) "
+                "VALUES (?, ?, ?, ?)",
+                (entity_id, entity_type, revision, encoded),
+            )
+
+    def get_entity_version(self, entity_id: str, revision: str) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT entity_id, entity_type, revision, payload_json, recorded_at "
+                "FROM entity_versions WHERE entity_id=? AND revision=?",
+                (entity_id, revision),
+            ).fetchone()
+        if row is None:
+            raise KeyError((entity_id, revision))
+        return {
+            "entity_id": row["entity_id"],
+            "entity_type": row["entity_type"],
+            "revision": row["revision"],
+            "payload": json.loads(row["payload_json"]),
+            "recorded_at": row["recorded_at"],
+        }
+
+    def list_entity_versions(self, entity_id: str) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT entity_id, entity_type, revision, payload_json, recorded_at "
+                "FROM entity_versions WHERE entity_id=? ORDER BY sequence",
+                (entity_id,),
+            ).fetchall()
+        return [
+            {
+                "entity_id": row["entity_id"],
+                "entity_type": row["entity_type"],
+                "revision": row["revision"],
+                "payload": json.loads(row["payload_json"]),
+                "recorded_at": row["recorded_at"],
+            }
+            for row in rows
+        ]
 
     def add_edge(self, source_id: str, target_id: str, relation: str) -> None:
         with self._connect() as db:
@@ -214,3 +349,30 @@ class SemanticRegistry:
                 (new_state, handoff_id, expected_state),
             )
             return cursor.rowcount == 1
+
+
+class EntityRepository:
+    def __init__(self, registry: SemanticRegistry, entity_type: str) -> None:
+        self._registry = registry
+        self.entity_type = entity_type
+
+    def put(self, entity_id: str, revision: str, payload: dict[str, Any]) -> None:
+        self._registry.record_entity_version(
+            entity_id,
+            entity_type=self.entity_type,
+            revision=revision,
+            payload=payload,
+        )
+
+    def get(self, entity_id: str, revision: str) -> dict[str, Any]:
+        record = self._registry.get_entity_version(entity_id, revision)
+        if record["entity_type"] != self.entity_type:
+            raise EntityConflict(f"entity {entity_id} type is immutable")
+        return record
+
+    def history(self, entity_id: str) -> list[dict[str, Any]]:
+        records = self._registry.list_entity_versions(entity_id)
+        for record in records:
+            if record["entity_type"] != self.entity_type:
+                raise EntityConflict(f"entity {entity_id} type is immutable")
+        return records
