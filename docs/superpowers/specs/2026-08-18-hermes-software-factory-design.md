@@ -81,6 +81,10 @@ Safe accepted transitions continue automatically. Mandatory HITL, secrets, destr
 
 High-assurance work separates producer, reviewer, security verifier, runtime verifier and final acceptance roles as required by policy.
 
+### P11 — Workforce evolution is governed
+
+A capability gap may propose a new Factory role but may never create a persistent profile or broaden organizational authority silently. Every new profile passes the Agent Admission Gate, which first tests whether the need is better satisfied by an existing Profile, Skill, Runbook or Task Template.
+
 ## 4. System context
 
 ```mermaid
@@ -259,6 +263,7 @@ Factory employees are persistent Hermes profiles.
 Examples:
 
 - Product Manager;
+- Product Designer / UX;
 - Requirements Engineer;
 - Solution Architect;
 - Software Architect;
@@ -268,7 +273,9 @@ Examples:
 - DevOps/Platform/Kubernetes/SRE;
 - QA/Integration/E2E/Performance;
 - AppSec/IAM/API/Supply-Chain specialists;
-- Release/Change/Documentation/Evidence roles.
+- Documentation Engineer / Developer Experience;
+- Release/Change/Documentation/Evidence roles;
+- Workforce Architect for Agent DNA/catalog governance.
 
 ### Specialized routine profiles
 
@@ -284,6 +291,8 @@ Examples:
 - Known-State Verifier;
 - ADR Consistency Auditor;
 - Evidence Provenance Auditor.
+
+The initial base catalog includes `factory-workforce-architect`, `factory-product-designer` and `factory-documentation-engineer`; additional specializations are demand-driven.
 
 ## 10. Agent DNA
 
@@ -308,6 +317,38 @@ A role version must be attributable in execution evidence.
 
 Agent changes follow their own CI/eval lifecycle. A new Soul is treated as production behavior configuration, not prose edited in place.
 
+### 10.1 Agent Admission Gate
+
+Every proposal for a new persistent profile must be classified through a permanent workforce gate. Valid outcomes include:
+
+```text
+USE_EXISTING_PROFILE
+ADD_SKILL_TO_EXISTING_PROFILE
+ADD_RUNBOOK
+ADD_TASK_TEMPLATE
+CREATE_ROUTINE_PROFILE
+CREATE_PROFESSIONAL_PROFILE
+DEFER
+REJECT
+```
+
+The gate evaluates recurrence, specialist judgment, stable identity need, authority separation, memory value, overlap with existing roles, ability to express the capability as a Skill/Runbook, eval feasibility, ownership and deprecation path.
+
+The Staffing Engine may emit `CAPABILITY_GAP` when no suitable capability exists. That event is routed to the `factory-workforce-architect`, which may prepare an Agent DNA proposal but may not solely approve an authority-increasing role it designed.
+
+Agent lifecycle:
+
+```text
+PROPOSED
+-> INCUBATING
+-> EVALUATING
+-> ACTIVE
+-> DEPRECATED
+-> RETIRED
+```
+
+Workforce governance also periodically detects unused/overlapping roles, duplicated skills, excessive permissions and agent versions associated with abnormal rework or quality failure rates.
+
 ## 11. Staffing
 
 Staffing is dynamic.
@@ -325,6 +366,8 @@ The engine evaluates:
 It selects a producer and independent assurance roles as required.
 
 The Factory catalog can contain many professions while each task activates only the needed team.
+
+If no suitable capability exists, staffing stops with `CAPABILITY_GAP`; it does not invent a worker profile as a side effect of decomposition.
 
 ## 12. Work lifecycle
 
@@ -412,6 +455,7 @@ Potential gates include:
 - static/supply-chain analysis;
 - CI;
 - exact SHA;
+- documentation impact / documentation consistency;
 - docs/change record;
 - deployment;
 - runtime observation;
@@ -419,6 +463,8 @@ Potential gates include:
 - evidence provenance.
 
 Quality profiles decide which are required.
+
+Documentation is a conditional acceptance concern: changes that alter installation, configuration, API behavior, architecture, operations or user/developer workflows cannot be accepted with knowingly stale required documentation.
 
 ## 16. Runtime truth
 
@@ -462,7 +508,7 @@ Initial capability families:
 - projects;
 - compile/reconcile;
 - work/status/staffing;
-- agents/versions/evals;
+- agents/versions/evals/admission status;
 - gate/findings/acceptance;
 - traceability/provenance;
 - GitHub reconciliation;
@@ -486,6 +532,7 @@ load canonical project state
 -> challenge claimed acceptance
 -> reopen invalid work
 -> identify systemic workforce problems
+-> inspect workforce catalog/admission signals
 -> issue bounded corrective direction
 -> escalate genuine owner decisions
 ```
@@ -503,15 +550,16 @@ Recommended sequence:
 1. schemas and validated config;
 2. read-only project compiler;
 3. traceability registry;
-4. Agent DNA registry/eval harness;
-5. read-only Hermes/GitHub reconciliation;
-6. Kanban reconciliation in dry-run;
-7. controlled task creation;
-8. quality/rework engine;
-9. controlled dispatch;
-10. runtime/evidence lane;
-11. Factory Control MCP;
-12. continuous operations/governance.
+4. Agent DNA registry, Agent Admission Gate and eval harness;
+5. bootstrap workforce including Workforce Architect, Product Designer and Documentation Engineer;
+6. read-only Hermes/GitHub reconciliation;
+7. Kanban reconciliation in dry-run;
+8. controlled task creation;
+9. quality/rework engine;
+10. controlled dispatch;
+11. runtime/evidence lane;
+12. Factory Control MCP;
+13. continuous operations/governance.
 
 ## 22. First pilot — Hermes Security Labs
 
@@ -538,6 +586,8 @@ v1 does not aim to:
 - eliminate strategic human decisions;
 - become a commercial multi-tenant SaaS;
 - maximize swarm size;
+- model every possible corporate job title in advance;
+- allow automatic profile creation from a capability gap without governance;
 - allow worker agents to self-modify Factory governance without review.
 
 ## 25. Acceptance criteria for this design
@@ -551,10 +601,12 @@ The architecture is ready for implementation planning when the owner accepts:
 5. Project Compiler responsibility;
 6. semantic entity/traceability model;
 7. persistent profile/Agent DNA model;
-8. staffing and independent review model;
-9. quality/evidence invariants;
-10. Factory Control MCP boundary;
-11. HSL as first pilot and second-project portability proof.
+8. permanent Agent Admission Gate and workforce lifecycle;
+9. bootstrap addition of Workforce Architect, Product Designer and Documentation Engineer;
+10. staffing and independent review model;
+11. quality/evidence invariants including conditional documentation impact;
+12. Factory Control MCP boundary;
+13. HSL as first pilot and second-project portability proof.
 
 ## 26. Related design documents
 
@@ -565,6 +617,8 @@ The architecture is ready for implementation planning when the owner accepts:
 - `docs/04-project-contract-traceability.md`
 - `docs/05-security-quality-governance.md`
 - `docs/06-pilot-and-roadmap.md`
+- `docs/07-proposed-architecture-decisions.md`
+- `docs/08-agent-admission-and-catalog-governance.md`
 
 ## 27. Next gate
 
