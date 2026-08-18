@@ -67,6 +67,7 @@ Deliverables:
 - Agent DNA model;
 - project contract/traceability model;
 - security/quality/governance model;
+- Agent Admission & Catalog Governance model;
 - approved ADRs for foundational decisions.
 
 Gate: owner approves the architecture before implementation planning.
@@ -95,19 +96,25 @@ Deliverables:
 
 - Agent DNA schema;
 - profile-distribution packaging convention;
+- Agent Admission Gate;
+- workforce lifecycle (`PROPOSED -> INCUBATING -> EVALUATING -> ACTIVE -> DEPRECATED -> RETIRED`);
 - initial enterprise professions;
 - initial routine agents;
 - agent version registry;
 - eval harness;
-- promotion/rollback model for Agent DNA.
+- promotion/rollback model for Agent DNA;
+- overlap/deprecation review for the agent catalog.
 
 Suggested bootstrap workforce:
 
 ```text
 factory-orchestrator
+factory-workforce-architect
+factory-product-designer
 factory-requirements-engineer
 factory-software-architect
 factory-security-architect
+factory-documentation-engineer
 factory-tdd-red
 factory-python-engineer
 factory-code-reviewer
@@ -120,7 +127,7 @@ factory-runtime-truth-observer
 factory-release-manager
 ```
 
-The full catalog grows as real projects require additional professions.
+The full catalog grows as real projects require additional professions. A detected capability gap may propose a new role, but the Factory must first attempt reuse of an existing Profile, Skill, Runbook or Task Template and must never create new organizational authority silently.
 
 ### Phase 3 — Project Compiler + Kanban reconciliation
 
@@ -133,6 +140,7 @@ Deliverables:
 - create/reconcile isolated Hermes board;
 - staffing assignment;
 - task skill attachment;
+- capability-gap emission when staffing cannot be satisfied;
 - worktree policy;
 - no duplicate work under repeated compile.
 
@@ -160,6 +168,7 @@ Deliverables:
 - TDD lifecycle support;
 - independent review assignments;
 - security/adversarial gates;
+- documentation-impact gate where required;
 - rework orders;
 - exact-SHA enforcement;
 - acceptance derivation.
@@ -183,6 +192,7 @@ Deliverables:
 - locks/concurrency controls;
 - project pause/resume;
 - blocker/HITL escalation;
+- workforce health/catalog signals;
 - portfolio metrics;
 - compact project/factory status reports.
 
@@ -197,6 +207,7 @@ Deliverables:
 - project/portfolio inspection;
 - evidence challenge/reopen capability;
 - systemic agent-quality signals;
+- workforce-catalog review signals;
 - owner escalation contract.
 
 ChatGPT periodic automation may operate at the platform-supported schedule, while the Factory itself can run at a finer internal cadence through Hermes scheduling.
@@ -224,7 +235,7 @@ Success criteria:
 - no redesign of traceability schema;
 - project-specific workflow selected via profiles/configuration;
 - existing enterprise agents reused where relevant;
-- new domain agents added at the edge without changing core orchestration.
+- new domain agents added at the edge through the Agent Admission Gate without changing core orchestration.
 
 ## Architecture decision checkpoints
 
@@ -240,6 +251,7 @@ Before implementation, the following should become explicit ADRs:
 8. Runtime state requires fresh runtime evidence.
 9. ChatGPT is an external independent Governor, not the only orchestrator keeping the Factory alive.
 10. Factory Control MCP is the stable governance interface.
+11. New Factory profiles require a permanent Agent Admission Gate; capability gaps never create agents or authority silently.
 
 ## Initial implementation sequence
 
@@ -248,7 +260,7 @@ flowchart TD
     A[Approve Architecture v1] --> B[Write implementation plan]
     B --> C[Factory schemas + read-only compiler]
     C --> D[Traceability registry]
-    D --> E[Agent DNA + profile distributions]
+    D --> E[Agent DNA + admission gate + profile distributions]
     E --> F[Kanban read/reconcile]
     F --> G[GitHub reconcile]
     G --> H[Quality gates]
@@ -269,10 +281,12 @@ HSF v1 is not complete because a dashboard looks impressive. It is complete when
 - the board is correctly reconciled;
 - work is traceable to product intent;
 - specialized reusable profiles are staffed automatically;
+- capability gaps are governed instead of silently spawning new agents;
 - producer/reviewer separation is enforced where required;
 - worktrees prevent unsafe checkout collisions;
 - PR/CI/SHA evidence is bound correctly;
 - invalid/stale gates prevent acceptance;
+- documentation-impact requirements prevent stale project docs where applicable;
 - runtime-required work cannot close on repository evidence alone;
 - true HITL stops are respected;
 - the Factory resumes safely after interruption;
