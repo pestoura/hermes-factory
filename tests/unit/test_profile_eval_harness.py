@@ -1,4 +1,10 @@
-from hermes_factory import agents
+from hermes_factory.agents import (
+    ProfileAdmissionError,
+    ProfileEvalEvidence,
+    ProfileEvalHarness,
+    ProfileEvalRecord,
+    ProfileEvalState,
+)
 
 
 BASE_DIMENSIONS = (
@@ -15,25 +21,20 @@ BASE_DIMENSIONS = (
 
 
 def test_profile_evaluation_api_is_exposed() -> None:
-    names = (
-        "ProfileAdmissionError",
-        "ProfileEvalEvidence",
-        "ProfileEvalHarness",
-        "ProfileEvalRecord",
-        "ProfileEvalState",
-    )
-    missing = [name for name in names if getattr(agents, name, None) is None]
-
-    assert not missing, f"missing Profile evaluation API: {missing}"
+    assert ProfileAdmissionError is not None
+    assert ProfileEvalEvidence is not None
+    assert ProfileEvalHarness is not None
+    assert ProfileEvalRecord is not None
+    assert ProfileEvalState is not None
 
 
 def _passing_evidence(profile_id: str, digest: str, dimensions: tuple[str, ...]):
     return tuple(
-        agents.ProfileEvalEvidence(
+        ProfileEvalEvidence(
             profile_id=profile_id,
             profile_digest=digest,
             dimension=dimension,
-            state=agents.ProfileEvalState.PASS,
+            state=ProfileEvalState.PASS,
             evidence_ref=f"EV-{dimension}",
             evaluator=(
                 "factory-fail-closed-inspector"
@@ -46,7 +47,7 @@ def _passing_evidence(profile_id: str, digest: str, dimensions: tuple[str, ...])
 
 
 def test_profile_activation_eligibility_requires_every_base_dimension_pass() -> None:
-    harness = agents.ProfileEvalHarness()
+    harness = ProfileEvalHarness()
     profile_id = "factory-software-engineer"
     digest = "a" * 64
 
@@ -64,12 +65,6 @@ def test_profile_activation_eligibility_requires_every_base_dimension_pass() -> 
     )
 
     assert complete.eligible_for_activation is True
-    assert all(
-        state is agents.ProfileEvalState.PASS
-        for state in complete.required_states.values()
-    )
+    assert all(state is ProfileEvalState.PASS for state in complete.required_states.values())
     assert missing_review.eligible_for_activation is False
-    assert (
-        missing_review.required_states["independent_review"]
-        is agents.ProfileEvalState.NOT_RUN
-    )
+    assert missing_review.required_states["independent_review"] is ProfileEvalState.NOT_RUN
