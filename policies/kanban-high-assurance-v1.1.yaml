@@ -1,0 +1,30 @@
+schema: hermes.factory/kanban-policy/v1
+policy:
+  id: factory-kanban-high-assurance
+  version: 1.1.0
+  lifecycle: proposed
+  architecture_baseline: 1.1
+
+  hermes:
+    kanban:
+      auto_decompose: false
+      dispatch_approval_mode: structured
+
+  requirements:
+    - explicit_factory_compilation_before_dispatch
+    - structured_approval_before_protected_state_advance
+    - no_compat_mode_for_high_assurance_factory_boards
+    - no_nonspawnable_assignee_as_security_boundary
+    - board_scoped_workers
+    - worktree_for_git_mutation
+    - idempotent_task_creation
+    - bounded_failure_retries
+
+  rationale:
+    - preserve_owner_governance_during_initial_factory_bootstrap
+    - avoid_known_auto_decompose_containment_risk
+    - preserve_pestoura_fork_dispatch_approval_hardening
+
+  relaxation:
+    allowed: false
+    requires_future_architecture_decision: true
