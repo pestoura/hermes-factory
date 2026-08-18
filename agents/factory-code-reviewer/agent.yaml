@@ -17,11 +17,12 @@ agent:
     required:
       - reading-project-truth
       - reviewing-code-independently
-      - verifying-exact-sha
       - producing-evidence-handoffs
     optional:
       - assessing-change-impact
       - validating-documentation-consistency
+  deterministic_gates:
+    - factory-exact-sha
   authority:
     allow:
       - inspect_repository_and_diff
