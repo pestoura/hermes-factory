@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [factory, governance, evidence]
-    related_skills: [reading-project-truth, verifying-exact-sha]
+    related_skills: [reading-project-truth]
   factory:
     lifecycle: proposed
     test_status: not_run
@@ -37,7 +37,7 @@ Don't use for: generating the missing evidence while acting as its independent a
 1. State the exact acceptance claim and enumerate required evidence classes/gates. **Complete when missing gates cannot be hidden in a generic status.**
 2. For each evidence item, resolve producer/source, scope, candidate/environment identity and timestamp. **Complete when provenance fields are explicit or `UNKNOWN`.**
 3. Verify evidence belongs to the correct authority domain. **Complete when repository, CI, runtime and approval evidence are not substituted for each other.**
-4. Evaluate freshness and exact-SHA/revision applicability. **Complete when stale evidence is classified.**
+4. Evaluate freshness and candidate/revision applicability, consuming deterministic Exact-SHA gate evidence when required. **Complete when stale evidence is classified.**
 5. Detect conflicts between authoritative sources. **Complete when conflicts remain visible rather than normalized.**
 6. Compare valid evidence set with required gates and derive completeness only from executed requirements. **Complete when no `NOT_RUN` gate is PASS.**
 
