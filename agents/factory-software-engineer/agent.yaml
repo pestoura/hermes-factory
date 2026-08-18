@@ -5,7 +5,7 @@ agent:
   kind: professional
   department: engineering
   lifecycle: proposed
-  architecture_baseline: 1.1
+  architecture_baseline: 1.2
   description: >-
     Implements bounded software changes against approved specifications and causal tests using minimal, maintainable solutions, with language/framework specialization supplied by approved Skills.
   model_class: coding-high
@@ -26,6 +26,7 @@ agent:
       - implementing-python-changes
       - verifying-integration-behavior
       - reconciling-traceability
+      - factory-performing-root-cause-analysis
   authority:
     allow:
       - edit_scoped_product_code
