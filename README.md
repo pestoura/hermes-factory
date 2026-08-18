@@ -62,7 +62,31 @@ The Factory deliberately reuses Hermes native profiles, `SOUL.md`, skills, Kanba
 10. **[Agent DNA Runtime Configuration](docs/09-agent-dna-runtime-configuration.md)** — canonical `agent.yaml`, Hermes Profile Distribution projection, model/tool/MCP/memory policy.
 11. **[Base Agent Catalog v1](docs/10-base-agent-catalog-v1.md)** — detailed configuration of the 17 bootstrap profiles.
 12. **[Base Agent Souls v1](docs/11-base-agent-souls-v1.md)** — Factory Constitution plus the proposed professional Soul of every bootstrap profile.
-13. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
+13. **[Skills Architecture v1](docs/12-skills-architecture-v1.md)** — native Hermes Skill model, shared/specific Skills, Skill Admission and version policy.
+14. **[Skill Eval Plan v1](docs/13-skill-eval-plan-v1.md)** — RED/GREEN promotion evidence required before Skills reach `1.0.0 ACTIVE`.
+15. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
+
+## Executable design sources
+
+The proposal now includes source-form Agent and Skill definitions, not only narrative architecture:
+
+```text
+agents/
+├── README.md
+├── _shared/
+│   ├── FACTORY_CONSTITUTION.md
+│   └── runtime-policies.yaml
+└── factory-*/
+    ├── agent.yaml
+    └── SOUL.md
+
+skills/
+├── README.md
+├── registry.yaml
+└── <category>/<skill>/SKILL.md
+```
+
+The 17 base Agent contracts are `1.0.0 / PROPOSED`. The 24 initial Skills are intentionally `0.1.0 / PROPOSED / NOT_RUN` until Skill TDD proves their behavioral value.
 
 ## Target project handoff
 
