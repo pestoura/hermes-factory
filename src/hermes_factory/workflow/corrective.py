@@ -32,7 +32,7 @@ class Finding:
 
 
 class ReworkController:
-    def __init__(self, max_same_cause_attempts: int):
+    def __init__(self, max_same_cause_attempts: int) -> None:
         if max_same_cause_attempts < 1:
             raise ValueError("max_same_cause_attempts must be >= 1")
         self.max_same_cause_attempts = max_same_cause_attempts
