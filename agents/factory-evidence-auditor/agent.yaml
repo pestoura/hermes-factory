@@ -19,7 +19,6 @@ agent:
       - auditing-evidence-provenance
       - producing-evidence-handoffs
     optional:
-      - verifying-exact-sha
       - reconciling-traceability
   authority:
     allow:
