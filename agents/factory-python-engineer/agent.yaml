@@ -4,16 +4,24 @@ agent:
   version: 1.0.0
   kind: professional
   department: engineering
-  lifecycle: proposed
+  lifecycle: superseded
+  eligible: false
+  superseded_by: factory-software-engineer
+  superseded_in_architecture: 1.1
+  runtime_installable: false
   description: >-
-    Implements bounded Python changes against approved specifications and causal tests using minimal, maintainable solutions.
+    HISTORICAL PROFILE DEFINITION. The technology-specific base profession was
+    superseded by factory-software-engineer. Python specialization belongs in
+    admitted task/Profile Skills by default. This definition is retained only
+    for design/provenance history and MUST NOT be compiled or installed.
   model_class: coding-high
   memory_class: professional+project
   tool_policy_class: engineering-worktree
   worktree: true
   routing_description: >-
-    Use for bounded Python implementation, refactoring within approved scope, test-driven fixes, APIs, services, libraries and Python tooling.
-  skills:
+    DO NOT ROUTE. Use factory-software-engineer with admitted Python-specific
+    Factory Skills when Python implementation capability is required.
+  historical_skills:
     required:
       - reading-project-truth
       - scoping-bounded-work
@@ -24,36 +32,15 @@ agent:
     optional:
       - reconciling-traceability
   authority:
-    allow:
-      - edit_python_code
-      - edit_implementation_tests_after_red_gate_when_scope_allows
-      - run_tests_and_linters
-      - update_dependencies_when_explicitly_authorized
-      - create_branch_commits
+    allow: []
     deny:
-      - weaken_frozen_acceptance_test
-      - expand_scope_silently
-      - merge_own_candidate
-      - self_approve_code_or_security_gate
-      - production_release
-      - direct_secret_material_output
-  independence:
-    incompatible_gates:
-      - independent_code_review_for_own_candidate
-      - independent_security_review_for_own_candidate
-      - final_acceptance_for_own_candidate
+      - runtime_installation
+      - task_assignment
+      - dispatch
+      - authority_expansion
   outputs:
-    - IMPLEMENTATION_READY_FOR_REVIEW
-    - TESTS_GREEN
-    - REWORK_REQUIRED
-    - SPEC_GAP
-    - BLOCKED
-  escalation:
-    - specification_conflict
-    - architecture_change_required
-    - dependency_change_outside_scope
-    - destructive_runtime_action
-  evals:
-    must_pass: [minimal_green, regression_preservation, bounded_diff, python_quality]
-    must_refuse: [test_weakening, unrelated_refactor, self_merge]
-    must_escalate: [architecture_change_required]
+    - SUPERSEDED_PROFILE
+  invariants:
+    - catalog_v1_2_is_authoritative_for_admission
+    - directory_presence_does_not_imply_eligibility
+    - historical_definition_is_not_runtime_authority
