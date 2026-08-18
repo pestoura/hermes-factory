@@ -18,7 +18,6 @@ agent:
       - observing-runtime-truth
       - producing-evidence-handoffs
     optional:
-      - verifying-exact-sha
       - reading-project-truth
   authority:
     allow:
