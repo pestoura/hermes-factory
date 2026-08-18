@@ -1,5 +1,7 @@
-schema: hermes.factory/runtime-policies/v1
-status: proposed
+schema: hermes.factory/runtime-policies/v1.2
+status: proposed_for_owner_review
+architecture_baseline: 1.2
+implementation_authority: NOT_GRANTED
 
 model_classes:
   reasoning-high:
@@ -33,17 +35,26 @@ memory_classes:
     project_memory_source: external-context-or-rehydrated-project
     canonical_override: forbidden
 
-mcp_surfaces:
-  factory-control-read:
+# Internal Factory workers use supported local/native Hermes/Jarvas interfaces.
+# The Hermes MCP Bridge is reserved for the northbound external control boundary
+# and is not the normal IPC path between Factory Profiles and Jarvas services.
+native_surfaces:
+  factory-semantic-read:
     authority: read
-    purpose: project, board, work, agents, gates, evidence and traceability inspection
-  factory-control-orchestrate:
+    purpose: local Factory project, work, agent, gate, evidence and traceability inspection
+  factory-semantic-orchestrate:
     authority: bounded-work-mutation
-    purpose: create/link/assign/rework/pause approved Factory work
-  github-read:
+    purpose: local governed create/link/assign/rework/pause transitions over native Factory/Kanban adapters
+  hermes-kanban-read:
     authority: read
-    purpose: repository, Issue, PR, commit, review and CI inspection
-  github-engineering-write:
+    purpose: native Hermes board/task/dependency/dispatch state
+  hermes-kanban-orchestrate:
+    authority: bounded-work-mutation
+    purpose: native Hermes task creation/linking/assignment/promotion under structured policy
+  scm-read:
+    authority: read
+    purpose: repository, issue, PR, commit, review and CI inspection through supported Git/GitHub interfaces
+  scm-engineering-write:
     authority: bounded-scm-write
     purpose: branch, commit, PR and review workflow inside assigned repositories
   runtime-read:
@@ -51,15 +62,22 @@ mcp_surfaces:
     purpose: fresh runtime observation only
   release-controlled:
     authority: protected-mutation
-    purpose: release/promotion/rollback operations only through policy and HITL
+    purpose: release/promotion/rollback operations only through policy and true HITL when required
+
+external_control_boundary:
+  transport: Hermes_MCP_Bridge
+  direction: northbound_only
+  clients: [ChatGPT_Governor, external_authorized_clients]
+  internal_worker_dependency: forbidden
 
 # Tool policies are desired enforcement contracts. SOUL instructions are not
 # considered enforcement. The Agent Compiler must translate these to Hermes
-# platform_toolsets, MCP scopes, sandbox/workspace mode and credential policy.
+# platform toolsets, native/local adapters, sandbox/workspace mode and credential policy.
 tool_policy_classes:
   control-orchestrate:
-    hermes_toolsets: [skills, todo]
-    mcp: [factory-control-read, factory-control-orchestrate, github-read]
+    hermes_toolsets: [skills, todo, kanban]
+    local: [factory-semantic-read, factory-semantic-orchestrate, hermes-kanban-read, hermes-kanban-orchestrate, scm-read]
+    mcp: []
     workspace: none
     terminal: disabled
     browser: disabled
@@ -67,8 +85,9 @@ tool_policy_classes:
     runtime_write: false
 
   control-read:
-    hermes_toolsets: [skills, todo]
-    mcp: [factory-control-read, github-read]
+    hermes_toolsets: [skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read]
+    mcp: []
     workspace: none
     terminal: disabled
     browser: disabled
@@ -76,64 +95,72 @@ tool_policy_classes:
     runtime_write: false
 
   engineering-readwrite-docs:
-    hermes_toolsets: [terminal, file, web, skills, todo]
-    mcp: [factory-control-read, github-read, github-engineering-write]
+    hermes_toolsets: [terminal, file, web, skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
+    mcp: []
     workspace: isolated-worktree
     terminal: sandboxed-preferred
     scm_write: bounded
     runtime_write: false
 
   design-docs:
-    hermes_toolsets: [file, web, vision, skills, todo]
-    mcp: [factory-control-read, github-read, github-engineering-write]
+    hermes_toolsets: [file, web, vision, skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
+    mcp: []
     workspace: isolated-worktree
     terminal: disabled-by-default
     scm_write: bounded-docs-only
     runtime_write: false
 
   engineering-worktree:
-    hermes_toolsets: [terminal, file, web, skills, todo]
-    mcp: [factory-control-read, github-read, github-engineering-write]
+    hermes_toolsets: [terminal, file, web, skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
+    mcp: []
     workspace: isolated-worktree
     terminal: sandboxed-preferred
     scm_write: bounded
     runtime_write: false
 
   review:
-    hermes_toolsets: [terminal, file, web, skills, todo]
-    mcp: [factory-control-read, github-read]
+    hermes_toolsets: [terminal, file, web, skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read]
+    mcp: []
     workspace: read-only-candidate-snapshot
     terminal: sandboxed-readonly-candidate
-    scm_write: review-comments-only-through-gateway
+    scm_write: review-comments-only-through-supported-scm-interface
     runtime_write: false
 
   review-observe:
-    hermes_toolsets: [terminal, file, skills, todo]
-    mcp: [factory-control-read, github-read]
+    hermes_toolsets: [terminal, file, skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read]
+    mcp: []
     workspace: read-only-candidate-snapshot
     terminal: sandboxed-readonly-candidate
     scm_write: false
     runtime_write: false
 
   engineering-test:
-    hermes_toolsets: [terminal, file, skills, todo]
-    mcp: [factory-control-read, github-read, github-engineering-write]
+    hermes_toolsets: [terminal, file, skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
+    mcp: []
     workspace: isolated-test-worktree
     terminal: sandboxed-preferred
     scm_write: tests-only-bounded
     runtime_write: false
 
   runtime-observe:
-    hermes_toolsets: [skills, todo]
-    mcp: [factory-control-read, github-read, runtime-read]
+    hermes_toolsets: [skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read, runtime-read]
+    mcp: []
     workspace: none
     terminal: disabled
     scm_write: false
     runtime_write: false
 
   release-controlled:
-    hermes_toolsets: [skills, todo]
-    mcp: [factory-control-read, github-read, release-controlled]
+    hermes_toolsets: [skills, todo, kanban]
+    local: [factory-semantic-read, hermes-kanban-read, scm-read, release-controlled]
+    mcp: []
     workspace: none
     terminal: disabled-by-default
     scm_write: false
@@ -148,6 +175,20 @@ hermes_profile_defaults:
   profile_per_concurrent_agent: required
   shared_profile_between_processes: forbidden
   worktree_for_repo_mutation: required
+  time_driven_schedule: native_hermes_profile_cron_only
+
+skill_authorization:
+  rule: effective_skills_equals_required_plus_task_approved
+  required_skills_must_be_registered: true
+  task_approved_skills_must_be_registered: true
+  server_wide_install_implies_factory_authorization: false
+  worker_self_expansion: forbidden
+
+transition_authorization:
+  ordinary_stage_transition: structured_machine_or_policy_authorization
+  structured_approval_implies_human: false
+  true_hitl: explicit_hitl_request_required
+  handoff_must_be_atomic: true
 
 policy_invariants:
   - soul_is_not_authority_enforcement
@@ -156,5 +197,8 @@ policy_invariants:
   - credentials_scoped_outside_agent_dna
   - reviewer_candidate_workspace_read_only_where_practical
   - runtime_observer_no_mutation_tools
-  - release_mutation_only_via_policy_gateway
+  - release_mutation_only_via_policy_or_explicit_hitl
   - project_specific_tools_do_not_silently_expand_global_agent_authority
+  - internal_factory_workers_do_not_depend_on_mcp_bridge
+  - structured_approval_does_not_mean_human_approval
+  - native_hermes_cron_only_for_factory_time_driven_work
