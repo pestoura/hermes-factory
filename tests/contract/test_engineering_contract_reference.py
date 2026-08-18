@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-import hermes_factory.contracts as contracts
+from hermes_factory import contracts
 
 
 def _write(tmp_path: Path, text: str) -> Path:
