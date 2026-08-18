@@ -53,13 +53,16 @@ The Factory deliberately reuses Hermes native profiles, `SOUL.md`, skills, Kanba
 1. **[Executive Proposal](docs/00-executive-proposal.md)** — the business/product case and the idea in one view.
 2. **[Reference Architecture](docs/01-reference-architecture.md)** — system boundaries and technical components.
 3. **[Operating Model](docs/02-operating-model.md)** — how projects flow from design to accepted delivery.
-4. **[Agent Workforce & Agent DNA](docs/03-agent-workforce.md)** — the reusable engineering organization, Souls, roles, routines and evals.
+4. **[Agent Workforce & Agent DNA](docs/03-agent-workforce.md)** — the reusable engineering organization and workforce model.
 5. **[Project Contract & Traceability](docs/04-project-contract-traceability.md)** — how Epics, Issues, WPs, Kanban tasks, PRs, SHAs, CI and runtime evidence stay connected.
 6. **[Security, Quality & Governance](docs/05-security-quality-governance.md)** — fail-closed policy, evidence, segregation of duties and HITL.
 7. **[Pilot & Roadmap](docs/06-pilot-and-roadmap.md)** — implementation phases and Hermes Security Labs as first pilot.
 8. **[Proposed Foundational Decisions](docs/07-proposed-architecture-decisions.md)** — the decisions to accept/change/defer/reject before implementation.
-9. **[Agent Admission & Catalog Governance](docs/08-agent-admission-and-catalog-governance.md)** — permanent Profile-vs-Skill gate, workforce lifecycle and new Documentation/UX/Workforce roles.
-10. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
+9. **[Agent Admission & Catalog Governance](docs/08-agent-admission-and-catalog-governance.md)** — permanent Profile-vs-Skill gate and workforce lifecycle.
+10. **[Agent DNA Runtime Configuration](docs/09-agent-dna-runtime-configuration.md)** — canonical `agent.yaml`, Hermes Profile Distribution projection, model/tool/MCP/memory policy.
+11. **[Base Agent Catalog v1](docs/10-base-agent-catalog-v1.md)** — detailed configuration of the 17 bootstrap profiles.
+12. **[Base Agent Souls v1](docs/11-base-agent-souls-v1.md)** — Factory Constitution plus the proposed professional Soul of every bootstrap profile.
+13. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
 
 ## Target project handoff
 
