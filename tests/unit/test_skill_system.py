@@ -147,3 +147,58 @@ def test_compiler_rewrites_native_skill_identity_and_adds_canonical_provenance(t
     assert "origin_repo: pestoura/hermes-factory" in text
     assert "origin_ref: abc123" in text
     assert "Keep the causal RED honest." in text
+
+
+def _write_skill(root: Path, folder: str, declared_name: str) -> None:
+    path = root / folder / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        f"name: {declared_name}\n"
+        "description: test\n"
+        "version: 0.1.0\n"
+        "---\n\n# Skill\n"
+    )
+
+
+def test_source_reconciliation_requires_exactly_one_source_per_registered_skill(tmp_path: Path):
+    registry = SkillRegistry.from_document(_registry_document())
+    _write_skill(tmp_path, "core/reading-project-truth", "reading-project-truth")
+    _write_skill(
+        tmp_path,
+        "engineering/implementing-minimal-green",
+        "implementing-minimal-green",
+    )
+    _write_skill(
+        tmp_path,
+        "governance/verifying-exact-sha",
+        "verifying-exact-sha",
+    )
+
+    result = registry.reconcile_sources(tmp_path)
+
+    assert result.sources == {
+        "factory-reading-project-truth": (
+            tmp_path / "core/reading-project-truth" / "SKILL.md"
+        ),
+        "factory-implementing-minimal-green": (
+            tmp_path / "engineering/implementing-minimal-green" / "SKILL.md"
+        ),
+    }
+    assert result.superseded_sources == (
+        tmp_path / "governance/verifying-exact-sha" / "SKILL.md",
+    )
+
+
+def test_source_reconciliation_rejects_orphans_duplicates_and_missing_sources(tmp_path: Path):
+    registry = SkillRegistry.from_document(_registry_document())
+    _write_skill(tmp_path, "a/reading-project-truth", "reading-project-truth")
+    _write_skill(
+        tmp_path,
+        "b/factory-reading-project-truth",
+        "factory-reading-project-truth",
+    )
+    _write_skill(tmp_path, "c/not-real", "not-real")
+
+    with pytest.raises(SkillAdmissionError, match="orphan|duplicate|missing"):
+        registry.reconcile_sources(tmp_path)
