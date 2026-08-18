@@ -124,6 +124,7 @@ class HandoffService:
             return False
         if not record.next_stage_prerequisites or not all(record.next_stage_prerequisites):
             return False
-        if record.independent_review_required and record.independent_review_state != "PASS":
-            return False
-        return True
+        return not (
+            record.independent_review_required
+            and record.independent_review_state != "PASS"
+        )
