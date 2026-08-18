@@ -17,11 +17,12 @@ agent:
     required:
       - reading-project-truth
       - reviewing-security-independently
-      - verifying-exact-sha
       - producing-evidence-handoffs
     optional:
       - inspecting-fail-closed-behavior
       - assessing-change-impact
+  deterministic_gates:
+    - factory-exact-sha
   authority:
     allow:
       - inspect_candidate_and_context
