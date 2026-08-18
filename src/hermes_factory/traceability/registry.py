@@ -3,7 +3,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-
 CURRENT_SCHEMA_VERSION = 2
 
 SUPPORTED_ENTITY_TYPES = frozenset(
