@@ -1,48 +1,42 @@
 # Factory Agents
 
-This directory is the canonical source for Hermes Software Factory Agent DNA.
+This directory contains Hermes Software Factory Agent DNA source and historical Agent definitions.
 
-## v1 source contract
+**Current admission/compilation authority:** `agents/catalog-v1.2.yaml`  
+**Architecture baseline:** v1.2  
+**Implementation authority:** NOT GRANTED
 
-Each persistent Profile has:
+## Source contract
+
+Each persistent Profile may have:
 
 ```text
 agents/<agent-id>/
-├── agent.yaml   # authority, routing, model/memory/tool classes, skills, outputs, eval contract
-└── SOUL.md      # professional identity, mission, posture, method and prohibitions
+├── agent.yaml
+└── SOUL.md
 ```
 
-All Profiles inherit `agents/_shared/FACTORY_CONSTITUTION.md`.
+All current Profiles inherit `agents/_shared/FACTORY_CONSTITUTION.md`. Runtime classes are defined centrally in `agents/_shared/runtime-policies.yaml`.
 
-Runtime classes are defined centrally in `agents/_shared/runtime-policies.yaml`. The future Agent Compiler resolves these sources into a native Hermes Profile Distribution:
+The future Agent Compiler resolves admitted sources into a native Hermes Profile Distribution:
 
 ```text
-Agent DNA + Constitution + Skills + Runtime Policies + Model Policy
+Agent DNA + Constitution + admitted Factory Skills + Runtime Policies + Model Policy
                            ↓
                     Agent Compiler
                            ↓
 distribution.yaml + SOUL.md + config.yaml + mcp.json + skills/ + cron/
 ```
 
-The source representation deliberately does not commit `.env`, credentials, memories, sessions, runtime databases or logs.
+The source representation deliberately excludes `.env`, credentials, memories, sessions, runtime databases and logs.
 
-## Lifecycle
+## Admission rule
 
-The current Agent definitions are `version: 1.0.0` but `lifecycle: proposed`.
+**Directory presence does not imply eligibility.** A Profile is eligible for current compilation only when admitted by `agents/catalog-v1.2.yaml` with the required lifecycle/evaluation state.
 
-`1.0.0` identifies the reviewed design contract; it does **not** mean the Profile is installed, evaluated or active. Promotion to active runtime requires:
+New Profiles require the Agent Admission Gate. Workers cannot create, promote or broaden their own profession/authority.
 
-```text
-Agent DNA schema validation
-+ required Skill promotion/compatibility
-+ Agent eval suite
-+ least-authority runtime projection review
-+ install in isolated Profile
-+ smoke tests
-+ governance promotion
-```
-
-## Base v1 workforce
+## v1.2 active-candidate workforce
 
 ```text
 factory-orchestrator
@@ -53,15 +47,49 @@ factory-security-architect
 factory-product-designer
 factory-documentation-engineer
 factory-tdd-red
-factory-python-engineer
+factory-software-engineer
+factory-platform-engineer
 factory-code-reviewer
 factory-security-reviewer
 factory-fail-closed-inspector
 factory-integration-tester
-factory-exact-sha-auditor
 factory-evidence-auditor
 factory-runtime-truth-observer
 factory-release-manager
 ```
 
-New Profiles must pass the Agent Admission Gate. Do not add a directory simply because a new specialization sounds useful.
+This is a reusable catalog, not a permanently running fleet.
+
+## Superseded historical directories
+
+The following directories are retained only for design/provenance history and are explicitly ineligible:
+
+```text
+factory-python-engineer
+  -> superseded by factory-software-engineer
+
+factory-exact-sha-auditor
+  -> superseded by deterministic gate:factory-exact-sha
+```
+
+Their `agent.yaml` files are marked `lifecycle: superseded`, `eligible: false`, `runtime_installable: false`. Their existence MUST NOT cause runtime installation or task routing.
+
+## Lifecycle
+
+An Agent DNA version does not imply an installed or ACTIVE runtime Profile. Runtime promotion requires, at minimum:
+
+```text
+Agent DNA/schema validation
++ required admitted Skill compatibility/evals
++ Agent eval suite
++ least-authority runtime projection review
++ isolated Profile installation
++ smoke tests
++ governance promotion
+```
+
+No Profile is installed or activated by this design branch.
+
+## Runtime boundary
+
+Current worker policies use native/local Hermes/Jarvas interfaces. Internal Factory workers do not depend on the northbound Hermes MCP Bridge. Factory-internal time-driven schedules compile to native Hermes Profile/Agent cron only.
