@@ -1,18 +1,11 @@
 from dataclasses import replace
 
-from hermes_factory.compiler.project import (
-    CanonicalSourceRef,
-    CompileInput,
-    EcosystemSnapshot,
-    ProjectCompiler,
-    RepositorySnapshot,
-    RequirementInput,
-)
+import hermes_factory.compiler.project as project_compiler
 from hermes_factory.contracts.project import AcceptanceContract, ProjectContract
 
 
-def _input() -> CompileInput:
-    return CompileInput(
+def _input():
+    return project_compiler.CompileInput(
         project=ProjectContract(
             project_id="jarvas-cli",
             name="Jarvas CLI",
@@ -25,7 +18,7 @@ def _input() -> CompileInput:
             owner_acceptance_required=True,
         ),
         requirements=(
-            RequirementInput(
+            project_compiler.RequirementInput(
                 requirement_id="REQ-1",
                 epic_id="EPIC-CLI",
                 title="Truthful status",
@@ -46,26 +39,26 @@ def _input() -> CompileInput:
         ),
         admitted_skills=frozenset({"factory-cli-engineering"}),
         canonical_sources=(
-            CanonicalSourceRef(
+            project_compiler.CanonicalSourceRef(
                 kind="ARCHITECTURE",
                 source_id="ARCH-1",
                 revision="r4",
                 digest="arch-digest",
             ),
-            CanonicalSourceRef(
+            project_compiler.CanonicalSourceRef(
                 kind="ADR",
                 source_id="ADR-12",
                 revision="accepted-v2",
                 digest="adr-digest",
             ),
         ),
-        repository_snapshot=RepositorySnapshot(
+        repository_snapshot=project_compiler.RepositorySnapshot(
             head_sha="a" * 40,
             tests_digest="tests-v1",
             ci_config_digest="ci-v3",
             scm_state_digest="scm-v7",
         ),
-        ecosystem_snapshot=EcosystemSnapshot(
+        ecosystem_snapshot=project_compiler.EcosystemSnapshot(
             snapshot_id="hermes360-20260818T2200",
             digest="eco-v5",
             capabilities=frozenset({"jarvas-ops-evidence"}),
@@ -77,7 +70,7 @@ def _input() -> CompileInput:
 
 
 def test_compile_digest_binds_canonical_repository_board_runtime_and_ecosystem_truth() -> None:
-    compiler = ProjectCompiler()
+    compiler = project_compiler.ProjectCompiler()
     source = _input()
     baseline = compiler.compile(source).digest
 
@@ -106,7 +99,7 @@ def test_compile_digest_binds_canonical_repository_board_runtime_and_ecosystem_t
 
 
 def test_work_package_exposes_hitl_capability_and_fail_closed_lifecycle_semantics() -> None:
-    model = ProjectCompiler().compile(_input())
+    model = project_compiler.ProjectCompiler().compile(_input())
     wp = model.work_packages[0]
 
     assert wp.required_capabilities == ("jarvas-ops-evidence",)
@@ -122,7 +115,7 @@ def test_missing_ecosystem_capability_is_a_gap_not_an_invented_worker() -> None:
         ecosystem_snapshot=replace(source.ecosystem_snapshot, capabilities=frozenset()),
     )
 
-    model = ProjectCompiler().compile(source)
+    model = project_compiler.ProjectCompiler().compile(source)
 
     assert (
         "ECOSYSTEM_CAPABILITY",
@@ -135,7 +128,7 @@ def test_missing_ecosystem_capability_is_a_gap_not_an_invented_worker() -> None:
 
 
 def test_acceptance_graph_is_explicit_and_preserves_jds_authority() -> None:
-    model = ProjectCompiler().compile(_input())
+    model = project_compiler.ProjectCompiler().compile(_input())
     wp = model.work_packages[0]
 
     requirements = {(item.kind, item.requirement_id) for item in wp.acceptance_requirements}
@@ -155,12 +148,14 @@ def test_compile_rejects_unbound_canonical_source_identity() -> None:
     bad = replace(
         source,
         canonical_sources=(
-            CanonicalSourceRef(kind="ADR", source_id="ADR-12", revision="", digest="x"),
+            project_compiler.CanonicalSourceRef(
+                kind="ADR", source_id="ADR-12", revision="", digest="x"
+            ),
         ),
     )
 
     try:
-        ProjectCompiler().compile(bad)
+        project_compiler.ProjectCompiler().compile(bad)
     except ValueError as exc:
         assert "canonical source revision" in str(exc)
     else:
