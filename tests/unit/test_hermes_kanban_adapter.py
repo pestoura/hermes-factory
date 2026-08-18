@@ -167,3 +167,61 @@ def test_board_reconciliation_uses_native_idempotent_board_api() -> None:
             },
         ),
     ]
+
+
+def test_high_assurance_patch_matches_native_hermes_config_keys() -> None:
+    adapter = HermesKanbanAdapter(FakeNativeKanban())
+
+    assert adapter.high_assurance_config_patch() == {
+        "kanban": {
+            "auto_decompose": False,
+            "dispatch_approval_mode": "structured",
+        }
+    }
+
+
+def test_high_assurance_verification_fails_closed_on_permissive_defaults() -> None:
+    adapter = HermesKanbanAdapter(FakeNativeKanban())
+
+    with pytest.raises(ValueError, match="auto_decompose"):
+        adapter.assert_high_assurance_config(
+            {
+                "kanban": {
+                    "auto_decompose": True,
+                    "dispatch_approval_mode": "compat",
+                }
+            }
+        )
+
+
+def test_high_assurance_verification_accepts_required_values_with_extra_config() -> None:
+    adapter = HermesKanbanAdapter(FakeNativeKanban())
+
+    adapter.assert_high_assurance_config(
+        {
+            "kanban": {
+                "auto_decompose": False,
+                "dispatch_approval_mode": "structured",
+                "max_spawn": 4,
+            },
+            "agent": {"max_turns": 500},
+        }
+    )
+
+
+def test_high_assurance_verification_rejects_missing_or_compat_dispatch_mode() -> None:
+    adapter = HermesKanbanAdapter(FakeNativeKanban())
+
+    with pytest.raises(ValueError, match="dispatch_approval_mode"):
+        adapter.assert_high_assurance_config(
+            {"kanban": {"auto_decompose": False}}
+        )
+    with pytest.raises(ValueError, match="dispatch_approval_mode"):
+        adapter.assert_high_assurance_config(
+            {
+                "kanban": {
+                    "auto_decompose": False,
+                    "dispatch_approval_mode": "compat",
+                }
+            }
+        )
