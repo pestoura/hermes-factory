@@ -1,0 +1,66 @@
+schema: hermes.factory/skills/v1
+registry:
+  policy:
+    source_of_truth: skills
+    new_skill_version: 0.1.0
+    active_baseline_version: 1.0.0
+    promotion_requires: [baseline_red, skill_green, variation_eval, review]
+    description_max_chars: 60
+    model: nous-hermes-skill-md
+
+  core:
+    - reading-project-truth
+    - scoping-bounded-work
+    - producing-evidence-handoffs
+    - reconciling-traceability
+    - assessing-change-impact
+
+  control_workforce:
+    - decomposing-approved-work
+    - governing-agent-admission
+
+  product_architecture:
+    - baselining-requirements
+    - making-architecture-decisions
+    - threat-modeling-changes
+    - designing-product-experience
+
+  documentation:
+    - authoring-repository-documentation
+    - validating-documentation-consistency
+
+  engineering_quality:
+    - writing-causal-red-tests
+    - implementing-minimal-green
+    - implementing-python-changes
+    - reviewing-code-independently
+    - verifying-integration-behavior
+
+  security_assurance:
+    - reviewing-security-independently
+    - inspecting-fail-closed-behavior
+
+  governance_operations:
+    - verifying-exact-sha
+    - auditing-evidence-provenance
+    - observing-runtime-truth
+    - coordinating-governed-releases
+
+  consumers:
+    factory-orchestrator: [reading-project-truth, scoping-bounded-work, decomposing-approved-work, reconciling-traceability, producing-evidence-handoffs]
+    factory-workforce-architect: [reading-project-truth, governing-agent-admission, producing-evidence-handoffs]
+    factory-requirements-engineer: [reading-project-truth, baselining-requirements, assessing-change-impact, producing-evidence-handoffs]
+    factory-software-architect: [reading-project-truth, making-architecture-decisions, assessing-change-impact, reconciling-traceability, producing-evidence-handoffs]
+    factory-security-architect: [reading-project-truth, threat-modeling-changes, assessing-change-impact, producing-evidence-handoffs]
+    factory-product-designer: [reading-project-truth, designing-product-experience, assessing-change-impact, producing-evidence-handoffs]
+    factory-documentation-engineer: [reading-project-truth, authoring-repository-documentation, validating-documentation-consistency, assessing-change-impact, producing-evidence-handoffs]
+    factory-tdd-red: [reading-project-truth, scoping-bounded-work, writing-causal-red-tests, producing-evidence-handoffs]
+    factory-python-engineer: [reading-project-truth, scoping-bounded-work, implementing-minimal-green, implementing-python-changes, assessing-change-impact, producing-evidence-handoffs]
+    factory-code-reviewer: [reading-project-truth, reviewing-code-independently, verifying-exact-sha, producing-evidence-handoffs]
+    factory-security-reviewer: [reading-project-truth, reviewing-security-independently, verifying-exact-sha, producing-evidence-handoffs]
+    factory-fail-closed-inspector: [reading-project-truth, inspecting-fail-closed-behavior, producing-evidence-handoffs]
+    factory-integration-tester: [reading-project-truth, verifying-integration-behavior, producing-evidence-handoffs]
+    factory-exact-sha-auditor: [verifying-exact-sha, producing-evidence-handoffs]
+    factory-evidence-auditor: [reading-project-truth, auditing-evidence-provenance, producing-evidence-handoffs]
+    factory-runtime-truth-observer: [observing-runtime-truth, producing-evidence-handoffs]
+    factory-release-manager: [reading-project-truth, coordinating-governed-releases, verifying-exact-sha, reconciling-traceability, producing-evidence-handoffs]
