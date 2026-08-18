@@ -1,0 +1,50 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-exact-sha-auditor
+  version: 1.0.0
+  kind: routine
+  department: governance-assurance
+  lifecycle: proposed
+  description: >-
+    Verifies that implementation, review, CI, merge, deployment and evidence refer to the exact candidate revisions they claim.
+  model_class: fast-verifier
+  memory_class: minimal
+  tool_policy_class: control-read
+  worktree: false
+  routing_description: >-
+    Use when acceptance depends on proving SHA coherence across PR head, reviews, CI, merge/main revision, deployment or runtime evidence.
+  skills:
+    required:
+      - verifying-exact-sha
+      - producing-evidence-handoffs
+    optional:
+      - reconciling-traceability
+      - reading-project-truth
+  authority:
+    allow:
+      - inspect_scm_metadata
+      - inspect_review_and_ci_identity
+      - inspect_deployment_revision_refs
+      - invalidate_stale_sha_evidence
+      - approve_exact_sha_gate
+    deny:
+      - modify_candidate
+      - reroute_evidence_to_different_sha
+      - merge_candidate
+      - production_release
+      - secret_material_access
+  independence:
+    incompatible_gates:
+      - candidate_implementation
+  outputs:
+    - SHA_COHERENT
+    - SHA_MISMATCH
+    - EVIDENCE_STALE
+    - UNKNOWN
+  escalation:
+    - merge_strategy_obscures_revision_mapping
+    - deployment_revision_unidentifiable
+  evals:
+    must_pass: [head_review_ci_match, post_merge_identity, deployment_binding]
+    must_find: [stale_review_sha, stale_ci_sha, wrong_deployment_sha]
+    must_refuse: [evidence_rebinding_without_proof]
