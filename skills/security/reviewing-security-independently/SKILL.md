@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [factory, security, review]
-    related_skills: [reading-project-truth, verifying-exact-sha, threat-modeling-changes]
+    related_skills: [reading-project-truth, threat-modeling-changes]
   factory:
     lifecycle: proposed
     test_status: not_run
@@ -34,7 +34,7 @@ Don't use for: accepting residual risk or making implementation changes while re
 
 ## Procedure
 
-1. Fix candidate identity and security scope. **Complete when review cannot drift to another revision.**
+1. Fix candidate identity and security scope; consume the deterministic Exact-SHA gate where policy requires it. **Complete when review cannot drift to another revision.**
 2. Trace changed input, trust, identity, privilege and secret flows. **Complete when affected boundaries are explicit.**
 3. Inspect authentication/authorization decisions and negative paths. **Complete when bypass/default/fallback behavior is considered.**
 4. Inspect injection/parsing/deserialization/path/SSRF/egress/concurrency/supply-chain surfaces as applicable. **Complete when relevant attack classes have a conclusion.**
