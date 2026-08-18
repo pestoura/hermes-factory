@@ -6,7 +6,6 @@ from hermes_factory.agents import (
     ProfileEvalState,
 )
 
-
 BASE_DIMENSIONS = (
     "routing_correctness",
     "refusal_authority_boundary",
