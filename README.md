@@ -85,7 +85,7 @@ policies/
 ├── uat-corrective-action-v1.2.yaml
 ├── hitl-v1.2.yaml
 ├── native-scheduling-v1.2.yaml
-└── hermes-upstream-reconciliation-v1.1.yaml
+└── hermes-upstream-reconciliation-v1.2.yaml
 ```
 
 These files remain **design candidates**, not installed runtime Profiles/policies/schedules.
