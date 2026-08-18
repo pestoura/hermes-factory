@@ -1,0 +1,73 @@
+schema: hermes.factory/agent-catalog/v1
+catalog:
+  version: 1.2.0
+  lifecycle: proposed_for_owner_review
+  architecture_review: docs/16-architecture-review-v1.2.md
+  canonical_spec: docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.2.md
+  authoritative_for_admission_and_compilation: true
+
+  active_candidates:
+    - factory-orchestrator
+    - factory-workforce-architect
+    - factory-requirements-engineer
+    - factory-software-architect
+    - factory-security-architect
+    - factory-product-designer
+    - factory-documentation-engineer
+    - factory-tdd-red
+    - factory-software-engineer
+    - factory-platform-engineer
+    - factory-code-reviewer
+    - factory-security-reviewer
+    - factory-fail-closed-inspector
+    - factory-integration-tester
+    - factory-evidence-auditor
+    - factory-runtime-truth-observer
+    - factory-release-manager
+
+  superseded_profiles:
+    factory-python-engineer:
+      replaced_by: factory-software-engineer
+      eligible: false
+      reason: >-
+        Language specialization belongs in admitted Skills by default. A persistent
+        language-specific profession requires a future Agent Admission Gate decision.
+    factory-exact-sha-auditor:
+      replaced_by: gate:factory-exact-sha
+      eligible: false
+      reason: >-
+        Candidate/SHA equality and freshness classification are mechanically decidable
+        and belong to the deterministic Exact-SHA validator.
+
+  admission_rules:
+    directory_presence_implies_eligibility: false
+    catalog_membership_required: true
+    lifecycle_active_required_for_runtime_install: true
+    agent_admission_gate_required_for_new_profile: true
+    language_framework_specialization_prefers_skill_first: true
+    deterministic_control_prefers_validator_over_agent: true
+    self_creation_or_self_promotion: forbidden
+    authority_expansion_by_worker: forbidden
+
+  staffing_outcomes:
+    - USE_EXISTING_PROFILE
+    - ADD_SKILL_TO_EXISTING_PROFILE
+    - ADD_RUNBOOK
+    - ADD_TASK_TEMPLATE
+    - CREATE_ROUTINE_PROFILE
+    - CREATE_PROFESSIONAL_PROFILE
+    - DEFER
+    - REJECT
+
+  runtime_status:
+    profiles_installed_by_this_catalog: false
+    implementation_authority: NOT_GRANTED
+
+  invariants:
+    - catalog_is_not_running_fleet
+    - profiles_are_staffed_on_demand
+    - agent_compiler_must_read_this_catalog
+    - filesystem_discovery_must_not_resurrect_superseded_profiles
+    - implementer_cannot_self_certify_review
+    - runtime_observer_cannot_mutate_runtime
+    - evidence_auditor_should_not_be_evidence_producer
