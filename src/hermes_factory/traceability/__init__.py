@@ -1,3 +1,3 @@
-from .registry import EvidenceConflict, SemanticRegistry
+from .registry import EntityConflict, EvidenceConflict, SemanticRegistry
 
-__all__ = ["EvidenceConflict", "SemanticRegistry"]
+__all__ = ["EntityConflict", "EvidenceConflict", "SemanticRegistry"]
