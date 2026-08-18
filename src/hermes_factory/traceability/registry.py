@@ -44,6 +44,11 @@ class SemanticRegistry:
                     candidate TEXT,
                     payload_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS handoffs (
+                    handoff_id TEXT PRIMARY KEY,
+                    state TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
                 """
             )
 
@@ -87,7 +92,12 @@ class SemanticRegistry:
             ).fetchone()
             value = (kind, state, candidate, encoded)
             if existing is not None:
-                current = (existing["kind"], existing["state"], existing["candidate"], existing["payload_json"])
+                current = (
+                    existing["kind"],
+                    existing["state"],
+                    existing["candidate"],
+                    existing["payload_json"],
+                )
                 if current != value:
                     raise EvidenceConflict(f"evidence {evidence_id} is immutable")
                 return
@@ -106,7 +116,10 @@ class SemanticRegistry:
 
     def get_evidence(self, evidence_id: str) -> dict[str, Any]:
         with self._connect() as db:
-            row = db.execute("SELECT * FROM evidence WHERE evidence_id=?", (evidence_id,)).fetchone()
+            row = db.execute(
+                "SELECT * FROM evidence WHERE evidence_id=?",
+                (evidence_id,),
+            ).fetchone()
         if row is None:
             raise KeyError(evidence_id)
         return {
@@ -116,3 +129,45 @@ class SemanticRegistry:
             "candidate": row["candidate"],
             "payload": json.loads(row["payload_json"]),
         }
+
+    def record_handoff(
+        self,
+        handoff_id: str,
+        *,
+        state: str,
+        payload: dict[str, Any],
+    ) -> None:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        with self._connect() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO handoffs(handoff_id, state, payload_json) VALUES (?, ?, ?)",
+                (handoff_id, state, encoded),
+            )
+
+    def get_handoff(self, handoff_id: str) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT handoff_id, state, payload_json FROM handoffs WHERE handoff_id=?",
+                (handoff_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(handoff_id)
+        return {
+            "handoff_id": row["handoff_id"],
+            "state": row["state"],
+            "payload": json.loads(row["payload_json"]),
+        }
+
+    def transition_handoff(
+        self,
+        handoff_id: str,
+        *,
+        expected_state: str,
+        new_state: str,
+    ) -> bool:
+        with self._connect() as db:
+            cursor = db.execute(
+                "UPDATE handoffs SET state=? WHERE handoff_id=? AND state=?",
+                (new_state, handoff_id, expected_state),
+            )
+            return cursor.rowcount == 1
