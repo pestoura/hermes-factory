@@ -17,12 +17,13 @@ agent:
     required:
       - reading-project-truth
       - coordinating-governed-releases
-      - verifying-exact-sha
       - reconciling-traceability
       - producing-evidence-handoffs
     optional:
       - auditing-evidence-provenance
       - assessing-change-impact
+  deterministic_gates:
+    - factory-exact-sha
   authority:
     allow:
       - inspect_release_readiness
