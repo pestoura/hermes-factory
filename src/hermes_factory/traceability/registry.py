@@ -1,0 +1,118 @@
+import json
+import sqlite3
+from pathlib import Path
+from typing import Any
+
+
+class EvidenceConflict(RuntimeError):
+    pass
+
+
+class SemanticRegistry:
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_schema()
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        return connection
+
+    def _init_schema(self) -> None:
+        with self._connect() as db:
+            db.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS entities (
+                    entity_id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS edges (
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    relation TEXT NOT NULL,
+                    PRIMARY KEY (source_id, target_id, relation),
+                    FOREIGN KEY(source_id) REFERENCES entities(entity_id),
+                    FOREIGN KEY(target_id) REFERENCES entities(entity_id)
+                );
+                CREATE TABLE IF NOT EXISTS evidence (
+                    evidence_id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    candidate TEXT,
+                    payload_json TEXT NOT NULL
+                );
+                """
+            )
+
+    def add_entity(self, entity_id: str, entity_type: str, payload: dict[str, Any]) -> None:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        with self._connect() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO entities(entity_id, entity_type, payload_json) VALUES (?, ?, ?)",
+                (entity_id, entity_type, encoded),
+            )
+
+    def add_edge(self, source_id: str, target_id: str, relation: str) -> None:
+        with self._connect() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO edges(source_id, target_id, relation) VALUES (?, ?, ?)",
+                (source_id, target_id, relation),
+            )
+
+    def has_edge(self, source_id: str, target_id: str, relation: str) -> bool:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM edges WHERE source_id=? AND target_id=? AND relation=?",
+                (source_id, target_id, relation),
+            ).fetchone()
+        return row is not None
+
+    def record_evidence(
+        self,
+        evidence_id: str,
+        *,
+        kind: str,
+        state: str,
+        candidate: str | None,
+        payload: dict[str, Any],
+    ) -> None:
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        with self._connect() as db:
+            existing = db.execute(
+                "SELECT kind, state, candidate, payload_json FROM evidence WHERE evidence_id=?",
+                (evidence_id,),
+            ).fetchone()
+            value = (kind, state, candidate, encoded)
+            if existing is not None:
+                current = (existing["kind"], existing["state"], existing["candidate"], existing["payload_json"])
+                if current != value:
+                    raise EvidenceConflict(f"evidence {evidence_id} is immutable")
+                return
+            db.execute(
+                "INSERT INTO evidence(evidence_id, kind, state, candidate, payload_json) VALUES (?, ?, ?, ?, ?)",
+                (evidence_id, *value),
+            )
+
+    def mark_evidence_stale_for_candidate(self, candidate: str) -> int:
+        with self._connect() as db:
+            cursor = db.execute(
+                "UPDATE evidence SET state='STALE' WHERE candidate=? AND state!='STALE'",
+                (candidate,),
+            )
+            return cursor.rowcount
+
+    def get_evidence(self, evidence_id: str) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM evidence WHERE evidence_id=?", (evidence_id,)).fetchone()
+        if row is None:
+            raise KeyError(evidence_id)
+        return {
+            "evidence_id": row["evidence_id"],
+            "kind": row["kind"],
+            "state": row["state"],
+            "candidate": row["candidate"],
+            "payload": json.loads(row["payload_json"]),
+        }
