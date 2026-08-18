@@ -6,6 +6,8 @@ from typing import Protocol
 
 
 class NativeKanban(Protocol):
+    def create_board(self, slug: str, **kwargs: object) -> dict[str, object]: ...
+
     def connect_closing(self, *, board: str) -> AbstractContextManager[object]: ...
 
     def create_task(self, conn: object, **kwargs: object) -> str: ...
@@ -67,6 +69,27 @@ class HermesKanbanAdapter:
 
     def __init__(self, native: NativeKanban) -> None:
         self._native = native
+
+    def ensure_board(
+        self,
+        *,
+        slug: str,
+        name: str,
+        description: str,
+        default_workdir: str | None,
+        project_id: str | None,
+    ) -> dict[str, object]:
+        if not slug.strip():
+            raise ValueError("slug is required")
+        if not name.strip():
+            raise ValueError("name is required")
+        return self._native.create_board(
+            slug,
+            name=name,
+            description=description,
+            default_workdir=default_workdir,
+            project_id=project_id,
+        )
 
     def project_task(self, spec: KanbanTaskProjection) -> str:
         spec.validate()
