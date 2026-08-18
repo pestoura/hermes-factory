@@ -78,7 +78,7 @@ class SkillRegistry:
         self._superseded = superseded
 
     @classmethod
-    def from_document(cls, document: dict[str, Any]) -> "SkillRegistry":
+    def from_document(cls, document: dict[str, Any]) -> SkillRegistry:
         if document.get("schema") != "hermes.factory/skills/v1.2":
             raise SkillAdmissionError("unsupported Skill Registry schema")
         raw = document.get("registry")
