@@ -1,0 +1,160 @@
+schema: hermes.factory/runtime-policies/v1
+status: proposed
+
+model_classes:
+  reasoning-high:
+    intent: complex architecture, security, governance and orchestration reasoning
+    selection: factory-model-policy
+  reasoning-standard:
+    intent: structured analysis, documentation, evidence and operational reasoning
+    selection: factory-model-policy
+  coding-high:
+    intent: complex code/test authoring and repository reasoning
+    selection: factory-model-policy
+  coding-standard:
+    intent: test/integration implementation with moderate coding complexity
+    selection: factory-model-policy
+  fast-verifier:
+    intent: deterministic or narrow verification with low creativity requirement
+    selection: factory-model-policy
+
+memory_classes:
+  minimal:
+    persistent_professional_memory: false
+    project_memory: false
+    rationale: assurance identity should minimize contamination from previous candidates
+  professional:
+    persistent_professional_memory: true
+    project_memory: false
+    canonical_override: forbidden
+  professional+project:
+    persistent_professional_memory: true
+    project_memory: true
+    project_memory_source: external-context-or-rehydrated-project
+    canonical_override: forbidden
+
+mcp_surfaces:
+  factory-control-read:
+    authority: read
+    purpose: project, board, work, agents, gates, evidence and traceability inspection
+  factory-control-orchestrate:
+    authority: bounded-work-mutation
+    purpose: create/link/assign/rework/pause approved Factory work
+  github-read:
+    authority: read
+    purpose: repository, Issue, PR, commit, review and CI inspection
+  github-engineering-write:
+    authority: bounded-scm-write
+    purpose: branch, commit, PR and review workflow inside assigned repositories
+  runtime-read:
+    authority: read
+    purpose: fresh runtime observation only
+  release-controlled:
+    authority: protected-mutation
+    purpose: release/promotion/rollback operations only through policy and HITL
+
+# Tool policies are desired enforcement contracts. SOUL instructions are not
+# considered enforcement. The Agent Compiler must translate these to Hermes
+# platform_toolsets, MCP scopes, sandbox/workspace mode and credential policy.
+tool_policy_classes:
+  control-orchestrate:
+    hermes_toolsets: [skills, todo]
+    mcp: [factory-control-read, factory-control-orchestrate, github-read]
+    workspace: none
+    terminal: disabled
+    browser: disabled
+    scm_write: false
+    runtime_write: false
+
+  control-read:
+    hermes_toolsets: [skills, todo]
+    mcp: [factory-control-read, github-read]
+    workspace: none
+    terminal: disabled
+    browser: disabled
+    scm_write: false
+    runtime_write: false
+
+  engineering-readwrite-docs:
+    hermes_toolsets: [terminal, file, web, skills, todo]
+    mcp: [factory-control-read, github-read, github-engineering-write]
+    workspace: isolated-worktree
+    terminal: sandboxed-preferred
+    scm_write: bounded
+    runtime_write: false
+
+  design-docs:
+    hermes_toolsets: [file, web, vision, skills, todo]
+    mcp: [factory-control-read, github-read, github-engineering-write]
+    workspace: isolated-worktree
+    terminal: disabled-by-default
+    scm_write: bounded-docs-only
+    runtime_write: false
+
+  engineering-worktree:
+    hermes_toolsets: [terminal, file, web, skills, todo]
+    mcp: [factory-control-read, github-read, github-engineering-write]
+    workspace: isolated-worktree
+    terminal: sandboxed-preferred
+    scm_write: bounded
+    runtime_write: false
+
+  review:
+    hermes_toolsets: [terminal, file, web, skills, todo]
+    mcp: [factory-control-read, github-read]
+    workspace: read-only-candidate-snapshot
+    terminal: sandboxed-readonly-candidate
+    scm_write: review-comments-only-through-gateway
+    runtime_write: false
+
+  review-observe:
+    hermes_toolsets: [terminal, file, skills, todo]
+    mcp: [factory-control-read, github-read]
+    workspace: read-only-candidate-snapshot
+    terminal: sandboxed-readonly-candidate
+    scm_write: false
+    runtime_write: false
+
+  engineering-test:
+    hermes_toolsets: [terminal, file, skills, todo]
+    mcp: [factory-control-read, github-read, github-engineering-write]
+    workspace: isolated-test-worktree
+    terminal: sandboxed-preferred
+    scm_write: tests-only-bounded
+    runtime_write: false
+
+  runtime-observe:
+    hermes_toolsets: [skills, todo]
+    mcp: [factory-control-read, github-read, runtime-read]
+    workspace: none
+    terminal: disabled
+    scm_write: false
+    runtime_write: false
+
+  release-controlled:
+    hermes_toolsets: [skills, todo]
+    mcp: [factory-control-read, github-read, release-controlled]
+    workspace: none
+    terminal: disabled-by-default
+    scm_write: false
+    runtime_write: policy-gated
+
+hermes_profile_defaults:
+  home_mode: profile
+  secrets_in_distribution: forbidden
+  memories_in_distribution: forbidden
+  sessions_in_distribution: forbidden
+  runtime_state_in_distribution: forbidden
+  profile_per_concurrent_agent: required
+  shared_profile_between_processes: forbidden
+  worktree_for_repo_mutation: required
+
+policy_invariants:
+  - soul_is_not_authority_enforcement
+  - profile_is_not_a_sandbox
+  - least_privilege_tools
+  - credentials_scoped_outside_agent_dna
+  - reviewer_candidate_workspace_read_only_where_practical
+  - runtime_observer_no_mutation_tools
+  - release_mutation_only_via_policy_gateway
+  - project_specific_tools_do_not_silently_expand_global_agent_authority
