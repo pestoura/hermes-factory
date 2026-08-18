@@ -1,56 +1,78 @@
 # Factory Skills
 
-Factory Skills follow the NousResearch Hermes Agent `SKILL.md` model and the agentskills.io-compatible progressive-disclosure pattern.
+Factory Skills use the native Hermes `SKILL.md` model, but professional content, admission, versioning and evaluation are owned by Hermes Software Factory.
+
+**Current registry:** `skills/registry.yaml`  
+**Current policy:** `skills/registry-policy-v1.2.yaml`  
+**Canonical runtime ID namespace:** `factory-*`  
+**Implementation authority:** NOT GRANTED
 
 ## Source layout
 
 ```text
-skills/<category>/<skill-name>/
+skills/<category>/<source-name>/
 ├── SKILL.md
-├── references/   # optional
-├── templates/    # optional
-├── scripts/      # optional
-└── evals/        # added as Skill TDD is executed
+├── references/
+├── templates/
+├── scripts/
+└── evals/
 ```
 
-`skills/registry.yaml` maps Skills to categories and Agent consumers.
+Existing unprefixed v1 draft directories are source aliases/design history. They are **not** runtime authorization. `skills/registry.yaml` maps them to canonical `factory-*` identities where retained.
 
-## Version rule
-
-New Skills start at `0.1.0 / PROPOSED / NOT_RUN`.
-
-They are not promoted to `1.0.0 ACTIVE` until the Skill TDD cycle demonstrates:
+## Authorization
 
 ```text
-BASELINE_RED without Skill
--> GREEN with Skill
--> variation/pressure evals
+effective_skills = agent.required_skills ∪ task.approved_skills
+```
+
+Both sets must resolve through the Factory Skill Registry and be admitted for the relevant lifecycle/role. A Skill merely installed server-wide does not become authorized for Factory work, and a worker cannot expand its own Skill allowlist.
+
+## Lifecycle
+
+New Skills start at:
+
+```text
+0.1.0 / PROPOSED / NOT_RUN
+```
+
+Promotion requires:
+
+```text
+BASELINE RED without Skill
+-> Skill GREEN
+-> variation eval
+-> pressure eval
 -> independent review
+-> 1.0.0 ACTIVE
 ```
 
-If baseline behavior is already reliable without the Skill, do not promote unnecessary procedural text.
+`NOT_RUN != PASS`. No Skill becomes ACTIVE by being committed to this branch.
 
-## Authoring hardline
+## Authoring rules
 
-- Hermes-compatible YAML frontmatter begins at byte zero.
-- Lowercase hyphenated name.
-- Description <= 60 characters, capability-only and non-marketing.
-- Semver, author, license, platforms and metadata are explicit.
-- `SKILL.md` is concise; heavy material belongs in references/templates/scripts.
-- Procedures use checkable completion criteria.
-- No machine-local paths.
-- No router/index Skills that merely point to other Skills.
-- Prefer a deterministic Tool/MCP/validator when exact execution matters more than judgment.
-- A Skill never broadens the Agent's authority.
+- use canonical `factory-*` runtime identity for newly admitted Factory Skills;
+- keep Hermes-compatible frontmatter and concise procedural content;
+- use checkable completion criteria;
+- keep large references/templates/scripts outside the core `SKILL.md` where appropriate;
+- never broaden Agent authority through prose;
+- prefer deterministic validators/tools for mechanically decidable requirements;
+- do not silently promote runtime-local edits back into canonical Factory source;
+- preserve origin/version/source-SHA provenance.
 
-## Shared vs specific
+## v1.2 additions
 
-A Skill exists once in this source tree and can have many consumers. The Agent Compiler selects the required/optional Skills for each Profile Distribution or task.
+The UAT/corrective-action design introduced six new drafts, all still `0.1.0 / proposed / not_run`:
 
 ```text
-Shared Skill source != copy-pasted Skill per Agent
+factory-designing-user-acceptance-tests
+factory-executing-user-acceptance-tests
+factory-classifying-findings
+factory-performing-root-cause-analysis
+factory-planning-bounded-rework
+factory-verifying-corrective-actions
 ```
 
-Project/domain Skills may be attached by the Project Contract/Work Package when needed. One project's technology does not automatically become a global Factory Skill.
+Exact-SHA is not a Skill; use deterministic `gate:factory-exact-sha`.
 
-See `docs/12-skills-architecture-v1.md` and `docs/13-skill-eval-plan-v1.md` for governance and eval rules.
+Historical skill architecture/eval documents remain useful provenance, but current authorization and namespace rules are defined by the v1.2 registry/policy and canonical v1.2 specification.
