@@ -1,0 +1,61 @@
+schema: hermes.factory/owner-approval/v1
+approval:
+  id: OWNER-APPROVAL-HSF-V1.2
+  architecture: hermes-software-factory-v1.2
+  owner: Pedro Estoura
+  decided_at: 2026-08-18
+  audited_design_sha: 281b8c7509252d0416621f9971e14bd4151b997a
+  decision: APPROVED
+  implementation_scope: FULL_ARCHITECTURE
+  implementation_authority: GRANTED
+  runtime_activation: GATED
+  activation_requires:
+    - implementation_plan
+    - tdd_red_evidence
+    - implementation_tests
+    - skill_evals_before_skill_active
+    - profile_evals_before_profile_active
+    - policy_and_authority_validation
+    - ci
+    - exact_sha
+    - post_merge_verification
+    - runtime_verification_before_live_acceptance
+  full_scope_includes:
+    - project_compiler
+    - semantic_traceability_registry
+    - staffing_engine
+    - agent_dna_registry_and_compiler
+    - all_17_profile_definitions_and_runtime_projections
+    - factory_skill_registry_and_eval_harness
+    - all_factory_owned_skills_defined_by_v1_2
+    - jds_adapter
+    - hermes_native_kanban_adapter
+    - continuous_atomic_handoff
+    - uat_and_acceptance
+    - findings_and_bounded_rework
+    - hitl_via_hermes_gateway
+    - native_hermes_profile_cron_projection
+    - scm_github_adapter
+    - jarvas_operations_evidence_adapter
+    - hermes_ecosystem_capability_adapter
+    - deterministic_exact_sha_integration
+    - governance_and_acceptance
+    - hermes_dashboard_plugin
+    - northbound_external_factory_control_contract
+  constraints:
+    - no_minimum_runtime_substitution
+    - no_second_kanban_or_dispatcher
+    - no_factory_specific_scheduler
+    - no_ritmo_for_internal_factory_scheduling
+    - no_internal_mcp_bridge_dependency
+    - no_generic_quality_gate_duplication_of_jds
+    - no_jarvas_ops_recovery_authority_capture
+    - not_run_unknown_absent_are_not_pass
+    - workers_cannot_self_expand_authority
+    - workers_cannot_self_promote_profiles_or_skills
+    - secrets_and_destructive_boundaries_remain_hitl
+  first_product_after_factory_acceptance: jarvas-cli
+  brownfield_after_first_product: hermes-security-labs
+  notes:
+    - Approval authorizes complete Factory source implementation and controlled Hermes/Jarvas integration.
+    - It does not declare any unexecuted Profile, Skill, gate, deployment or runtime check PASS/ACTIVE.
