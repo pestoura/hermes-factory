@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
@@ -69,6 +70,36 @@ class HermesKanbanAdapter:
 
     def __init__(self, native: NativeKanban) -> None:
         self._native = native
+
+    @staticmethod
+    def high_assurance_config_patch() -> dict[str, dict[str, object]]:
+        """Return the minimal native Hermes config required by Factory boards.
+
+        This is a projection, not a live mutation. Phase P applies the patch
+        through Hermes' supported configuration surface and then calls
+        :meth:`assert_high_assurance_config` against the resolved config.
+        """
+        return {
+            "kanban": {
+                "auto_decompose": False,
+                "dispatch_approval_mode": "structured",
+            }
+        }
+
+    @staticmethod
+    def assert_high_assurance_config(config: Mapping[str, object]) -> None:
+        """Fail closed unless the resolved Hermes config enforces Factory policy."""
+        kanban = config.get("kanban")
+        if not isinstance(kanban, Mapping):
+            raise ValueError("kanban config is required for high-assurance mode")
+        if kanban.get("auto_decompose") is not False:
+            raise ValueError(
+                "kanban.auto_decompose must be false for Factory high-assurance boards"
+            )
+        if kanban.get("dispatch_approval_mode") != "structured":
+            raise ValueError(
+                "kanban.dispatch_approval_mode must be structured for Factory high-assurance boards"
+            )
 
     def ensure_board(
         self,
