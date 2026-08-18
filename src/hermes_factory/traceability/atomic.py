@@ -4,7 +4,7 @@ import json
 import sqlite3
 from typing import Any
 
-from .registry import EntityConflict, SUPPORTED_ENTITY_TYPES, SemanticRegistry
+from .registry import SUPPORTED_ENTITY_TYPES, EntityConflict, SemanticRegistry
 
 
 def record_entity_version_once(
