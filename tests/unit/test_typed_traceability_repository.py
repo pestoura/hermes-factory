@@ -4,7 +4,6 @@ import pytest
 
 from hermes_factory.traceability import EntityConflict, SemanticRegistry
 
-
 REQUIRED_ENTITY_TYPES = (
     "Project",
     "Requirement",
