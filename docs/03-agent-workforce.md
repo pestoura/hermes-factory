@@ -9,125 +9,99 @@ Factory agents are not disposable prompts. They are **persistent Hermes profiles
 A profile answers **who the worker is**. Skills and runbooks answer **how the worker performs a technique**. A Kanban task answers **what the worker must do now**.
 
 ```text
-SOUL / Profile = professional identity
-Skill          = reusable competence / SOP
+SOUL / Profile  = professional identity
+Skill           = reusable competence / SOP
 Project context = project-specific operating context
-Task           = current bounded assignment
+Task            = current bounded assignment
 ```
 
-## Agent DNA
+## Canonical Agent DNA
 
-Every Factory profession should be versioned as an auditable Agent DNA package.
-
-Conceptual structure:
+The Factory owns one canonical machine-readable definition for every role:
 
 ```text
-factory-security-reviewer/
-├── SOUL.md
-├── role.yaml
-├── authority.yaml
-├── tools.yaml
-├── methods.md
-├── output-contract.yaml
-├── gates.yaml
-├── runbooks/
+agents/<agent-id>/
+├── agent.yaml                 # canonical Factory Agent DNA
+├── SOUL.md                    # compiled/native Hermes identity
+├── distribution.yaml         # Hermes Profile Distribution manifest
+├── config.yaml               # Hermes-native runtime config
+├── mcp.json                   # Hermes-native MCP connections
 ├── skills/
-└── evals/
+├── cron/
+├── evals/
+└── README.md
 ```
 
-### Required DNA dimensions
+`agent.yaml` carries the organizational semantics that Hermes itself does not need to own: mission, routing capabilities, authority, independence rules, model class, memory policy, tool/MCP policy, gates, output contracts and eval requirements.
+
+The Agent Compiler will render the Hermes-native distribution from the approved Agent DNA. See `09-agent-dna-runtime-configuration.md`.
+
+## Agent DNA dimensions
 
 | Dimension | Purpose |
 |---|---|
 | identity | stable professional mission and posture |
+| routing | how Project Compiler/Orchestrator recognize suitable work |
 | responsibilities | what the agent owns |
 | non-responsibilities | explicit boundaries |
 | authority | allowed mutations/decisions |
-| tools | permitted/preferred tools and MCPs |
-| methods | standard way of working |
-| runbooks | repetitive operating procedures |
-| invariants | conditions the agent must never violate |
+| independence | incompatible producer/reviewer roles |
+| model policy | capability class, not hard-coded vendor |
+| memory policy | what may persist and with what authority |
+| tool/MCP policy | least-privilege runtime exposure |
+| methods/skills | standard way of working |
+| invariants | conditions never to violate |
 | output contract | structured handoff expectations |
 | escalation | what requires another role/HITL |
-| evals | regression tests for agent behavior |
+| evals | regression tests for Agent DNA behavior |
 
-## Example — Security Reviewer Soul
+## Factory Constitution + Role Soul
 
-The Security Reviewer should not be optimized to make work pass.
+All profiles inherit a common Factory Constitution covering source-of-truth, evidence, scope, secrets, safety, handoff and integrity. Each profile then adds its role-specific Soul.
 
 ```text
-IDENTITY
-You are an independent software security reviewer.
-
-MISSION
-Find technically valid reasons a candidate should not be accepted.
-
-ASSUMPTIONS
-- tests can be incomplete;
-- comments can be stale;
-- repository state does not prove runtime;
-- another agent's PASS is not independent proof;
-- missing evidence is not positive evidence.
-
-NEVER
-- modify implementation while acting as reviewer;
-- convert NOT_RUN to PASS;
-- silently broaden authorization;
-- weaken a control to make a test pass;
-- close a finding without re-verification.
-
-VALID OUTCOMES
-PASS
-PASS_WITH_FINDINGS
-REWORK_REQUIRED
-BLOCKED
+Factory Constitution
++
+Role Soul
++
+Agent version identity
+=
+compiled SOUL.md
 ```
 
-## Professions vs robotic stations
+This prevents 17 copies of core governance language from drifting independently. Full proposed Souls are in `11-base-agent-souls-v1.md`.
 
-The Factory needs two kinds of persistent expertise.
+## Professions vs routine stations
 
-### Professional roles
+The Factory uses two types of persistent specialization.
 
-Broad domain expertise:
+### Professional profiles
 
-- Product Manager;
-- Business Analyst;
+Require broad domain judgment and stable professional identity, for example:
+
 - Requirements Engineer;
-- Solution Architect;
 - Software Architect;
 - Security Architect;
-- Data Architect;
-- Integration Architect;
-- Backend / Frontend / Full-stack Engineer;
-- Python / Go / .NET / Java / TypeScript Engineer;
-- Database Engineer;
-- API Engineer;
-- AI/ML Engineer;
-- DevOps / Platform / Kubernetes / Cloud / IaC Engineer;
-- SRE / Observability / Performance Engineer;
-- AppSec / IAM / Secrets / Cloud Security specialists;
-- Release / Configuration / Change / Documentation roles.
+- Product Designer;
+- Documentation Engineer;
+- Python Engineer;
+- Code Reviewer;
+- Security Reviewer;
+- Integration Tester;
+- Evidence Auditor;
+- Release Manager;
+- Workforce Architect.
 
-### Specialized routine stations
+### Routine profiles
 
-Narrow repeatable procedures with strict behavior:
+Narrow, repeatable controls where independence and strict output are valuable, for example:
 
 - Causal-RED Builder;
-- Minimal-GREEN Implementer;
 - Fail-Closed Inspector;
 - Exact-SHA Auditor;
-- Secret Leakage Inspector;
-- Dependency Drift Inspector;
-- Regression Gate;
-- ADR Consistency Auditor;
-- CI Evidence Collector;
-- Runtime Truth Observer;
-- Known-State Verifier;
-- Evidence Provenance Auditor;
-- Release Readiness Gate.
+- Runtime Truth Observer.
 
-These routine profiles reduce prompt variability in high-frequency operations.
+A routine does not become a profile merely because it is repeatable. It still passes the Agent Admission Gate; many routines remain Skills or Runbooks.
 
 ## Organizational map
 
@@ -135,73 +109,68 @@ These routine profiles reduce prompt variability in high-frequency operations.
 flowchart TB
     FD[Factory Orchestrator]
 
-    FD --> PROD[Product & Delivery]
+    FD --> PROD[Product & Requirements]
+    FD --> UX[Product Design / UX]
     FD --> ARCH[Architecture]
     FD --> ENG[Engineering]
     FD --> PLAT[Platform & SRE]
     FD --> QA[Quality Engineering]
     FD --> SEC[Security Engineering]
+    FD --> DOC[Documentation & Developer Experience]
     FD --> GOV[Governance & Release]
+    FD --> WORK[Workforce Engineering]
 
-    PROD --> PM[Product Manager]
-    PROD --> BA[Business Analyst]
     PROD --> REQ[Requirements Engineer]
-    PROD --> DM[Delivery / Dependency Manager]
+    UX --> PD[Product Designer]
 
-    ARCH --> SOL[Solution Architect]
     ARCH --> SW[Software Architect]
     ARCH --> SARCH[Security Architect]
-    ARCH --> DARCH[Data / Integration Architect]
 
-    ENG --> BACK[Backend]
-    ENG --> FRONT[Frontend]
-    ENG --> DATA[Data / AI]
-    ENG --> INT[Integration / API]
+    ENG --> PY[Python Engineer]
+    ENG --> FUTURE[Conditional language/domain engineers]
 
-    PLAT --> DEVOPS[DevOps]
-    PLAT --> K8S[Kubernetes]
-    PLAT --> SRE[SRE]
-    PLAT --> OBS[Observability]
+    PLAT --> PS[Conditional DevOps / K8s / SRE profiles]
 
-    QA --> TDD[TDD]
-    QA --> UNIT[Unit / Regression]
-    QA --> INTEG[Integration]
-    QA --> E2E[E2E]
-    QA --> PERF[Performance]
+    QA --> TDD[TDD RED]
+    QA --> CR[Code Reviewer]
+    QA --> INT[Integration Tester]
 
-    SEC --> APPSEC[AppSec]
-    SEC --> IAM[IAM / Auth]
-    SEC --> RED[Adversarial Reviewer]
-    SEC --> SUPPLY[Supply Chain]
+    SEC --> SR[Security Reviewer]
+    SEC --> FC[Fail-Closed Inspector]
 
-    GOV --> ADR[ADR Steward]
-    GOV --> CHANGE[Change Manager]
-    GOV --> RELEASE[Release Manager]
-    GOV --> EVID[Evidence Auditor]
+    DOC --> DE[Documentation Engineer]
+
     GOV --> SHA[Exact-SHA Auditor]
+    GOV --> EVA[Evidence Auditor]
+    GOV --> RT[Runtime Truth Observer]
+    GOV --> REL[Release Manager]
+
+    WORK --> WA[Workforce Architect]
 ```
+
+The diagram shows the **bootstrap workforce**, not every eventual profession. Additional domain agents enter through the permanent Agent Admission Gate.
 
 ## Orchestrator role
 
 The Factory Orchestrator is a coordinator, not an implementation super-agent.
 
-It should be able to:
+It may:
 
-- inspect the project board;
+- inspect compiled project/board state;
 - decompose bounded approved work;
 - create/link tasks;
-- assign profiles;
+- assign approved profiles;
 - attach skills;
 - inspect worker status;
 - request review/rework;
 - identify blockers;
 - coordinate dependencies.
 
-It should **not** normally write production code or independently approve the work it coordinated.
+It should **not** write production code or independently approve work it coordinated.
 
 ## Staffing engine
 
-The staffing decision is computed from a Work Package profile.
+Staffing is computed from work characteristics.
 
 ```mermaid
 flowchart LR
@@ -213,53 +182,63 @@ flowchart LR
     Stack --> Staff
     Risk --> Staff
     Gates --> Staff
-    Staff --> Profiles[Selected Profiles]
-    Staff --> Skills[Task Skills]
+    Staff --> Match{Capabilities available?}
+    Match -- yes --> Profiles[Selected Profiles + Skills]
+    Match -- no --> Gap[CAPABILITY_GAP]
+    Gap --> Admission[Agent Admission Gate]
 ```
 
-Example:
+A capability gap never silently creates a new profile.
 
-```yaml
-work_package:
-  type: oidc_backend_integration
-  technologies: [python, fastapi, oidc]
-  assurance: high
-  runtime_required: true
+## Bootstrap catalog v1
 
-staffing:
-  producer:
-    - factory-python-engineer
-    - factory-iam-specialist
-  assurance:
-    - factory-tdd-red
-    - factory-security-reviewer
-    - factory-api-security-reviewer
-    - factory-integration-tester
-    - factory-runtime-truth-observer
-    - factory-exact-sha-auditor
+```text
+factory-orchestrator
+factory-workforce-architect
+factory-requirements-engineer
+factory-software-architect
+factory-security-architect
+factory-product-designer
+factory-documentation-engineer
+factory-tdd-red
+factory-python-engineer
+factory-code-reviewer
+factory-security-reviewer
+factory-fail-closed-inspector
+factory-integration-tester
+factory-exact-sha-auditor
+factory-evidence-auditor
+factory-runtime-truth-observer
+factory-release-manager
 ```
+
+Detailed configuration for all 17 roles is defined in `10-base-agent-catalog-v1.md`.
 
 ## Tool policy
 
-Tool availability should follow role necessity and least authority.
+Tool availability follows role necessity and least authority.
 
 Examples:
 
-- Orchestrator: Kanban + read-only project/GitHub context; no production code mutation by default.
-- Implementer: repository/worktree + tests + approved dependency/runtime tools.
-- Code Reviewer: repository/PR read + review/comment; no implementation mutation.
-- Runtime Observer: runtime read/observe tools; no configuration mutation.
-- Evidence Auditor: evidence/SCM/CI read; no implementation mutation.
-- Release Manager: controlled release tools behind explicit policy gates.
+- Orchestrator: Kanban/Factory/GitHub coordination; no product implementation by default.
+- Implementer: scoped repository/worktree + tests + approved engineering tools.
+- Code/Security Reviewer: repository/PR read + review/comment/request changes; no implementation mutation.
+- Runtime Observer: runtime observation only; no deployment/configuration mutation.
+- Evidence/Exact-SHA Auditor: SCM/CI/evidence read only.
+- Release Manager: controlled promotion tools behind policy/HITL.
+
+Hermes Profile isolation alone is not a filesystem sandbox. Runtime controls must be applied through config, tool exposure, MCPs, credentials, workspaces/backends and Factory policy.
 
 ## Project context
 
-Project-specific instructions should not mutate global Souls.
+Project-specific instructions do not mutate global Souls.
 
 A worker combines:
 
 ```text
 Factory Agent DNA
+        +
+Factory Constitution / Role Soul
         +
 project AGENTS.md / .hermes.md
         +
@@ -270,24 +249,36 @@ current Work Package / task
 execution context
 ```
 
-This preserves reusable professions while allowing each project to define conventions and constraints.
+## Model policy
+
+Roles select logical model classes such as:
+
+```text
+reasoning-high
+reasoning-standard
+coding-high
+coding-standard
+fast-verifier
+vision-capable
+long-context
+```
+
+The Factory/Jarvas model policy resolves these classes to approved installed models. Professional identity must not be coupled to a vendor/model name unnecessarily.
 
 ## Agent versioning
 
-An execution should be attributable to an immutable agent version, for example:
+An execution should be attributable to immutable Agent DNA:
 
 ```yaml
-agent:
+agent_identity:
   id: factory-security-reviewer
-  version: 1.3.0
+  version: 1.0.0
+  agent_digest: sha256:...
   soul_digest: sha256:...
-  policy_digest: sha256:...
-  skill_set:
-    - secure-code-review@2.0.1
-    - fail-closed-inspection@1.4.0
+  runtime_config_digest: sha256:...
+  skills:
+    secure-code-review: 1.0.0
 ```
-
-This allows regression analysis when agent behavior changes over time.
 
 ## Agent CI / evaluations
 
@@ -296,58 +287,69 @@ Agent changes require testing before promotion.
 ```mermaid
 flowchart LR
     Change[Agent DNA change] --> Evals[Eval Suite]
-    Evals --> Safe[Known-safe cases]
-    Evals --> Bad[Known-bad cases]
-    Evals --> Amb[Ambiguous/refusal cases]
+    Evals --> Safe[Must pass]
+    Evals --> Bad[Must find]
+    Evals --> Refuse[Must refuse / escalate]
     Safe --> Compare[Regression comparison]
     Bad --> Compare
-    Amb --> Compare
+    Refuse --> Compare
     Compare --> Gate{Promotion gate}
-    Gate -- pass --> Active[New active version]
-    Gate -- fail --> Old[Keep previous version]
+    Gate -- pass --> Active[New ACTIVE version]
+    Gate -- fail --> Old[Keep previous active version]
 ```
 
-Minimum evaluation classes:
+Minimum classes:
 
-- must-pass;
-- must-find;
-- must-refuse;
-- must-escalate;
-- no-unapproved-mutation;
-- output-contract compliance;
-- regression against previous active Agent DNA.
+```text
+must-pass
+must-find
+must-refuse
+must-escalate
+no-unapproved-mutation
+source-authority
+output-contract
+regression
+```
 
 ## Independence matrix
 
-The same identity must not satisfy incompatible segregation-of-duties gates for a candidate unless explicitly allowed by a low-assurance profile.
-
-| Producer | Independent gate |
+| Producer/action | Independent gate/role |
 |---|---|
 | implementation engineer | code reviewer |
-| implementation engineer | security reviewer |
-| deployment agent | runtime verifier |
-| test author | high-assurance acceptance verifier where independence is required |
+| implementation engineer | security reviewer where required |
+| deployment/release executor | runtime truth observer where independence is required |
+| test author | high-assurance verifier when policy requires independence |
 | orchestrator | final technical acceptance |
+| workforce architect | approval of its own authority-increasing Agent DNA proposal |
 
 ## Memory policy
 
-Agent memory may contain reusable professional/project context, but must not become an untracked authority source.
+Agent memory accelerates orientation but never becomes an untracked authority source.
 
-Rules:
+```text
+canonical decisions remain in project artifacts
+raw SCM state remains in GitHub
+operational work state remains in Hermes Kanban
+live truth requires runtime evidence
+secrets do not belong in general memory
+```
 
-- canonical decisions remain in project artifacts;
-- secrets are not stored in general memory;
-- raw operational state remains in its source system;
-- memory can accelerate orientation but cannot override current repository, GitHub, Kanban or live evidence.
+Profiles use one of three memory classes: `minimal`, `professional`, `professional+project`.
 
 ## Capacity model
 
-The Factory keeps a catalog larger than the number of concurrent workers.
-
 ```text
-catalog = the company
-active profiles = the current project team
-subagents = temporary execution assistance when useful
+catalog          = the reusable company
+active profiles  = current staffed team
+skills           = techniques attached as required
+subagents        = temporary assistance where useful
 ```
 
 The goal is controlled concurrency and specialization, not maximum swarm size.
+
+## Related design documents
+
+- `08-agent-admission-and-catalog-governance.md`
+- `09-agent-dna-runtime-configuration.md`
+- `10-base-agent-catalog-v1.md`
+- `11-base-agent-souls-v1.md`
