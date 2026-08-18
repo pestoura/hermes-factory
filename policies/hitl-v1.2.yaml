@@ -1,0 +1,74 @@
+schema: hermes.factory/hitl/v1.2
+status: proposed_for_owner_review
+implementation_authority: NOT_GRANTED
+
+request:
+  type: HITL_REQUEST
+  required_fields:
+    - request_id
+    - request_version
+    - project_id
+    - work_package_id
+    - stage
+    - context_revision
+    - decision_type
+    - allowed_responder
+    - created_at
+    - expires_at
+    - problem
+    - impact
+    - recommended_solution
+    - alternatives
+    - evidence_refs
+  candidate_revision_required_when_candidate_bound: true
+  states: [PENDING, DECIDED, EXPIRED, STALE, CANCELLED]
+
+transport:
+  preferred_gateway: Hermes_Gateway
+  telegram: presentation_adapter
+  transport_is_decision_source_of_truth: false
+  exact_telegram_selector_primitive: implementation_verification_required
+
+validation:
+  responder_identity_required: true
+  request_version_must_match: true
+  context_revision_must_match: true
+  candidate_revision_must_match_when_bound: true
+  stale_response_unlocks_work: false
+  expired_response_unlocks_work: false
+  cancelled_response_unlocks_work: false
+  response_processing_idempotent: true
+  replay_across_requests: forbidden
+
+timeout:
+  behavior: HOLD
+  auto_choose_recommended_solution: false
+
+human_decision_evidence:
+  immutable: true
+  required_fields:
+    - request_id
+    - request_version
+    - decision
+    - responder_identity
+    - decided_at
+    - context_revision
+    - affected_requirement_or_wp
+    - stage
+    - evidence_refs
+  candidate_revision_required_when_candidate_bound: true
+
+hitl_classes:
+  - requirement_or_product_rebaseline
+  - unresolved_structural_decision
+  - destructive_or_recovery_sensitive_operation
+  - secret_root_token_shamir_or_credential_handling
+  - acceptance_or_release_reserved_to_owner
+  - bounded_rework_escalation
+  - external_decision_without_safe_policy_resolution
+
+invariants:
+  - routine_stage_progression_is_not_hitl
+  - secrets_are_not_embedded_in_hitl_messages
+  - transport_does_not_gain_broader_authority
+  - decision_evidence_is_committed_before_unblock
