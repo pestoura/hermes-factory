@@ -1,358 +1,206 @@
 # Hermes Software Factory — Project Contract & Traceability
 
-**Status:** PROPOSED
+**Status:** RECONCILED FOR v1.2  
+**Implementation authority:** NOT GRANTED
 
 ## Objective
 
-A project must be transferable from human design into autonomous Factory operation **without relying on conversation memory** and without duplicating every artifact into the Kanban.
+A project must be transferable from approved human design into autonomous Factory operation without relying on conversation memory and without turning the Kanban into a lossy copy of product, SCM or runtime truth.
 
-The solution is a small declarative Factory contract plus a traceability graph.
+## Current project contract
 
-## Project contract
-
-Each client project contains a `.factory/` directory owned by that project.
-
-Recommended v1 layout:
+The recommended v1.2 contract is:
 
 ```text
 .factory/
 ├── project.yaml
-├── quality.yaml
 └── acceptance.yaml
+
+.jarvas/
+└── engineering.yml
 ```
 
-The contract does not contain the global Factory workforce. It tells the Factory:
+Responsibilities:
 
-- what the project is;
-- which repositories belong to it;
-- where canonical sources live;
-- what workflow/quality profile applies;
-- what runtime environments matter;
-- what autonomy/HITL rules apply;
-- how existing IDs should be reconciled.
+```text
+.factory/project.yaml
+  = Factory/project identity, repositories, canonical sources, workflow/board and autonomy boundaries
 
-## Example `project.yaml`
+.factory/acceptance.yaml
+  = acceptance classes, UAT/HITL/runtime acceptance semantics
 
-```yaml
-schema: hermes.factory/project/v1
-
-project:
-  id: hermes-security-labs
-  name: Hermes Security Labs
-  lifecycle: active
-
-repositories:
-  - id: labs
-    repo: pestoura/hermes-security-labs
-    role: product
-
-  - id: vault
-    repo: pestoura/hermes-vault
-    role: platform_dependency
-
-sources:
-  vision:
-    - README.md
-  architecture:
-    - docs/architecture/
-  roadmap:
-    - docs/roadmap/
-  decisions:
-    - docs/adr/
-  changes:
-    - changes/
-  validation:
-    - validation/
-
-factory:
-  board: hermes-security-labs
-  workflow: high-assurance-engineering
-  quality_profile: factory-high-assurance
-  autonomy_profile: controlled-continuous
+.jarvas/engineering.yml
+  = JDS-001 capabilities, risk/criticality and generic engineering gates
 ```
 
-## Example `quality.yaml`
+`.factory/quality.yaml` was part of the original v1 proposal and is **SUPERSEDED** for generic engineering gate selection. JDS-001 is authoritative for that concern. Any future Factory-specific quality overlay may contain only semantics not already represented by JDS and must not weaken mandatory JDS controls.
 
-```yaml
-schema: hermes.factory/quality/v1
+## Project Compiler inputs
 
-required_gates:
-  specification: true
-  tdd_red: true
-  unit: true
-  regression: true
-  code_review: true
-  security_review: true
-  exact_sha: true
-  ci: true
+The compiler reads:
 
-conditional_gates:
-  threat_model: security_sensitive
-  integration: cross_component
-  runtime: runtime_effect
-  recovery: mutating_runtime
-```
+- Factory contract;
+- canonical requirements, ADRs, architecture, Epics and change records;
+- JDS Effective Gate Plan;
+- current code/tests/CI state;
+- GitHub issues/PRs/SHAs;
+- Hermes Kanban state;
+- Hermes ecosystem capability inventory;
+- runtime/evidence sources when relevant.
 
-## Example `acceptance.yaml`
+It reconciles a semantic project model and idempotent Work Packages rather than duplicating every source artifact into Kanban cards.
 
-```yaml
-schema: hermes.factory/acceptance/v1
-
-acceptance_classes:
-  repository: ACCEPTED_REPO
-  runtime: ACCEPTED_LIVE
-
-human_gates:
-  - destructive_operation
-  - direct_secret_handling
-  - unresolved_architecture_decision
-  - production_release
-
-principles:
-  not_run_is_pass: false
-  repository_implies_runtime: false
-  stale_sha_evidence_allowed: false
-```
-
-## Entity model
-
-The Factory should preserve semantic types rather than converting all artifacts into generic cards.
+## Entity model v1.2
 
 | Entity | Canonical owner | Purpose |
 |---|---|---|
 | Project | project repo / Factory contract | product identity |
 | Requirement | project repo | required behavior |
+| AcceptanceCriterion | project repo / approved acceptance baseline | observable acceptance intent |
+| UATScenario | project acceptance source | versioned user-acceptance procedure |
 | ADR | project repo | architectural decision |
-| Epic | project repo / project planning model | large capability/outcome |
-| Change record | project repo | governed change |
-| GitHub Issue | GitHub | problem/work collaboration object |
-| Work Package | Factory | executable delivery unit |
-| Kanban Task | Hermes | operational execution state |
-| Execution | Hermes | actual agent run |
-| Branch | GitHub | implementation isolation |
-| Pull Request | GitHub | integration candidate |
-| Commit SHA | GitHub | immutable code candidate |
-| CI Run | CI/GitHub | executed check evidence |
-| Deployment | runtime/deployer | promoted candidate |
-| Runtime Evidence | evidence/runtime source | observed live state |
-| Acceptance | Factory | governed decision over evidence |
+| Epic | project repo / planning model | large capability/outcome |
+| ChangeRecord | project repo | governed change |
+| Issue | GitHub | collaboration/problem object |
+| WorkPackage | Factory | bounded governed delivery unit |
+| KanbanTask | Hermes | operational execution state |
+| Execution | Hermes | actual Profile worker run |
+| Branch / PR / CommitSHA | Git/GitHub | SCM isolation/candidate identity |
+| CIRun | CI/GitHub | executed engineering evidence |
+| Deployment | deployer/runtime | promoted candidate identity |
+| RuntimeEvidence | runtime/evidence source | observed live truth |
+| UATExecution / UATEvidence | Factory/project acceptance | acceptance execution proof |
+| Finding | Factory | material failure/adverse observation |
+| ReworkOrder | Factory | bounded corrective delivery unit |
+| HITLRequest / HumanDecision | Factory governance | explicit human authority/evidence |
+| AcceptanceDecision | Factory | governed decision over current evidence |
 
 ## Traceability graph
 
 ```mermaid
 graph LR
-    P[Project]
-    R[Requirement]
-    ADR[ADR]
-    E[Epic]
-    C[Change Record]
-    I[GitHub Issue]
-    WP[Work Package]
-    KT[Kanban Task]
-    EX[Hermes Execution]
-    B[Branch]
-    PR[Pull Request]
-    SHA[Commit SHA]
-    CI[CI Run]
-    D[Deployment]
-    RE[Runtime Evidence]
-    A[Acceptance]
-
-    P --> R
-    P --> E
-    ADR --> E
+    P[Project] --> R[Requirement]
+    R --> AC[Acceptance Criterion]
+    AC --> UATS[UAT Scenario]
+    P --> E[Epic]
     R --> E
-    E --> WP
-    C --> WP
-    I --> WP
-    WP --> KT
-    KT --> EX
-    WP --> B
-    B --> PR
-    PR --> SHA
-    SHA --> CI
-    SHA --> D
-    D --> RE
-    CI --> A
+    E --> WP[Work Package]
+    WP --> KT[Hermes Kanban Task]
+    KT --> EX[Execution]
+    WP --> PR[PR / Candidate SHA]
+    PR --> CI[CI / Review Evidence]
+    PR --> D[Deployment]
+    D --> RE[Runtime Evidence]
+    UATS --> UATE[UAT Execution / Evidence]
+    CI --> A[Acceptance Decision]
     RE --> A
-    WP --> A
+    UATE --> A
+    WP --> F[Finding]
+    F --> RW[Rework Order]
+    RW --> WP
+    WP --> H[HITL Request / Human Decision]
+    H --> A
 ```
 
-The graph must support traversal in both directions.
+The graph must support traversal in both directions, for example:
 
-Examples:
+- PR -> Work Package -> Epic/Requirement/ADR;
+- Acceptance -> exact candidate, CI/reviews, UAT and runtime evidence;
+- Finding -> original evidence -> rework -> corrected candidate -> reverification;
+- HumanDecision -> request/version/context -> affected Work Package/stage.
 
-- "Why does PR #430 exist?" -> PR -> Work Package -> Epic -> requirement/decision.
-- "What blocks Epic X?" -> Epic -> Work Packages -> current Kanban states/gates.
-- "What evidence proves this acceptance?" -> Acceptance -> exact SHA/CI/runtime evidence.
+## Work Package v1.2
 
-## Work Package
-
-A Work Package is the Factory's principal execution unit.
-
-Conceptual contract:
+Conceptual shape:
 
 ```yaml
 id: HSF-WP-0123
-project: hermes-security-labs
-epic: EPIC-HSL-042
-
-objective: >
-  Implement the bounded capability described by the referenced specification.
-
+project: example-project
+epic: EPIC-042
+objective: implement the bounded approved capability
 sources:
   requirements: [REQ-17]
-  decisions: [ADR-0017]
-  issues:
-    - github:pestoura/hermes-security-labs#403
-
-scope:
-  repositories:
-    - pestoura/hermes-security-labs
-
-acceptance_criteria:
-  - AC-01
-  - AC-02
-
-quality_profile: factory-high-assurance
-
+  decisions: [ADR-0007]
+acceptance_criteria: [AC-01, AC-02]
+engineering_plan: jds-effective-plan-ref
 staffing:
-  producer: factory-python-engineer
-  reviewers:
-    - factory-code-reviewer
-    - factory-security-reviewer
-
+  producer: factory-software-engineer
+  reviewers: [factory-code-reviewer]
+skills:
+  required: [factory-reading-project-truth, factory-implementing-minimal-green]
 trace:
   kanban_task: null
   branch: null
   pull_request: null
   candidate_sha: null
   ci_runs: []
+  uat_executions: []
+  findings: []
+  human_decisions: []
   runtime_evidence: []
-
 state: READY
 ```
 
-## Compilation flow
+The concrete staffing/Skills are produced from current Agent/Skill admission sources, not hard-coded by this example.
 
-```mermaid
-sequenceDiagram
-    participant Repo as Project Repository
-    participant PC as Project Compiler
-    participant TR as Traceability Registry
-    participant K as Hermes Kanban
-    participant GH as GitHub
+## Continuous handoff
 
-    Repo->>PC: Factory contract + canonical artifacts
-    GH->>PC: Existing Issues / PRs / SHAs
-    K->>PC: Existing project board state
-    PC->>PC: Normalize and compute desired graph
-    PC->>TR: Reconcile stable entity identities
-    PC->>K: Create/update idempotent tasks and dependencies
-    PC->>TR: Persist mappings
-```
-
-## Idempotency
-
-Every compiler-created entity needs a stable identity key derived from canonical project identity and source entity identity.
-
-Example:
+A stage may promote the next stage only after the atomic handoff record has committed:
 
 ```text
-factory://hermes-security-labs/epic/EPIC-HSL-042/wp/implementation
+stage outcome
++ artifact refs
++ evidence refs/freshness
++ candidate identity where applicable
++ Finding state
++ required independence state
++ next-stage prerequisites
 ```
 
-Recompilation should reconcile that object, not create another card with a similar title.
+`agent says done` is never a handoff proof.
 
-## GitHub synchronization
+## UAT and corrective action
 
-GitHub is not replaced by the Factory.
-
-The Factory sync layer should:
-
-- observe issue creation/change;
-- associate issues with Work Packages where policy says they are work inputs;
-- observe PR creation/change;
-- record current PR head SHA;
-- observe CI/check state;
-- detect candidate SHA changes after review;
-- map merge SHA separately from PR head SHA;
-- preserve GitHub URLs/IDs as external references;
-- avoid copying full GitHub history into Factory state.
-
-## PR chain
-
-```mermaid
-flowchart LR
-    WP[Work Package] --> WT[Git Worktree]
-    WT --> B[Branch]
-    B --> PR[Pull Request]
-    PR --> H[Head SHA]
-    H --> REV[Reviews]
-    H --> CI[CI]
-    REV --> Gate{Candidate valid?}
-    CI --> Gate
-    Gate -- no --> RW[Rework]
-    RW --> H2[New Head SHA]
-    H2 --> REV
-    H2 --> CI
-    Gate -- yes --> M[Merge]
-    M --> MS[Merge / main SHA]
-    MS --> PMV[Post-merge verification]
-```
-
-Reviews for one candidate SHA are not silently transferred to a materially changed candidate.
-
-## Epic compilation
-
-An Epic is an outcome/capability, not necessarily a single card.
-
-Example:
+Canonical chain:
 
 ```text
-EPIC: OIDC authentication
-  ├─ WP: requirements refinement
-  ├─ WP: architecture
-  ├─ WP: threat model
-  ├─ WP: causal TDD RED
-  ├─ WP: backend implementation
-  ├─ WP: integration
-  ├─ WP: security review
-  ├─ WP: runtime validation
-  └─ WP: evidence/acceptance
+Requirement
+-> AcceptanceCriterion
+-> UATScenario
+-> UATExecution
+-> UATEvidence
+-> AcceptanceDecision
 ```
 
-The compiler selects only the WPs required by the project's quality profile and Epic characteristics.
-
-## Change synchronization
-
-When the project definition changes, the Factory performs a delta reconciliation rather than rebuilding blindly.
-
-```mermaid
-flowchart LR
-    Old[Previous compiled model] --> Diff[Semantic delta]
-    New[New canonical revision] --> Diff
-    Diff --> Impact[Impact analysis]
-    Impact --> Keep[Unchanged work]
-    Impact --> Modify[Modify/reopen affected work]
-    Impact --> Add[Create new work]
-    Impact --> Obsolete[Mark superseded/deferred]
-```
-
-An already accepted Work Package may need to be reopened if a new architectural decision invalidates its acceptance basis.
-
-## Conversation boundary
-
-The Factory must never depend on a chat transcript as its only durable project definition.
-
-Correct path:
+A failing gate/UAT/review opens or updates a Finding. Corrective work follows:
 
 ```text
-conversation / design session
--> approved decision
--> canonical project artifact
--> commit
--> Factory compilation
+Finding
+-> classification/root cause
+-> bounded ReworkOrder
+-> correction
+-> targeted verification/regression
+-> rerun invalidated gates/UAT
+-> refreshed evidence
 ```
 
-This allows the project to survive model/session changes and makes decisions auditable.
+Frozen UAT/Acceptance Criteria cannot be edited by an implementer merely to obtain PASS; changes require an explicit Finding and authorized rebaseline.
+
+## HITL traceability
+
+Human decisions are first-class governance evidence. A decision is valid only for its `request_id`, `request_version` and matching context/candidate revision. Stale, expired or cancelled responses cannot unlock work.
+
+## Idempotency and identity
+
+Compiler-created entities require stable identity derived from canonical project/source identity. Recompilation of unchanged canonical input must not create duplicate Work Packages or Kanban tasks.
+
+## Truth boundaries
+
+```text
+project/repository truth != Kanban execution state
+PR/CI truth             != runtime truth
+RITMO/external schedule != proof Factory work ran
+worker narrative        != acceptance evidence
+```
+
+`NOT_RUN != PASS` throughout the graph.
