@@ -58,7 +58,8 @@ The Factory deliberately reuses Hermes native profiles, `SOUL.md`, skills, Kanba
 6. **[Security, Quality & Governance](docs/05-security-quality-governance.md)** — fail-closed policy, evidence, segregation of duties and HITL.
 7. **[Pilot & Roadmap](docs/06-pilot-and-roadmap.md)** — implementation phases and Hermes Security Labs as first pilot.
 8. **[Proposed Foundational Decisions](docs/07-proposed-architecture-decisions.md)** — the decisions to accept/change/defer/reject before implementation.
-9. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
+9. **[Agent Admission & Catalog Governance](docs/08-agent-admission-and-catalog-governance.md)** — permanent Profile-vs-Skill gate, workforce lifecycle and new Documentation/UX/Workforce roles.
+10. **[Canonical Design Spec](docs/superpowers/specs/2026-08-18-hermes-software-factory-design.md)** — consolidated Architecture & Operating Model v1.
 
 ## Target project handoff
 
@@ -137,6 +138,23 @@ ACCEPTED
 ```
 
 `NOT_RUN != PASS` and repository proof never silently becomes runtime proof.
+
+## Workforce growth principle
+
+The Factory workforce is intentionally extensible but not allowed to grow without discipline. Every proposed new profile passes the Agent Admission Gate and can be classified as:
+
+```text
+USE_EXISTING_PROFILE
+ADD_SKILL_TO_EXISTING_PROFILE
+ADD_RUNBOOK
+ADD_TASK_TEMPLATE
+CREATE_ROUTINE_PROFILE
+CREATE_PROFESSIONAL_PROFILE
+DEFER
+REJECT
+```
+
+A missing capability may trigger a proposal; it never silently creates a new agent or new authority.
 
 ## First pilot
 
