@@ -93,7 +93,7 @@ def test_human_decision_is_committed_once_before_it_can_unlock(tmp_path: Path) -
     committed = service.commit(_request(), decision)
 
     assert committed == decision
-    records = registry.repository("HumanDecision").history("HITL-42")
+    records = registry.repository("HumanDecision").history("HumanDecision:HITL-42")
     assert len(records) == 1
     assert records[0]["revision"] == "3"
     assert records[0]["payload"]["decision"] == "approve"
@@ -138,5 +138,5 @@ def test_non_pending_or_mismatched_decision_is_never_committed(tmp_path: Path) -
         else:
             raise AssertionError("non-pending HITL must not commit")
 
-    assert registry.repository("HumanDecision").history("HITL-42") == []
+    assert registry.repository("HumanDecision").history("HumanDecision:HITL-42") == []
     assert registry.list_events(kind="HUMAN_DECISION_RECORDED") == []
