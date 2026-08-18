@@ -1,0 +1,41 @@
+schema: hermes.factory/continuous-handoff/v1.2
+status: proposed_for_owner_review
+implementation_authority: NOT_GRANTED
+
+states: [WORKING, HANDOFF_PENDING, HANDOFF_READY, HANDOFF_BLOCKED, HANDED_OFF, STALE]
+
+handoff_record:
+  required:
+    - project_id
+    - work_package_id
+    - stage
+    - producer_profile
+    - stage_outcome
+    - artifact_refs
+    - evidence_refs
+    - finding_state
+    - next_stage_prerequisites
+  candidate_identity_required_when_code_or_configuration_changed: true
+  independent_review_state_required_when_applicable: true
+
+promotion:
+  next_stage_ready_only_from: HANDOFF_READY
+  authorization: structured_machine_or_policy
+  human_required_by_default: false
+  prerequisite_failure: HANDOFF_BLOCKED
+  material_context_change_before_dispatch: STALE
+
+separation_of_duties:
+  implementer_reviews_own_candidate: forbidden
+  evidence_producer_audits_own_evidence: forbidden
+  runtime_mutator_is_independent_runtime_observer: forbidden
+
+failure:
+  failed_stage_opens_or_updates_finding: true
+  direct_promotion_after_failure: forbidden
+  corrective_action_policy: policies/uat-corrective-action-v1.2.yaml
+
+invariants:
+  - handoff_is_semantically_atomic
+  - worker_completion_text_is_not_handoff_proof
+  - operational_execution_remains_hermes_kanban_dispatcher
