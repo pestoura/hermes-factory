@@ -7,7 +7,6 @@ from hermes_factory.skills.evals import (
 )
 from hermes_factory.skills.system import SkillAdmissionError
 
-
 GATES = (
     "baseline_red",
     "skill_green",
