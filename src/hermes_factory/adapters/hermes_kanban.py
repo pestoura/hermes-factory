@@ -91,7 +91,7 @@ class HermesKanbanAdapter:
         """Fail closed unless the resolved Hermes config enforces Factory policy."""
         kanban = config.get("kanban")
         if not isinstance(kanban, Mapping):
-            raise ValueError("kanban config is required for high-assurance mode")
+            raise TypeError("kanban config is required for high-assurance mode")
         if kanban.get("auto_decompose") is not False:
             raise ValueError(
                 "kanban.auto_decompose must be false for Factory high-assurance boards"
