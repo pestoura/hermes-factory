@@ -9,7 +9,7 @@ class EvidenceConflict(RuntimeError):
 
 
 class SemanticRegistry:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
