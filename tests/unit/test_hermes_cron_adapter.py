@@ -71,7 +71,7 @@ def test_cron_projection_fails_closed_without_profile_scope_or_recurring_identit
             raise AssertionError("invalid Factory cron duty must fail closed")
 
 
-def test_cron_projection_rejects_sensitive_prompt_and_does_not_expose_os_scheduler_fields() -> None:
+def test_cron_projection_rejects_sensitive_prompt_and_all_parallel_scheduler_surfaces() -> None:
     adapter = HermesProfileCronAdapter(
         redact_text=lambda value: value.replace("SECRET-42", "[REDACTED]")
     )
@@ -98,4 +98,6 @@ def test_cron_projection_rejects_sensitive_prompt_and_does_not_expose_os_schedul
     assert "systemd" not in rendered
     assert "crontab" not in rendered
     assert "scheduler" not in rendered
+    assert "ritmo" not in rendered
+    assert "mcp" not in rendered
     assert "script" not in safe.job_kwargs()
