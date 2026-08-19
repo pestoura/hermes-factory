@@ -4,6 +4,8 @@ runtime_state: NOT_RUN
 
 requires:
   exact_hermes_sha: true
+  exact_factory_candidate_sha: true
+  verified_factory_package_candidate_v2: true
   all_profile_evals_pass: true
   all_skill_evals_pass: true
   all_component_evidence_pass: true
@@ -15,11 +17,12 @@ prohibitions:
   - embedded_runtime_state
   - internal_mcp_ipc
   - implicit_execution
+  - mutable_factory_package_source
 
 components:
   FACTORY_PACKAGE:
-    mechanism: stage_factory_package
-    source: pestoura/hermes-factory
+    mechanism: install_verified_factory_wheel
+    source: verified_exact_head_factory_package_candidate
     target: HERMES_RUNTIME_ENV
 
   PROFILE_DISTRIBUTIONS:
