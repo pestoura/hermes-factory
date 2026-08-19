@@ -31,7 +31,7 @@ class RuntimeComponentBinding:
     verification_state: ExternalVerificationState
 
     @classmethod
-    def from_mapping(cls, payload: dict[str, Any]) -> "RuntimeComponentBinding":
+    def from_mapping(cls, payload: dict[str, Any]) -> RuntimeComponentBinding:
         if payload.get("schema") != "hermes.factory/runtime-component-binding/v1":
             raise ValueError("unsupported runtime component binding schema")
         repository = payload.get("repository")
