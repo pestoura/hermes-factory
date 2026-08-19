@@ -144,9 +144,12 @@ class AcceptanceEngine:
             raise ValueError("acceptance evidence ids must be unique")
         if not set(request.independent_evidence_ids).issubset(request.required_evidence_ids):
             raise ValueError("independent evidence must also be required evidence")
-        if request.acceptance_class is AcceptanceClass.RELEASE and policy.owner_release_required:
-            if policy.owner_actor_id is None or not policy.owner_actor_id.strip():
-                raise ValueError("owner_actor_id is required for owner-reserved release")
+        if (
+            request.acceptance_class is AcceptanceClass.RELEASE
+            and policy.owner_release_required
+            and (policy.owner_actor_id is None or not policy.owner_actor_id.strip())
+        ):
+            raise ValueError("owner_actor_id is required for owner-reserved release")
 
     @staticmethod
     def _hold(request: AcceptanceRequest, reason: str) -> AcceptanceDecision:
