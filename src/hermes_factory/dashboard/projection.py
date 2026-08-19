@@ -39,6 +39,10 @@ class FactoryDashboardProjection:
         skill_evals: Sequence[Mapping[str, Any]] = (),
     ) -> dict[str, Any]:
         """Project current canonical truth without deriving optimistic state."""
+        evidence = self._registry.list_evidence(candidate=candidate)
+        canonical_jds = [row for row in evidence if row["kind"] == "JDS_GATE_PLAN"]
+        canonical_agents = [row for row in evidence if row["kind"] == "PROFILE_EVAL"]
+        canonical_skills = [row for row in evidence if row["kind"] == "SKILL_EVAL"]
         return {
             "schema_version": "1.0",
             "candidate": candidate,
@@ -53,8 +57,8 @@ class FactoryDashboardProjection:
             "hitl": self._current("HITLRequest", "HumanDecision"),
             "runtime": self._current("Deployment", "RuntimeEvidence"),
             "acceptance": self._current("AcceptanceDecision"),
-            "evidence": self._registry.list_evidence(candidate=candidate),
-            "jds_gates": self._copy_records(jds_gates),
-            "agent_evals": self._copy_records(agent_evals),
-            "skill_evals": self._copy_records(skill_evals),
+            "evidence": evidence,
+            "jds_gates": canonical_jds or self._copy_records(jds_gates),
+            "agent_evals": canonical_agents or self._copy_records(agent_evals),
+            "skill_evals": canonical_skills or self._copy_records(skill_evals),
         }
