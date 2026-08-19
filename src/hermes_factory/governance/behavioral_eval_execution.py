@@ -74,6 +74,10 @@ class BehavioralEvalExecutor:
             raise BehavioralEvalExecutionError(
                 f"unsupported evaluation execution state: {plan.execution_state}"
             )
+        if plan.execution_state == "PASS" and plan.items:
+            raise BehavioralEvalExecutionError(
+                "evaluation plan is PASS but still contains pending work items"
+            )
 
         attempted_count = 0
         recorded_count = 0
