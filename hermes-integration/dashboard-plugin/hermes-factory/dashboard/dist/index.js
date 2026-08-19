@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
-function FactoryPage({ rest }) {
+function FactoryPage({ loadSnapshot }) {
   const [state, setState] = useState({ loading: true, data: null, error: null });
 
   useEffect(() => {
     let active = true;
 
-    ctx.rest("/snapshot")
+    loadSnapshot()
       .then((data) => {
         if (active) {
           setState({ loading: false, data, error: null });
@@ -26,7 +26,7 @@ function FactoryPage({ rest }) {
     return () => {
       active = false;
     };
-  }, [rest]);
+  }, [loadSnapshot]);
 
   if (state.loading) {
     return React.createElement(
@@ -70,7 +70,8 @@ const plugin = {
   name: "Hermes Software Factory",
   defaultEnabled: true,
   register(ctx) {
-    const renderFactory = () => React.createElement(FactoryPage, { rest: ctx.rest });
+    const loadSnapshot = () => ctx.rest("/snapshot");
+    const renderFactory = () => React.createElement(FactoryPage, { loadSnapshot });
 
     ctx.register({
       id: "route",
