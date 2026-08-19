@@ -2,7 +2,9 @@
 
 This directory documents the Phase P installation boundary for the Hermes Software Factory.
 
-The canonical implementation of the controlled install planner is `src/hermes_factory/runtime/install.py`. The planner is deliberately side-effect free: it may report `READY`, but it always emits `execute=false`. Runtime execution is a separate controlled transition and must never be inferred from planning or repository CI.
+The canonical controlled install planner is `src/hermes_factory/runtime/install.py`. The planner is deliberately side-effect free: it may report `READY`, but it always emits `execute=false`.
+
+The controlled execution boundary is `src/hermes_factory/runtime/install_execution.py`. It consumes only a `READY` plan plus an explicit authorization bound to that exact plan digest. Runtime mutation is delegated to an injected Hermes/Jarvas runtime adapter, so planning, repository CI and execution remain distinct. If an operational step fails, the executor requests compensation for already-applied operations in reverse order and reports either `ROLLED_BACK` or `ROLLBACK_FAILED` rather than silently continuing.
 
 ## Admission requirements
 
@@ -13,7 +15,8 @@ A controlled runtime installation is eligible to move beyond planning only when 
 - all 29 Factory Skills have complete PASS evaluation evidence for their current source-directory digests;
 - all eight Phase P runtime components have PASS evidence;
 - the native cron installation plan is not blocked;
-- no candidate artifact has drifted since its evaluation evidence was recorded.
+- no candidate artifact has drifted since its evaluation evidence was recorded;
+- the explicit execution authorization references the exact current install-plan digest and contains approval provenance.
 
 The current F/G workload is 298 checks: 153 Profile checks (`17 × 9`) and 145 Skill gates (`29 × 5`). Missing, NOT_RUN, UNKNOWN, STALE, ABSENT, BLOCKED or FAIL evidence never collapses into PASS.
 
@@ -34,7 +37,7 @@ The installation surface reuses Hermes/Jarvas primitives instead of introducing 
 
 ## Current checkpoint
 
-Repository-side planning and preflight are implemented. Runtime installation has **not** been performed.
+Repository-side planning, preflight and the controlled executor are implemented. Runtime installation has **not** been performed.
 
 Current known blockers remain fail-closed:
 
@@ -42,7 +45,8 @@ Current known blockers remain fail-closed:
 - 29 Factory Skills: evaluation state `NOT_RUN`;
 - 298 total F/G evaluation work items remain to be executed and persisted;
 - northbound MCP Bridge integration remains externally `BLOCKED` on its bound candidate until independent CI/runtime evidence succeeds;
-- the live accepted Hermes runtime exact SHA has not been asserted by repository tests.
+- the live accepted Hermes runtime exact SHA has not been asserted by repository tests;
+- no real runtime execution authorization has been issued or consumed.
 
 The Phase Q acceptance matrix is already defined but its 15 runtime scenarios also remain `NOT_RUN` until controlled installation and runtime verification are legitimately available.
 
