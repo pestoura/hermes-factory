@@ -104,14 +104,14 @@ class InstallExecutor:
                         f"{operation.action}"
                     )
                 applied.append((operation, receipt))
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             rollback_failures: list[str] = []
             rolled_back_count = 0
             for operation, receipt in reversed(applied):
                 try:
                     self._runtime.rollback(operation, receipt)
                     rolled_back_count += 1
-                except Exception as rollback_exc:
+                except (RuntimeError, OSError, ValueError) as rollback_exc:
                     rollback_failures.append(
                         f"{operation.component.value}:{operation.action}: {rollback_exc}"
                     )
