@@ -1,4 +1,4 @@
-from hermes_factory.runtime.admission import AdmissionEvidenceState
+from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
 
 
 def _readiness_contract():
@@ -7,6 +7,10 @@ def _readiness_contract():
     except ModuleNotFoundError as exc:
         raise AssertionError("Phase P runtime readiness assessor is not implemented") from exc
     return RuntimeReadinessAssessor
+
+
+def _passing_components() -> dict[RuntimeComponent, AdmissionEvidenceState]:
+    return {component: AdmissionEvidenceState.PASS for component in RuntimeComponent}
 
 
 def test_runtime_readiness_requires_complete_pass_evidence() -> None:
@@ -22,6 +26,7 @@ def test_runtime_readiness_requires_complete_pass_evidence() -> None:
         skill_eval_states={
             "factory-reading-project-truth": AdmissionEvidenceState.PASS,
         },
+        component_states=_passing_components(),
     )
 
     assert assessment.ready is True
@@ -42,6 +47,7 @@ def test_runtime_readiness_marks_missing_evidence_absent_and_blocks() -> None:
         skill_eval_states={
             "factory-reading-project-truth": AdmissionEvidenceState.PASS,
         },
+        component_states=_passing_components(),
     )
 
     assert assessment.ready is False
@@ -61,6 +67,7 @@ def test_runtime_readiness_preserves_non_pass_state_and_never_promotes_it() -> N
         skill_eval_states={
             "factory-reading-project-truth": AdmissionEvidenceState.NOT_RUN,
         },
+        component_states=_passing_components(),
     )
 
     assert assessment.ready is False
@@ -76,12 +83,17 @@ def test_runtime_readiness_manifest_is_deterministic() -> None:
         required_skill_ids=("y", "x"),
         profile_eval_states={"a": AdmissionEvidenceState.PASS, "b": AdmissionEvidenceState.PASS},
         skill_eval_states={"x": AdmissionEvidenceState.PASS, "y": AdmissionEvidenceState.PASS},
+        component_states=_passing_components(),
     )
     second = assessor.assess(
         required_profile_ids=("a", "b"),
         required_skill_ids=("x", "y"),
         profile_eval_states={"b": AdmissionEvidenceState.PASS, "a": AdmissionEvidenceState.PASS},
         skill_eval_states={"y": AdmissionEvidenceState.PASS, "x": AdmissionEvidenceState.PASS},
+        component_states={
+            component: AdmissionEvidenceState.PASS
+            for component in reversed(tuple(RuntimeComponent))
+        },
     )
 
     assert first.to_manifest() == second.to_manifest()
@@ -102,6 +114,7 @@ def test_runtime_readiness_blocks_unexpected_evidence_identities() -> None:
             "factory-reading-project-truth": AdmissionEvidenceState.PASS,
             "factory-unknown-skill": AdmissionEvidenceState.PASS,
         },
+        component_states=_passing_components(),
     )
 
     assert assessment.ready is False
