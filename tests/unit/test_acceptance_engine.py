@@ -7,7 +7,6 @@ from hermes_factory.governance.acceptance import (
     AcceptancePolicy,
     AcceptanceRequest,
 )
-
 from hermes_factory.traceability import SemanticRegistry
 
 CANDIDATE = "a" * 40
