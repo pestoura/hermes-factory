@@ -8,6 +8,7 @@ from hermes_factory.agents.evals import (
 )
 from hermes_factory.runtime.admission import AdmissionEvidenceState
 from hermes_factory.skills.evals import (
+    SKILL_EVAL_GATES,
     SkillEvalEvidence,
     SkillEvalHarness,
     SkillEvalState,
@@ -149,6 +150,18 @@ class EvalEvidenceStore:
             for row in rows
             if row["kind"] == _SKILL_KIND
         )
+
+    def skill_gate_states(
+        self,
+        skill_id: str,
+        source_digest: str,
+    ) -> dict[str, SkillEvalState]:
+        evidence = self._skill_evidence(skill_id, source_digest)
+        by_gate = {record.gate: record.state for record in evidence}
+        return {
+            gate: by_gate.get(gate, SkillEvalState.NOT_RUN)
+            for gate in SKILL_EVAL_GATES
+        }
 
     def skill_record(self, skill_id: str, source_digest: str) -> SkillEvalRecord:
         return self._skill_harness.evaluate(
