@@ -55,3 +55,45 @@ jobs:
             artifacts/static-profile-evals/static-profile-evals.db
             artifacts/static-profile-evals/behavioral-eval-plan.json
           if-no-files-found: error
+
+  factory-package-candidate:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      FACTORY_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build exact-head Factory wheel
+        run: |
+          mkdir -p artifacts/factory-package
+          python -m pip wheel . --no-deps --wheel-dir artifacts/factory-package
+      - name: Build exact-head Factory package identity
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import os
+          from pathlib import Path
+          from hermes_factory.runtime.package_candidate import build_package_candidate_manifest
+
+          package_dir = Path("artifacts/factory-package")
+          wheels = sorted(package_dir.glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one Factory wheel, found {len(wheels)}")
+          build_package_candidate_manifest(
+              wheel_path=wheels[0],
+              candidate_sha=os.environ["FACTORY_CANDIDATE_SHA"],
+              output_path=package_dir / "factory-package.json",
+          )
+          PY
+      - name: Upload exact-head Factory package candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-package-candidate-${{ env.FACTORY_CANDIDATE_SHA }}
+          path: |
+            artifacts/factory-package/*.whl
+            artifacts/factory-package/factory-package.json
+          if-no-files-found: error
