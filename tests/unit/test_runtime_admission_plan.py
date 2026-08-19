@@ -97,3 +97,63 @@ def test_runtime_admission_fails_closed_on_non_pass_skill_eval(state_name: str) 
             profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
             skill_eval_states={"factory-reading-project-truth": state},
         )
+
+
+def test_runtime_install_plan_manifest_and_digest_are_deterministic() -> None:
+    AdmissionEvidenceState, _, RuntimeAdmissionPlanner, _ = _runtime_admission_contract()
+    planner = RuntimeAdmissionPlanner()
+
+    first = planner.build(
+        accepted_hermes_sha="hermes-sha-1",
+        observed_hermes_sha="hermes-sha-1",
+        profile_eval_states={
+            "factory-software-engineer": AdmissionEvidenceState.PASS,
+            "factory-orchestrator": AdmissionEvidenceState.PASS,
+        },
+        skill_eval_states={
+            "factory-tdd": AdmissionEvidenceState.PASS,
+            "factory-reading-project-truth": AdmissionEvidenceState.PASS,
+        },
+    )
+    second = planner.build(
+        accepted_hermes_sha="hermes-sha-1",
+        observed_hermes_sha="hermes-sha-1",
+        profile_eval_states={
+            "factory-orchestrator": AdmissionEvidenceState.PASS,
+            "factory-software-engineer": AdmissionEvidenceState.PASS,
+        },
+        skill_eval_states={
+            "factory-reading-project-truth": AdmissionEvidenceState.PASS,
+            "factory-tdd": AdmissionEvidenceState.PASS,
+        },
+    )
+
+    assert first.to_manifest() == second.to_manifest()
+    assert first.digest == second.digest
+    assert len(first.digest) == 64
+    assert first.to_manifest()["execute"] is False
+    assert first.to_manifest()["runtime_state"] == "NOT_RUN"
+
+
+@pytest.mark.parametrize("kind", ["profile", "skill"])
+def test_runtime_admission_rejects_blank_candidate_identity(kind: str) -> None:
+    (
+        AdmissionEvidenceState,
+        RuntimeAdmissionError,
+        RuntimeAdmissionPlanner,
+        _,
+    ) = _runtime_admission_contract()
+    profile_states = {"factory-orchestrator": AdmissionEvidenceState.PASS}
+    skill_states = {"factory-reading-project-truth": AdmissionEvidenceState.PASS}
+    if kind == "profile":
+        profile_states = {" ": AdmissionEvidenceState.PASS}
+    else:
+        skill_states = {" ": AdmissionEvidenceState.PASS}
+
+    with pytest.raises(RuntimeAdmissionError, match="identity"):
+        RuntimeAdmissionPlanner().build(
+            accepted_hermes_sha="hermes-sha-1",
+            observed_hermes_sha="hermes-sha-1",
+            profile_eval_states=profile_states,
+            skill_eval_states=skill_states,
+        )
