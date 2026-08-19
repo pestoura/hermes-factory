@@ -41,7 +41,7 @@ class StaticProfileEvaluator:
     ) -> tuple[ProfileEvalEvidence, ...]:
         agent = agent_document.get("agent")
         if not isinstance(agent, dict):
-            raise ValueError("agent document must contain agent mapping")
+            raise TypeError("agent document must contain agent mapping")
         profile_id = agent.get("id")
         if not isinstance(profile_id, str) or not profile_id.strip():
             raise ValueError("agent.id is required")
