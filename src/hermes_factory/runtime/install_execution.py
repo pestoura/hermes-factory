@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
+from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.install import ControlledInstallPlan, InstallOperation
 
 
@@ -87,12 +89,37 @@ class InstallExecutor:
         if not authorization.approved_by.strip() or not authorization.evidence_ref.strip():
             raise InstallExecutionError("explicit approval provenance is required")
 
+    @staticmethod
+    def _validate_source_identities(plan: ControlledInstallPlan) -> None:
+        for operation in plan.operations:
+            if operation.source_digest is None:
+                continue
+            if operation.source is None or not operation.source.strip():
+                raise InstallExecutionError(
+                    f"digest-bound install source is absent for "
+                    f"{operation.component.value}:{operation.action}"
+                )
+            try:
+                observed_digest = digest_artifact(Path(operation.source))
+            except (OSError, ValueError) as exc:
+                raise InstallExecutionError(
+                    f"install source digest unavailable for "
+                    f"{operation.component.value}:{operation.action}"
+                ) from exc
+            if observed_digest != operation.source_digest:
+                raise InstallExecutionError(
+                    f"install source digest drift for "
+                    f"{operation.component.value}:{operation.action}: "
+                    f"expected={operation.source_digest} observed={observed_digest}"
+                )
+
     def execute(
         self,
         plan: ControlledInstallPlan,
         authorization: InstallExecutionAuthorization,
     ) -> InstallExecutionReport:
         self._authorize(plan, authorization)
+        self._validate_source_identities(plan)
 
         applied: list[tuple[InstallOperation, str]] = []
         try:
