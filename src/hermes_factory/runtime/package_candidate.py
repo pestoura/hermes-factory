@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -29,14 +30,16 @@ def build_package_candidate_manifest(
     if wheel.is_symlink() or not wheel.is_file():
         raise PackageCandidateError("Factory package candidate wheel must be a regular file")
 
+    wheel_bytes = wheel.read_bytes()
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, object] = {
-        "schema": "hermes.factory/package-candidate/v1",
+        "schema": "hermes.factory/package-candidate/v2",
         "candidate_sha": candidate_sha.lower(),
         "filename": wheel.name,
-        "sha256": digest_artifact(wheel),
-        "size_bytes": wheel.stat().st_size,
+        "artifact_digest": digest_artifact(wheel),
+        "content_sha256": hashlib.sha256(wheel_bytes).hexdigest(),
+        "size_bytes": len(wheel_bytes),
     }
     output.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
