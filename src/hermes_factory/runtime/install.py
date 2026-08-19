@@ -11,6 +11,7 @@ from hermes_factory.gates.exact_sha import ExactSHAState, evaluate_exact_sha
 from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
 from hermes_factory.runtime.cron_projection import NativeCronPlan
+from hermes_factory.runtime.package_candidate import FactoryPackageCandidate
 from hermes_factory.runtime.readiness import RuntimeReadinessAssessor
 
 
@@ -28,6 +29,7 @@ _SECRET_PATH_PARTS = {
     "credential",
 }
 _MODULE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
+_GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class InstallOperation:
 class ControlledInstallPlan:
     accepted_hermes_sha: str
     observed_hermes_sha: str
+    factory_candidate_sha: str
     operations: tuple[InstallOperation, ...]
     blockers: tuple[str, ...]
     execution_state: str
@@ -66,9 +69,10 @@ class ControlledInstallPlan:
 
     def to_manifest(self) -> dict[str, object]:
         return {
-            "schema": "hermes.factory/controlled-install-plan/v1",
+            "schema": "hermes.factory/controlled-install-plan/v2",
             "accepted_hermes_sha": self.accepted_hermes_sha,
             "observed_hermes_sha": self.observed_hermes_sha,
+            "factory_candidate_sha": self.factory_candidate_sha,
             "operations": [operation.to_manifest() for operation in self.operations],
             "blockers": list(self.blockers),
             "execution_state": self.execution_state,
@@ -111,8 +115,8 @@ class ControlledInstallPlanBuilder:
         *,
         accepted_hermes_sha: str,
         observed_hermes_sha: str,
-        factory_package_source: Path,
-        expected_factory_package_digest: str,
+        expected_factory_candidate_sha: str,
+        factory_package_candidate: FactoryPackageCandidate,
         profile_artifacts: Mapping[str, Path],
         expected_profile_digests: Mapping[str, str],
         profile_eval_states: Mapping[str, AdmissionEvidenceState],
@@ -123,7 +127,13 @@ class ControlledInstallPlanBuilder:
         gateway_adapter_module: str,
         northbound_binding_source: Path,
     ) -> ControlledInstallPlan:
-        factory_package_source = Path(factory_package_source)
+        if not _GIT_SHA.fullmatch(expected_factory_candidate_sha):
+            raise InstallPlanError(
+                "expected Factory candidate SHA must be an exact 40-character Git SHA"
+            )
+
+        factory_package_source = Path(factory_package_candidate.wheel_path)
+        expected_factory_package_digest = factory_package_candidate.artifact_digest
         dashboard_plugin_source = Path(dashboard_plugin_source)
         northbound_binding_source = Path(northbound_binding_source)
         _require_regular_file(factory_package_source, "Factory package source")
@@ -141,6 +151,13 @@ class ControlledInstallPlanBuilder:
         if sha_state is not ExactSHAState.SHA_MATCH:
             blockers.append(
                 f"exact Hermes SHA required: accepted={accepted_hermes_sha} observed={observed_hermes_sha}"
+            )
+
+        if factory_package_candidate.candidate_sha.lower() != expected_factory_candidate_sha.lower():
+            blockers.append(
+                "exact Factory candidate SHA required: "
+                f"expected={expected_factory_candidate_sha.lower()} "
+                f"observed={factory_package_candidate.candidate_sha.lower()}"
             )
 
         observed_package_digest = digest_artifact(factory_package_source)
@@ -274,6 +291,7 @@ class ControlledInstallPlanBuilder:
         return ControlledInstallPlan(
             accepted_hermes_sha=accepted_hermes_sha,
             observed_hermes_sha=observed_hermes_sha,
+            factory_candidate_sha=factory_package_candidate.candidate_sha.lower(),
             operations=tuple(operations),
             blockers=ordered_blockers,
             execution_state="READY" if ready else "BLOCKED",
