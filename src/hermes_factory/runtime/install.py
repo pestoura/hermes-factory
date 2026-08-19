@@ -219,7 +219,15 @@ class ControlledInstallPlanBuilder:
                 InstallOperation(
                     component=RuntimeComponent.PROFILE_DISTRIBUTIONS,
                     action="INSTALL_NATIVE_PROFILE_DISTRIBUTION",
-                    argv=("hermes", "profile", "install", str(artifact)),
+                    argv=(
+                        "hermes",
+                        "profile",
+                        "install",
+                        str(artifact),
+                        "--name",
+                        profile_id,
+                        "-y",
+                    ),
                     source=str(artifact),
                     source_digest=expected_profile_digests.get(profile_id),
                     target=f"HERMES_HOME/profiles/{profile_id}",
