@@ -60,6 +60,10 @@ class SkillEvalHarness:
                 )
             if not record.evidence_ref.strip() or not record.evaluator.strip():
                 raise SkillAdmissionError("evaluation evidence requires provenance")
+            if record.gate == "independent_review" and record.evaluator == skill_id:
+                raise SkillAdmissionError(
+                    "independent review evaluator cannot be the Skill candidate"
+                )
             states[record.gate] = record.state
         passed = {
             gate: states.get(gate) is SkillEvalState.PASS
