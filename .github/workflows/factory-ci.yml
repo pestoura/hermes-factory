@@ -53,4 +53,5 @@ jobs:
           path: |
             artifacts/static-profile-evals/static-profile-evals.json
             artifacts/static-profile-evals/static-profile-evals.db
+            artifacts/static-profile-evals/behavioral-eval-plan.json
           if-no-files-found: error
