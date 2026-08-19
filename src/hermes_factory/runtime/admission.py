@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -52,6 +54,35 @@ class RuntimeInstallPlan:
     runtime_state: AdmissionEvidenceState
     execute: bool
 
+    def to_manifest(self) -> dict[str, object]:
+        return {
+            "schema": "hermes.factory/runtime-install-plan/v1",
+            "hermes_sha": self.hermes_sha,
+            "components": [component.value for component in self.components],
+            "profiles_to_admit": list(self.profiles_to_admit),
+            "skills_to_admit": list(self.skills_to_admit),
+            "runtime_state": self.runtime_state.value,
+            "execute": self.execute,
+        }
+
+    @property
+    def digest(self) -> str:
+        payload = json.dumps(
+            self.to_manifest(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+
+def _require_identities(
+    evidence_type: str,
+    states: Mapping[str, AdmissionEvidenceState],
+) -> None:
+    if any(not identity.strip() for identity in states):
+        raise RuntimeAdmissionError(f"{evidence_type} identity is required")
+
 
 def _require_pass(
     evidence_type: str,
@@ -83,6 +114,8 @@ class RuntimeAdmissionPlanner:
         if sha_state is not ExactSHAState.SHA_MATCH:
             raise RuntimeAdmissionError("exact Hermes SHA match is required for runtime admission")
 
+        _require_identities("Profile", profile_eval_states)
+        _require_identities("Skill", skill_eval_states)
         _require_pass("Profile", profile_eval_states)
         _require_pass("Skill", skill_eval_states)
 
