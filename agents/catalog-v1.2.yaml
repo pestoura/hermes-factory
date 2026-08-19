@@ -1,7 +1,7 @@
 schema: hermes.factory/agent-catalog/v1
 catalog:
   version: 1.2.0
-  lifecycle: proposed_for_owner_review
+  lifecycle: approved_for_implementation
   architecture_review: docs/16-architecture-review-v1.2.md
   canonical_spec: docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.2.md
   authoritative_for_admission_and_compilation: true
@@ -61,7 +61,7 @@ catalog:
 
   runtime_status:
     profiles_installed_by_this_catalog: false
-    implementation_authority: NOT_GRANTED
+    implementation_authority: GRANTED
 
   invariants:
     - catalog_is_not_running_fleet
