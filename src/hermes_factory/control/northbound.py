@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
@@ -13,6 +15,13 @@ class NorthboundOrigin(StrEnum):
     INTERNAL_PROFILE = "INTERNAL_PROFILE"
 
 
+class ProtectedMutationAction(StrEnum):
+    MERGE_PR = "MERGE_PR"
+    RELEASE = "RELEASE"
+    ACTIVATE_PROFILE = "ACTIVATE_PROFILE"
+    ACTIVATE_SKILL = "ACTIVATE_SKILL"
+
+
 @dataclass(frozen=True)
 class NorthboundCaller:
     principal: str
@@ -23,8 +32,12 @@ class NorthboundAccessDenied(PermissionError):
     pass
 
 
+class NorthboundMutationDenied(RuntimeError):
+    pass
+
+
 class NorthboundControl:
-    """Transport-neutral read surface for authorized external Factory clients."""
+    """Transport-neutral external governance/control surface for the Factory."""
 
     SCHEMA_VERSION = "1.0"
 
@@ -80,6 +93,81 @@ class NorthboundControl:
             candidate_sha=candidate_sha,
             data={"records": records},
         )
+
+    def protected_mutation_intent(
+        self,
+        *,
+        action: ProtectedMutationAction,
+        resource: str,
+        candidate_sha: str,
+        caller: NorthboundCaller,
+        authority_evidence_id: str,
+        human_decision_id: str,
+    ) -> dict[str, Any]:
+        self._authorize(candidate_sha=candidate_sha, caller=caller)
+        if not resource.strip():
+            raise ValueError("protected mutation resource is required")
+        authority = self._authority_evidence(
+            authority_evidence_id,
+            candidate_sha=candidate_sha,
+        )
+        decision = self._human_decision(
+            human_decision_id,
+            candidate_sha=candidate_sha,
+        )
+        payload: dict[str, Any] = {
+            "action": action.value,
+            "resource": resource,
+            "principal": caller.principal,
+            "candidate_sha": candidate_sha,
+            "authority_evidence_id": str(authority["evidence_id"]),
+            "human_decision_id": str(decision["entity_id"]),
+            "execute": False,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        payload["intent_id"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return self._response(
+            operation="PROTECTED_MUTATION_INTENT",
+            candidate_sha=candidate_sha,
+            data=payload,
+        )
+
+    def _authority_evidence(
+        self,
+        evidence_id: str,
+        *,
+        candidate_sha: str,
+    ) -> dict[str, Any]:
+        try:
+            evidence = self._registry.get_evidence(evidence_id)
+        except KeyError as exc:
+            raise NorthboundMutationDenied("authority evidence is absent") from exc
+        if evidence.get("state") != "PASS" or evidence.get("candidate") != candidate_sha:
+            raise NorthboundMutationDenied(
+                "authority evidence is not PASS and bound to candidate"
+            )
+        return evidence
+
+    def _human_decision(
+        self,
+        entity_id: str,
+        *,
+        candidate_sha: str,
+    ) -> dict[str, Any]:
+        matches = [
+            row
+            for row in self._registry.list_latest_entities("HumanDecision")
+            if row.get("entity_id") == entity_id
+        ]
+        if len(matches) != 1:
+            raise NorthboundMutationDenied("HumanDecision is absent")
+        decision = matches[0]
+        payload = decision.get("payload")
+        if not isinstance(payload, dict) or payload.get("candidate_revision") != candidate_sha:
+            raise NorthboundMutationDenied("HumanDecision is not bound to candidate")
+        if not isinstance(payload.get("decision"), str) or not str(payload["decision"]).strip():
+            raise NorthboundMutationDenied("HumanDecision is invalid")
+        return decision
 
     @staticmethod
     def _candidate_from_entity(row: dict[str, Any]) -> str | None:
