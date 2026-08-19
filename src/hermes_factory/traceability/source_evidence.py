@@ -5,15 +5,10 @@ import json
 from typing import Any
 
 from hermes_factory.adapters.jds import JDSEffectiveGatePlan
-from hermes_factory.agents.evals import (
-    ProfileEvalEvidence,
-    ProfileEvalRecord,
-    ProfileEvalState,
-)
+from hermes_factory.agents.evals import ProfileEvalEvidence, ProfileEvalRecord
 from hermes_factory.skills.evals import SkillEvalEvidence, SkillEvalState
 from hermes_factory.skills.system import SkillEvalRecord
-
-from .registry import SemanticRegistry
+from hermes_factory.traceability.registry import SemanticRegistry
 
 
 _SKILL_GATES = (
