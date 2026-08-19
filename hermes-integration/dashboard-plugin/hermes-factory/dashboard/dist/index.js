@@ -1,56 +1,95 @@
-(function () {
-  "use strict";
+import React, { useEffect, useState } from "react";
+import { ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
-  const SDK = window.__HERMES_PLUGIN_SDK__;
-  const { React } = SDK;
-  const { Card, CardHeader, CardTitle, CardContent } = SDK.components;
-  const SNAPSHOT_URL = "/api/plugins/hermes-factory/snapshot";
+function FactoryPage({ rest }) {
+  const [state, setState] = useState({ loading: true, data: null, error: null });
 
-  function FactoryPage() {
-    const [state, setState] = React.useState({ loading: true, data: null, error: null });
+  useEffect(() => {
+    let active = true;
 
-    React.useEffect(function () {
-      let active = true;
-      SDK.fetchJSON(SNAPSHOT_URL)
-        .then(function (data) {
-          if (active) setState({ loading: false, data: data, error: null });
-        })
-        .catch(function (error) {
-          if (active) {
-            setState({
-              loading: false,
-              data: null,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        });
-      return function () { active = false; };
-    }, []);
+    ctx.rest("/snapshot")
+      .then((data) => {
+        if (active) {
+          setState({ loading: false, data, error: null });
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setState({
+            loading: false,
+            data: null,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
 
-    let body;
-    if (state.loading) {
-      body = React.createElement("p", { className: "text-sm text-muted-foreground" }, "Loading Factory truth…");
-    } else if (state.error) {
-      body = React.createElement("p", { className: "text-sm text-destructive" }, state.error);
-    } else {
-      body = React.createElement(
-        "pre",
-        { className: "overflow-auto text-xs whitespace-pre-wrap" },
-        JSON.stringify(state.data, null, 2),
-      );
-    }
+    return () => {
+      active = false;
+    };
+  }, [rest]);
 
+  if (state.loading) {
     return React.createElement(
-      Card,
-      null,
-      React.createElement(
-        CardHeader,
-        null,
-        React.createElement(CardTitle, null, "Hermes Software Factory"),
-      ),
-      React.createElement(CardContent, null, body),
+      "div",
+      { className: "p-6 text-sm text-muted-foreground" },
+      "Loading Factory truth…",
     );
   }
 
-  window.__HERMES_PLUGINS__.register("hermes-factory", FactoryPage);
-})();
+  if (state.error) {
+    return React.createElement(
+      "div",
+      { className: "p-6 text-sm text-destructive" },
+      state.error,
+    );
+  }
+
+  return React.createElement(
+    "section",
+    { className: "flex h-full flex-col gap-4 overflow-auto p-6" },
+    React.createElement(
+      "header",
+      null,
+      React.createElement("h1", { className: "text-lg font-semibold" }, "Hermes Software Factory"),
+      React.createElement(
+        "p",
+        { className: "text-sm text-muted-foreground" },
+        "Canonical Factory state and evidence (read-only)",
+      ),
+    ),
+    React.createElement(
+      "pre",
+      { className: "overflow-auto whitespace-pre-wrap text-xs" },
+      JSON.stringify(state.data, null, 2),
+    ),
+  );
+}
+
+const plugin = {
+  id: "hermes-factory",
+  name: "Hermes Software Factory",
+  defaultEnabled: true,
+  register(ctx) {
+    const renderFactory = () => React.createElement(FactoryPage, { rest: ctx.rest });
+
+    ctx.register({
+      id: "route",
+      area: ROUTES_AREA,
+      title: "Hermes Software Factory",
+      data: { path: "/factory" },
+      render: renderFactory,
+    });
+
+    ctx.register({
+      id: "sidebar-nav",
+      area: SIDEBAR_NAV_AREA,
+      data: {
+        codicon: "organization",
+        label: "Factory",
+        path: "/factory",
+      },
+    });
+  },
+};
+
+export default plugin;
