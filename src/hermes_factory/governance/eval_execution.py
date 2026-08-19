@@ -86,10 +86,10 @@ class EvalExecutionPlanBuilder:
                 profile_digest,
                 scheduled_duties=profile_id in scheduled,
             )
-            for dimension, state in sorted(record.required_states.items()):
-                if state is ProfileEvalState.FAIL:
+            for dimension, profile_state in sorted(record.required_states.items()):
+                if profile_state is ProfileEvalState.FAIL:
                     blockers.append(f"Profile {profile_id} {dimension}=FAIL")
-                elif state is ProfileEvalState.NOT_RUN:
+                elif profile_state is ProfileEvalState.NOT_RUN:
                     items.append(
                         EvalWorkItem(
                             candidate_kind="PROFILE",
@@ -101,11 +101,11 @@ class EvalExecutionPlanBuilder:
                     )
 
         for skill_id, source_digest in sorted(inventory.skill_digests.items()):
-            states = self._store.skill_gate_states(skill_id, source_digest)
-            for gate, state in sorted(states.items()):
-                if state is SkillEvalState.FAIL:
+            skill_states = self._store.skill_gate_states(skill_id, source_digest)
+            for gate, skill_state in sorted(skill_states.items()):
+                if skill_state is SkillEvalState.FAIL:
                     blockers.append(f"Skill {skill_id} {gate}=FAIL")
-                elif state is SkillEvalState.NOT_RUN:
+                elif skill_state is SkillEvalState.NOT_RUN:
                     items.append(
                         EvalWorkItem(
                             candidate_kind="SKILL",
