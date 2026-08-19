@@ -10,7 +10,6 @@ from hermes_factory.skills.evals import SkillEvalEvidence, SkillEvalState
 from hermes_factory.skills.system import SkillEvalRecord
 from hermes_factory.traceability.registry import SemanticRegistry
 
-
 _SKILL_GATES = (
     "baseline_red",
     "skill_green",
