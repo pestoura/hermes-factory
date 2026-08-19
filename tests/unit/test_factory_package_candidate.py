@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -20,10 +21,12 @@ def test_factory_package_candidate_manifest_binds_wheel_to_exact_head(tmp_path: 
         output_path=output,
     )
 
-    assert manifest["schema"] == "hermes.factory/package-candidate/v1"
+    assert manifest["schema"] == "hermes.factory/package-candidate/v2"
     assert manifest["candidate_sha"] == candidate_sha
     assert manifest["filename"] == wheel.name
-    assert manifest["sha256"] == digest_artifact(wheel)
+    assert manifest["artifact_digest"] == digest_artifact(wheel)
+    assert manifest["content_sha256"] == hashlib.sha256(wheel.read_bytes()).hexdigest()
+    assert "sha256" not in manifest
     assert manifest["size_bytes"] == wheel.stat().st_size
     assert json.loads(output.read_text(encoding="utf-8")) == manifest
 
