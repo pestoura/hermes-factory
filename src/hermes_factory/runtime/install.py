@@ -150,6 +150,9 @@ class ControlledInstallPlanBuilder:
                 f"expected={expected_factory_package_digest} observed={observed_package_digest}"
             )
 
+        dashboard_plugin_digest = digest_artifact(dashboard_plugin_source)
+        northbound_binding_digest = digest_artifact(northbound_binding_source)
+
         profile_ids = tuple(sorted(profile_artifacts))
         expected_ids = set(expected_profile_digests)
         actual_ids = set(profile_artifacts)
@@ -201,6 +204,7 @@ class ControlledInstallPlanBuilder:
                     action="INSTALL_NATIVE_PROFILE_DISTRIBUTION",
                     argv=("hermes", "profile", "install", str(artifact)),
                     source=str(artifact),
+                    source_digest=expected_profile_digests.get(profile_id),
                     target=f"HERMES_HOME/profiles/{profile_id}",
                 )
             )
@@ -246,6 +250,7 @@ class ControlledInstallPlanBuilder:
                     component=RuntimeComponent.DASHBOARD_PLUGIN,
                     action="REGISTER_DASHBOARD_PLUGIN",
                     source=str(dashboard_plugin_source),
+                    source_digest=dashboard_plugin_digest,
                     target="HERMES_HOME/plugins/hermes-factory",
                 ),
                 InstallOperation(
@@ -258,6 +263,7 @@ class ControlledInstallPlanBuilder:
                     component=RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION,
                     action="REGISTER_NORTHBOUND_CONTROL_INTEGRATION",
                     source=str(northbound_binding_source),
+                    source_digest=northbound_binding_digest,
                     target="HERMES_MCP_BRIDGE",
                 ),
             ]
