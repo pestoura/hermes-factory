@@ -53,6 +53,23 @@ class RuntimeInstallPlan:
     execute: bool
 
 
+def _require_pass(
+    evidence_type: str,
+    states: Mapping[str, AdmissionEvidenceState],
+) -> None:
+    non_pass = tuple(
+        sorted(
+            (identity, state)
+            for identity, state in states.items()
+            if state is not AdmissionEvidenceState.PASS
+        )
+    )
+    if not non_pass:
+        return
+    details = ", ".join(f"{identity}={state.value}" for identity, state in non_pass)
+    raise RuntimeAdmissionError(f"{evidence_type} evaluation must PASS: {details}")
+
+
 class RuntimeAdmissionPlanner:
     def build(
         self,
@@ -66,25 +83,14 @@ class RuntimeAdmissionPlanner:
         if sha_state is not ExactSHAState.SHA_MATCH:
             raise RuntimeAdmissionError("exact Hermes SHA match is required for runtime admission")
 
-        profiles_to_admit = tuple(
-            sorted(
-                profile_id
-                for profile_id, state in profile_eval_states.items()
-                if state is AdmissionEvidenceState.PASS
-            )
-        )
-        skills_to_admit = tuple(
-            sorted(
-                skill_id
-                for skill_id, state in skill_eval_states.items()
-                if state is AdmissionEvidenceState.PASS
-            )
-        )
+        _require_pass("Profile", profile_eval_states)
+        _require_pass("Skill", skill_eval_states)
+
         return RuntimeInstallPlan(
             hermes_sha=accepted_hermes_sha,
             components=_COMPONENTS,
-            profiles_to_admit=profiles_to_admit,
-            skills_to_admit=skills_to_admit,
+            profiles_to_admit=tuple(sorted(profile_eval_states)),
+            skills_to_admit=tuple(sorted(skill_eval_states)),
             runtime_state=AdmissionEvidenceState.NOT_RUN,
             execute=False,
         )
