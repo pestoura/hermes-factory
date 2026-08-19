@@ -5,6 +5,7 @@ from typing import Any
 
 import yaml
 
+from hermes_factory.agents.runtime_projection import project_native_profile_config
 from hermes_factory.skills.artifacts import compile_skill_artifact
 
 
@@ -26,6 +27,7 @@ def compile_profile_distribution(
     *,
     cron_jobs: list[dict[str, Any]],
     skill_artifacts: Mapping[str, Path] | None = None,
+    runtime_policies: dict[str, Any],
 ) -> Path:
     agent = agent_document.get("agent")
     if not isinstance(agent, dict):
@@ -64,9 +66,6 @@ def compile_profile_distribution(
         "name": agent_id,
         "version": str(agent.get("version", "0.0.0")),
         "description": str(agent.get("description", "")),
-        # Hermes 0.20.x currently accepts one comparator in hermes_requires.
-        # Keep the native manifest installable instead of emitting a
-        # comma-separated range that its semver parser cannot consume.
         "hermes_requires": ">=0.20.0",
         "author": "Hermes Software Factory",
         "distribution_owned": [
@@ -80,11 +79,7 @@ def compile_profile_distribution(
     }
     (destination / "distribution.yaml").write_text(yaml.safe_dump(manifest, sort_keys=False))
     (destination / "SOUL.md").write_text(soul)
-    config = {
-        "model_class": agent.get("model_class"),
-        "tool_policy_class": agent.get("tool_policy_class"),
-        "factory_agent_id": agent_id,
-    }
+    config = project_native_profile_config(agent, runtime_policies)
     (destination / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
     (destination / "mcp.json").write_text(json.dumps({}, indent=2) + "\n")
     for skill in requested:
@@ -93,11 +88,13 @@ def compile_profile_distribution(
             canonical_id=skill,
             destination_root=skills_destination,
         )
+
+    # Runtime cron state is deliberately not manufactured at build-time.
+    # Phase P materializes validated duties through the native Hermes cron
+    # primitive after the Profile has been installed.
     for job in cron_jobs:
         job_id = job.get("id")
         if not isinstance(job_id, str) or not job_id or "/" in job_id:
             raise AgentCompileError("cron job id must be a safe non-empty string")
-        (destination / "cron" / f"{job_id}.json").write_text(
-            json.dumps(job, sort_keys=True, indent=2) + "\n"
-        )
+
     return destination
