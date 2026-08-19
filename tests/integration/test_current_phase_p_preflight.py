@@ -3,7 +3,6 @@ from pathlib import Path
 import yaml
 
 from hermes_factory.agents import compile_profile_distribution
-from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.governance.eval_evidence import EvalEvidenceStore
 from hermes_factory.governance.eval_inventory import (
     EvalInventoryBuilder,
@@ -13,9 +12,14 @@ from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComp
 from hermes_factory.runtime.bindings import RuntimeComponentBinding
 from hermes_factory.runtime.cron_projection import NativeCronPlanBuilder
 from hermes_factory.runtime.install import ControlledInstallPlanBuilder
+from hermes_factory.runtime.package_candidate import (
+    build_package_candidate_manifest,
+    load_package_candidate,
+)
 from hermes_factory.traceability.registry import SemanticRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
+_FACTORY_SHA = "f" * 40
 
 
 def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(tmp_path):
@@ -65,18 +69,30 @@ def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(
     components = {component: AdmissionEvidenceState.PASS for component in RuntimeComponent}
     components[RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION] = northbound.admission_state
 
-    # Synthetic local package artifact isolates the package-identity prerequisite.
-    # It is not runtime package evidence and is never installed by this test.
+    # Synthetic package bytes isolate package-candidate contract behavior only.
+    # The v2 manifest is verified before use; nothing is installed by this test.
     package = tmp_path / "hermes_factory-0.1.0-py3-none-any.whl"
     package.write_bytes(b"synthetic preflight package identity")
+    package_manifest = tmp_path / "factory-package.json"
+    build_package_candidate_manifest(
+        wheel_path=package,
+        candidate_sha=_FACTORY_SHA,
+        output_path=package_manifest,
+    )
+    package_candidate = load_package_candidate(
+        manifest_path=package_manifest,
+        wheel_path=package,
+        expected_candidate_sha=_FACTORY_SHA,
+    )
 
     plan = ControlledInstallPlanBuilder().build(
         # Synthetic matching SHAs intentionally isolate F/G + northbound blockers.
-        # This test does not claim or infer the live accepted Hermes runtime SHA.
+        # This test does not claim or infer the live accepted Hermes runtime SHA
+        # or a live Factory install candidate SHA.
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
-        factory_package_source=package,
-        expected_factory_package_digest=digest_artifact(package),
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=package_candidate,
         profile_artifacts=profile_artifacts,
         expected_profile_digests=inventory.profile_digests,
         profile_eval_states=inventory.profile_states,
