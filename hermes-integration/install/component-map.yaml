@@ -1,0 +1,58 @@
+schema: hermes.factory/install-surface/v1
+execute: false
+runtime_state: NOT_RUN
+
+requires:
+  exact_hermes_sha: true
+  all_profile_evals_pass: true
+  all_skill_evals_pass: true
+  all_component_evidence_pass: true
+
+prohibitions:
+  - embedded_secrets
+  - embedded_memories
+  - embedded_sessions
+  - embedded_runtime_state
+  - internal_mcp_ipc
+  - implicit_execution
+
+components:
+  FACTORY_PACKAGE:
+    mechanism: stage_factory_package
+    source: pestoura/hermes-factory
+    target: HERMES_RUNTIME_ENV
+
+  PROFILE_DISTRIBUTIONS:
+    mechanism: hermes profile install
+    source: compiled_native_profile_distributions
+    target: HERMES_PROFILE_HOME
+
+  FACTORY_SKILLS:
+    mechanism: profile_scoped_native_skill_directories
+    source: canonical_factory_skill_artifacts
+    target: PROFILE_SCOPED_SKILLS
+
+  KANBAN_HIGH_ASSURANCE_POLICY:
+    mechanism: native_hermes_kanban_policy
+    source: hermes_factory_kanban_adapter_and_policy
+    target: HERMES_KANBAN
+
+  NATIVE_PROFILE_CRON:
+    mechanism: hermes -p PROFILE cron create
+    source: digest_bound_validated_factory_duties
+    target: HERMES_PROFILE_CRON
+
+  DASHBOARD_PLUGIN:
+    mechanism: hermes_dashboard_plugin_registration
+    source: hermes-integration/dashboard-plugin/hermes-factory
+    target: HERMES_HOME/plugins/hermes-factory
+
+  GATEWAY_HITL_ADAPTER:
+    mechanism: native_hermes_gateway_send_clarify_adapter
+    source: hermes_factory.adapters.hermes_gateway
+    target: HERMES_GATEWAY
+
+  NORTHBOUND_CONTROL_INTEGRATION:
+    mechanism: hermes_mcp_bridge_northbound_registration
+    source: hermes-integration/mcp-bridge/factory-northbound.yaml
+    target: HERMES_MCP_BRIDGE
