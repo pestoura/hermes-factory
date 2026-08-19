@@ -17,6 +17,37 @@ def _skill_source(tmp_path: Path, name: str) -> Path:
     return source
 
 
+def _runtime_policies() -> dict:
+    return {
+        "status": "approved_for_implementation",
+        "implementation_authority": "GRANTED",
+        "model_classes": {
+            "reasoning-high": {"selection": "factory-model-policy"},
+        },
+        "tool_policy_classes": {
+            "review": {
+                "hermes_toolsets": ["terminal", "file", "web", "skills", "todo", "kanban"],
+                "mcp": [],
+                "terminal": "sandboxed-readonly-candidate",
+                "browser": "disabled",
+            },
+            "control-orchestrate": {
+                "hermes_toolsets": ["skills", "todo", "kanban"],
+                "mcp": [],
+                "terminal": "disabled",
+                "browser": "disabled",
+            },
+        },
+        "hermes_profile_defaults": {
+            "home_mode": "profile",
+            "secrets_in_distribution": "forbidden",
+            "memories_in_distribution": "forbidden",
+            "sessions_in_distribution": "forbidden",
+            "runtime_state_in_distribution": "forbidden",
+        },
+    }
+
+
 def test_agent_compiles_to_native_hermes_distribution_without_internal_mcp(tmp_path: Path):
     agent = {
         "agent": {
@@ -58,15 +89,20 @@ def test_agent_compiles_to_native_hermes_distribution_without_internal_mcp(tmp_p
         out,
         cron_jobs=[],
         skill_artifacts=skill_artifacts,
+        runtime_policies=_runtime_policies(),
     )
     manifest = yaml.safe_load((out / "distribution.yaml").read_text())
     assert manifest["name"] == "factory-code-reviewer"
-    # Hermes 0.20.x profile_distribution.check_hermes_requires accepts one
-    # comparator only; comma-separated ranges are not a supported manifest
-    # contract and fail native semver parsing.
     assert manifest["hermes_requires"] == ">=0.20.0"
     assert json.loads((out / "mcp.json").read_text()) == {}
-    assert yaml.safe_load((out / "config.yaml").read_text())["tool_policy_class"] == "review"
+    config = yaml.safe_load((out / "config.yaml").read_text())
+    assert config == {
+        "toolsets": ["terminal", "file", "web", "skills", "todo", "kanban"],
+        "terminal": {"home_mode": "profile"},
+    }
+    assert "model_class" not in config
+    assert "tool_policy_class" not in config
+    assert "factory_agent_id" not in config
     first = out / "skills" / "factory-reading-project-truth" / "SKILL.md"
     second = out / "skills" / "factory-reviewing-code-independently" / "SKILL.md"
     assert first.is_file()
@@ -80,7 +116,7 @@ def test_agent_compiles_to_native_hermes_distribution_without_internal_mcp(tmp_p
     assert not list((out / "skills").glob("*.skillref"))
 
 
-def test_agent_compiler_projects_cron_only_inside_distribution(tmp_path: Path):
+def test_agent_compiler_does_not_materialize_runtime_cron_state_at_build_time(tmp_path: Path):
     agent = {
         "agent": {
             "id": "factory-orchestrator",
@@ -107,8 +143,10 @@ def test_agent_compiler_projects_cron_only_inside_distribution(tmp_path: Path):
             {"id": "reconcile", "schedule": "0 * * * *", "prompt": "Reconcile projects"}
         ],
         skill_artifacts={},
+        runtime_policies=_runtime_policies(),
     )
-    assert (out / "cron" / "reconcile.json").exists()
+    assert not (out / "cron" / "reconcile.json").exists()
+    assert not (out / "cron" / "jobs.json").exists()
     assert not (out / "systemd").exists()
     assert not (out / "crontab").exists()
 
@@ -140,4 +178,5 @@ def test_compiler_fails_if_agent_declares_skill_not_admitted_for_consumer(tmp_pa
             tmp_path / "x",
             cron_jobs=[],
             skill_artifacts={},
+            runtime_policies=_runtime_policies(),
         )
