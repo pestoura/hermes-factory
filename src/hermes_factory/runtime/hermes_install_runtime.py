@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,9 @@ class SubprocessCommandRunner:
 _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _JOB_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _CREATED_JOB = re.compile(r"^Created job:\s*(\S+)\s*$", re.MULTILINE)
+_FACTORY_DISTRIBUTION = "hermes-factory"
 _SUPPORTED_ACTIONS = {
+    "STAGE_FACTORY_PACKAGE",
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
@@ -67,7 +70,7 @@ def _load_receipt(receipt: str) -> dict[str, object]:
 class HermesJarvasInstallRuntime:
     """Concrete, fail-closed adapter for proven native Hermes install actions.
 
-    Only operations with verified upstream apply and compensation mechanisms are
+    Only operations with verified apply and compensation mechanisms are
     supported. The full Phase P plan therefore remains blocked by preflight
     until every remaining symbolic operation has an equally concrete mapping.
     """
@@ -77,9 +80,30 @@ class HermesJarvasInstallRuntime:
         *,
         command_runner: CommandRunner | None = None,
         hermes_home: Path | None = None,
+        python_executable: str | None = None,
     ) -> None:
         self._runner = command_runner or SubprocessCommandRunner()
         self._hermes_home = Path(hermes_home) if hermes_home is not None else None
+        self._python_executable = python_executable or sys.executable
+        if not self._python_executable.strip():
+            raise ValueError("Python executable is required for Factory package installation")
+
+    @staticmethod
+    def _factory_package_source(operation: InstallOperation) -> Path:
+        if operation.component is not RuntimeComponent.FACTORY_PACKAGE:
+            raise RuntimeError("Factory package install operation has wrong component")
+        if operation.target != "HERMES_RUNTIME_ENV":
+            raise RuntimeError("Factory package target is invalid")
+        if operation.argv:
+            raise RuntimeError("Factory package install operation must not contain argv")
+        if operation.source is None or not operation.source.strip():
+            raise RuntimeError("Factory package source is required")
+        source = Path(operation.source)
+        if source.suffix != ".whl" or source.is_symlink() or not source.is_file():
+            raise RuntimeError("Factory package source must be a regular wheel")
+        if operation.source_digest is None or not operation.source_digest.startswith("sha256:"):
+            raise RuntimeError("Factory package source digest is required")
+        return source
 
     @staticmethod
     def _profile_id(operation: InstallOperation) -> str:
@@ -161,6 +185,9 @@ class HermesJarvasInstallRuntime:
                 f"unsupported install operation: {operation.component.value}:"
                 f"{operation.action}"
             )
+        if operation.action == "STAGE_FACTORY_PACKAGE":
+            self._factory_package_source(operation)
+            return
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             if operation.component is not RuntimeComponent.PROFILE_DISTRIBUTIONS:
                 raise RuntimeError("Profile install operation has wrong component")
@@ -184,15 +211,56 @@ class HermesJarvasInstallRuntime:
         if operation.argv:
             raise RuntimeError("empty cron plan operation must not contain a command")
 
+    def _ensure_factory_package_absent(self) -> None:
+        result = self._runner.run(
+            (self._python_executable, "-m", "pip", "show", _FACTORY_DISTRIBUTION)
+        )
+        if result.returncode == 0:
+            raise RuntimeError("Factory package is already installed")
+        if result.returncode != 1:
+            raise RuntimeError(
+                f"Factory package probe failed with exit code {result.returncode}"
+            )
+
     def preflight(self, operations: tuple[InstallOperation, ...]) -> None:
+        # First validate every operation structurally. Only after the complete
+        # plan is known to be supported may read-only environment probes run.
         for operation in operations:
             self._validate_operation(operation)
+        for operation in operations:
+            if operation.action == "STAGE_FACTORY_PACKAGE":
+                self._ensure_factory_package_absent()
 
     def _run_checked(self, argv: tuple[str, ...], label: str) -> CommandResult:
         result = self._runner.run(argv)
         if result.returncode != 0:
             raise RuntimeError(f"{label} failed with exit code {result.returncode}")
         return result
+
+    def _apply_factory_package(self, operation: InstallOperation) -> str:
+        source = self._factory_package_source(operation)
+        # Repeat the read-only absence probe immediately before mutation to
+        # close the preflight/apply race window.
+        self._ensure_factory_package_absent()
+        self._run_checked(
+            (
+                self._python_executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--no-input",
+                str(source),
+            ),
+            "Factory package install",
+        )
+        return _receipt(
+            {
+                "distribution": _FACTORY_DISTRIBUTION,
+                "kind": "FACTORY_PACKAGE_INSTALL",
+                "source": str(source),
+            }
+        )
 
     def _apply_dashboard(self, operation: InstallOperation) -> str:
         source, target, plugins_root = self._dashboard_paths(
@@ -221,6 +289,8 @@ class HermesJarvasInstallRuntime:
 
     def apply(self, operation: InstallOperation) -> str:
         self._validate_operation(operation)
+        if operation.action == "STAGE_FACTORY_PACKAGE":
+            return self._apply_factory_package(operation)
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             profile_id = self._profile_id(operation)
             self._run_checked(operation.argv, "native Profile install")
@@ -248,6 +318,27 @@ class HermesJarvasInstallRuntime:
     def rollback(self, operation: InstallOperation, receipt: str) -> None:
         self._validate_operation(operation, allow_dashboard_target_exists=True)
         payload = _load_receipt(receipt)
+
+        if operation.action == "STAGE_FACTORY_PACKAGE":
+            source = self._factory_package_source(operation)
+            if payload != {
+                "distribution": _FACTORY_DISTRIBUTION,
+                "kind": "FACTORY_PACKAGE_INSTALL",
+                "source": str(source),
+            }:
+                raise RuntimeError("Factory package rollback receipt does not match operation")
+            self._run_checked(
+                (
+                    self._python_executable,
+                    "-m",
+                    "pip",
+                    "uninstall",
+                    "-y",
+                    _FACTORY_DISTRIBUTION,
+                ),
+                "Factory package rollback",
+            )
+            return
 
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             profile_id = self._profile_id(operation)
