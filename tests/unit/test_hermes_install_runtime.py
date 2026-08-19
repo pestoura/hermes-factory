@@ -174,3 +174,53 @@ def test_runtime_empty_cron_plan_is_explicit_noop_with_no_command():
     assert json.loads(receipt) == {"kind": "EMPTY_CRON_PLAN"}
     runtime.rollback(operation, receipt)
     assert runner.calls == []
+
+
+def test_runtime_applies_and_rolls_back_dashboard_plugin_without_overwrite(tmp_path: Path):
+    _, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    source = tmp_path / "dashboard-plugin" / "hermes-factory"
+    (source / "dashboard" / "dist").mkdir(parents=True)
+    (source / "dashboard" / "manifest.json").write_text(
+        '{"name":"hermes-factory","entry":"dist/index.js"}\n', encoding="utf-8"
+    )
+    (source / "dashboard" / "dist" / "index.js").write_text("plugin();\n", encoding="utf-8")
+    operation = InstallOperation(
+        component=RuntimeComponent.DASHBOARD_PLUGIN,
+        action="REGISTER_DASHBOARD_PLUGIN",
+        source=str(source),
+        target="HERMES_HOME/plugins/hermes-factory",
+    )
+    runner = FakeRunner([])
+    runtime = runtime_type(command_runner=runner, hermes_home=hermes_home)
+
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    target = hermes_home / "plugins" / "hermes-factory"
+    assert (target / "dashboard" / "manifest.json").is_file()
+    assert json.loads(receipt)["kind"] == "DASHBOARD_PLUGIN_INSTALL"
+
+    runtime.rollback(operation, receipt)
+    assert not target.exists()
+    assert runner.calls == []
+
+
+def test_runtime_dashboard_preflight_refuses_existing_plugin_target(tmp_path: Path):
+    _, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    target = hermes_home / "plugins" / "hermes-factory"
+    target.mkdir(parents=True)
+    source = tmp_path / "source"
+    (source / "dashboard").mkdir(parents=True)
+    (source / "dashboard" / "manifest.json").write_text("{}\n", encoding="utf-8")
+    operation = InstallOperation(
+        component=RuntimeComponent.DASHBOARD_PLUGIN,
+        action="REGISTER_DASHBOARD_PLUGIN",
+        source=str(source),
+        target="HERMES_HOME/plugins/hermes-factory",
+    )
+    runtime = runtime_type(command_runner=FakeRunner([]), hermes_home=hermes_home)
+
+    with pytest.raises(RuntimeError, match="already exists"):
+        runtime.preflight((operation,))
