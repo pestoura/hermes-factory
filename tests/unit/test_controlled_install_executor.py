@@ -7,6 +7,12 @@ from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
 from hermes_factory.runtime.cron_projection import NativeCronPlanBuilder
 from hermes_factory.runtime.install import ControlledInstallPlanBuilder
+from hermes_factory.runtime.package_candidate import (
+    build_package_candidate_manifest,
+    load_package_candidate,
+)
+
+_FACTORY_SHA = "f" * 40
 
 
 def _contract():
@@ -24,6 +30,18 @@ def _contract():
 def _ready_plan(tmp_path: Path):
     package = tmp_path / "hermes_factory-0.1.0-py3-none-any.whl"
     package.write_bytes(b"exact candidate package")
+    package_manifest = tmp_path / "factory-package.json"
+    build_package_candidate_manifest(
+        wheel_path=package,
+        candidate_sha=_FACTORY_SHA,
+        output_path=package_manifest,
+    )
+    candidate = load_package_candidate(
+        manifest_path=package_manifest,
+        wheel_path=package,
+        expected_candidate_sha=_FACTORY_SHA,
+    )
+
     profile = tmp_path / "factory-orchestrator"
     profile.mkdir()
     (profile / "distribution.yaml").write_text(
@@ -44,8 +62,8 @@ def _ready_plan(tmp_path: Path):
     return ControlledInstallPlanBuilder().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
-        factory_package_source=package,
-        expected_factory_package_digest=digest_artifact(package),
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=candidate,
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={
             "factory-orchestrator": digest_artifact(profile)
