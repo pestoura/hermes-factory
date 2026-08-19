@@ -57,7 +57,7 @@ def _load_receipt(receipt: str) -> dict[str, object]:
     except json.JSONDecodeError as exc:
         raise RuntimeError("invalid install rollback receipt") from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("invalid install rollback receipt")
+        raise TypeError("invalid install rollback receipt")
     return payload
 
 
