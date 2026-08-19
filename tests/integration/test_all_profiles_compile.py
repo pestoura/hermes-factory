@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 
 from hermes_factory.agents import compile_profile_distribution
+from hermes_factory.governance.eval_inventory import discover_skill_artifacts
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -11,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_all_admitted_profiles_compile_to_native_distribution(tmp_path):
     catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
     registry = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())
+    skill_artifacts = discover_skill_artifacts(ROOT / "skills", registry["registry"])
     active = catalog["active_candidates"]
     assert len(active) == 17
 
@@ -26,9 +28,11 @@ def test_all_admitted_profiles_compile_to_native_distribution(tmp_path):
             registry,
             out,
             cron_jobs=[],
+            skill_artifacts=skill_artifacts,
         )
         assert yaml.safe_load((out / "distribution.yaml").read_text())["name"] == agent_id
         assert json.loads((out / "mcp.json").read_text()) == {}
+        assert not list((out / "skills").glob("*.skillref"))
         assert not (out / ".env").exists()
         assert not (out / "memories").exists()
         assert not (out / "sessions").exists()
