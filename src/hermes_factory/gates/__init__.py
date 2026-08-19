@@ -1,3 +1,3 @@
-from .exact_sha import ExactSHAState, evaluate_exact_sha
+from .exact_sha import ExactSHAEvidenceGate, ExactSHAState, evaluate_exact_sha
 
-__all__ = ["ExactSHAState", "evaluate_exact_sha"]
+__all__ = ["ExactSHAEvidenceGate", "ExactSHAState", "evaluate_exact_sha"]
