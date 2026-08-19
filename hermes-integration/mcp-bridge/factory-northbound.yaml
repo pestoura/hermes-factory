@@ -1,0 +1,20 @@
+schema: hermes.factory/runtime-component-binding/v1
+component: NORTHBOUND_CONTROL_INTEGRATION
+repository: pestoura/hermes-mcp-bridge
+pull_request: 111
+candidate_sha: 5d96f02ca21b29446e0bf01b06087b353fb45c0b
+verification_state: BLOCKED_EXTERNAL_BILLING
+default_enabled: false
+internal_factory_ipc: false
+mutation_execution: false
+production_entrypoint: hermes_mcp_bridge.http_runner
+tools:
+  - factory_acceptance
+  - factory_evidence
+  - factory_protected_mutation_intent
+  - factory_status
+protected_actions:
+  - ACTIVATE_PROFILE
+  - ACTIVATE_SKILL
+  - MERGE_PR
+  - RELEASE
