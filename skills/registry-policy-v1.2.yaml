@@ -1,7 +1,7 @@
 schema: hermes.factory/skill-registry-policy/v1.2
-status: proposed_for_owner_review
+status: approved_for_implementation
 architecture_baseline: 1.2
-implementation_authority: NOT_GRANTED
+implementation_authority: GRANTED
 
 canonical:
   source_repository: pestoura/hermes-factory
