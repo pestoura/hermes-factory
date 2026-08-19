@@ -4,6 +4,7 @@ import yaml
 
 from hermes_factory.agents import compile_profile_distribution
 from hermes_factory.governance.eval_evidence import EvalEvidenceStore
+from hermes_factory.governance.eval_execution import EvalExecutionPlanBuilder
 from hermes_factory.governance.eval_inventory import (
     EvalInventoryBuilder,
     discover_skill_artifacts,
@@ -48,6 +49,7 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
     skill_artifacts = discover_skill_artifacts(ROOT / "skills", registry)
 
     assert len(profile_artifacts) == 17
+    assert len(expected_skill_ids) == 29
     assert set(skill_artifacts) == expected_skill_ids
     assert set(registry["proposed_v1_2_skills"]) <= expected_skill_ids
     assert "factory-verifying-exact-sha" not in skill_artifacts
@@ -65,3 +67,13 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
     assert set(inventory.skill_states.values()) == {AdmissionEvidenceState.NOT_RUN}
     assert inventory.ready is False
     assert len(inventory.blockers) == 17 + len(expected_skill_ids)
+
+    execution_plan = EvalExecutionPlanBuilder(store).build(
+        inventory,
+        scheduled_profile_ids=(),
+    )
+    assert execution_plan.execution_state == "NOT_RUN"
+    assert execution_plan.execute is False
+    assert execution_plan.blockers == ()
+    assert len(execution_plan.items) == (17 * 9) + (29 * 5)
+    assert len(execution_plan.items) == 298
