@@ -19,8 +19,10 @@ class InstallRuntime(Protocol):
 
     The Factory executor owns ordering, authorization and compensation semantics;
     the concrete Hermes/Jarvas runtime adapter owns how each structured
-    InstallOperation is applied and rolled back.
+    InstallOperation is preflighted, applied and rolled back.
     """
+
+    def preflight(self, operations: tuple[InstallOperation, ...]) -> None: ...
 
     def apply(self, operation: InstallOperation) -> str: ...
 
@@ -113,6 +115,12 @@ class InstallExecutor:
                     f"expected={operation.source_digest} observed={observed_digest}"
                 )
 
+    def _preflight_runtime(self, plan: ControlledInstallPlan) -> None:
+        try:
+            self._runtime.preflight(plan.operations)
+        except (RuntimeError, OSError, ValueError) as exc:
+            raise InstallExecutionError(f"runtime preflight failed: {exc}") from exc
+
     def execute(
         self,
         plan: ControlledInstallPlan,
@@ -120,6 +128,7 @@ class InstallExecutor:
     ) -> InstallExecutionReport:
         self._authorize(plan, authorization)
         self._validate_source_identities(plan)
+        self._preflight_runtime(plan)
 
         applied: list[tuple[InstallOperation, str]] = []
         try:
