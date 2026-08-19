@@ -1,5 +1,5 @@
-import json
 from pathlib import Path
+import json
 
 from hermes_factory.traceability.registry import SemanticRegistry
 
