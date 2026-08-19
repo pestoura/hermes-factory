@@ -86,3 +86,24 @@ def test_runtime_readiness_manifest_is_deterministic() -> None:
 
     assert first.to_manifest() == second.to_manifest()
     assert first.digest == second.digest
+
+
+def test_runtime_readiness_blocks_unexpected_evidence_identities() -> None:
+    assessor = _readiness_contract()()
+
+    assessment = assessor.assess(
+        required_profile_ids=("factory-orchestrator",),
+        required_skill_ids=("factory-reading-project-truth",),
+        profile_eval_states={
+            "factory-orchestrator": AdmissionEvidenceState.PASS,
+            "factory-unknown-profile": AdmissionEvidenceState.PASS,
+        },
+        skill_eval_states={
+            "factory-reading-project-truth": AdmissionEvidenceState.PASS,
+            "factory-unknown-skill": AdmissionEvidenceState.PASS,
+        },
+    )
+
+    assert assessment.ready is False
+    assert "Unexpected Profile evidence factory-unknown-profile=PASS" in assessment.blockers
+    assert "Unexpected Skill evidence factory-unknown-skill=PASS" in assessment.blockers
