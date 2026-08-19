@@ -22,7 +22,7 @@ class SkillEvalEvidence:
     evaluator: str
 
 
-_GATES = (
+SKILL_EVAL_GATES = (
     "baseline_red",
     "skill_green",
     "variation_eval",
@@ -50,7 +50,7 @@ class SkillEvalHarness:
                 raise SkillAdmissionError(
                     "evaluation evidence source digest does not match current Skill"
                 )
-            if record.gate not in _GATES:
+            if record.gate not in SKILL_EVAL_GATES:
                 raise SkillAdmissionError(
                     f"unknown Skill evaluation gate {record.gate}"
                 )
@@ -67,7 +67,7 @@ class SkillEvalHarness:
             states[record.gate] = record.state
         passed = {
             gate: states.get(gate) is SkillEvalState.PASS
-            for gate in _GATES
+            for gate in SKILL_EVAL_GATES
         }
         return SkillEvalRecord(
             baseline_red=passed["baseline_red"],
