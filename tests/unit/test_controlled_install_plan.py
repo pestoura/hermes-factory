@@ -61,7 +61,7 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
     assert plan.execution_state == "READY"
     assert plan.blockers == ()
     assert len(plan.digest) == 64
-    assert set(operation.component for operation in plan.operations) == set(RuntimeComponent)
+    assert {operation.component for operation in plan.operations} == set(RuntimeComponent)
     assert any(
         operation.argv == ("hermes", "profile", "install", str(profile))
         for operation in plan.operations
@@ -130,7 +130,7 @@ def test_controlled_install_plan_detects_profile_artifact_digest_drift(tmp_path:
 
 def test_controlled_install_plan_rejects_missing_install_surfaces_and_secret_like_paths(tmp_path: Path):
     builder_type, error_type = _contract()
-    profile, dashboard, northbound = _artifacts(tmp_path)
+    profile, _, northbound = _artifacts(tmp_path)
     unsafe_dashboard = tmp_path / ".env" / "hermes-factory"
     unsafe_dashboard.mkdir(parents=True)
 
