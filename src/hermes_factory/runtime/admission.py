@@ -16,6 +16,7 @@ class RuntimeAdmissionError(ValueError):
 class AdmissionEvidenceState(StrEnum):
     PASS = "PASS"
     FAIL = "FAIL"
+    BLOCKED = "BLOCKED"
     NOT_RUN = "NOT_RUN"
     UNKNOWN = "UNKNOWN"
     STALE = "STALE"
