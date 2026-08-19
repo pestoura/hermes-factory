@@ -105,3 +105,28 @@ def test_duplicate_gate_evidence_fails_closed_instead_of_last_write_wins():
             "sha256:abc",
             records,
         )
+
+
+def test_independent_review_cannot_be_self_reviewed_by_skill_candidate():
+    evidence = tuple(
+        SkillEvalEvidence(
+            skill_id="factory-reading-project-truth",
+            source_digest="sha256:abc",
+            gate=gate,
+            state=SkillEvalState.PASS,
+            evidence_ref=f"evidence:{gate}",
+            evaluator=(
+                "factory-reading-project-truth"
+                if gate == "independent_review"
+                else "factory-evidence-auditor"
+            ),
+        )
+        for gate in GATES
+    )
+
+    with pytest.raises(SkillAdmissionError, match="independent review"):
+        SkillEvalHarness().evaluate(
+            "factory-reading-project-truth",
+            "sha256:abc",
+            evidence,
+        )
