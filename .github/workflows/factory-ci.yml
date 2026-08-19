@@ -72,9 +72,11 @@ jobs:
         run: |
           mkdir -p artifacts/factory-package
           python -m pip wheel . --no-deps --wheel-dir artifacts/factory-package
+      - name: Verify exact-head Factory wheel installation
+        run: python -m pip install artifacts/factory-package/*.whl
       - name: Build exact-head Factory package identity
         run: |
-          PYTHONPATH=src python - <<'PY'
+          python - <<'PY'
           import os
           from pathlib import Path
           from hermes_factory.runtime.package_candidate import build_package_candidate_manifest
