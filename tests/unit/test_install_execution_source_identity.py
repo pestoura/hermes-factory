@@ -21,7 +21,11 @@ _FACTORY_SHA = "f" * 40
 
 class RecordingRuntime:
     def __init__(self) -> None:
+        self.preflighted = []
         self.applied = []
+
+    def preflight(self, operations):
+        self.preflighted.append(tuple(operations))
 
     def apply(self, operation):
         self.applied.append(operation)
@@ -107,4 +111,5 @@ def test_install_executor_revalidates_all_local_source_identity_before_first_mut
     with pytest.raises(InstallExecutionError, match="source digest"):
         InstallExecutor(runtime).execute(plan, authorization)
 
+    assert runtime.preflighted == []
     assert runtime.applied == []
