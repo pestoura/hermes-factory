@@ -22,6 +22,8 @@ def _contract():
 
 
 def _ready_plan(tmp_path: Path):
+    package = tmp_path / "hermes_factory-0.1.0-py3-none-any.whl"
+    package.write_bytes(b"exact candidate package")
     profile = tmp_path / "factory-orchestrator"
     profile.mkdir()
     (profile / "distribution.yaml").write_text(
@@ -42,6 +44,8 @@ def _ready_plan(tmp_path: Path):
     return ControlledInstallPlanBuilder().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
+        factory_package_source=package,
+        expected_factory_package_digest=digest_artifact(package),
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={
             "factory-orchestrator": digest_artifact(profile)
