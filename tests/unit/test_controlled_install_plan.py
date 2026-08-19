@@ -89,7 +89,16 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
     assert len(plan.digest) == 64
     assert {operation.component for operation in plan.operations} == set(RuntimeComponent)
     assert any(
-        operation.argv == ("hermes", "profile", "install", str(profile))
+        operation.argv
+        == (
+            "hermes",
+            "profile",
+            "install",
+            str(profile),
+            "--name",
+            "factory-orchestrator",
+            "-y",
+        )
         for operation in plan.operations
     )
     package_operation = next(
