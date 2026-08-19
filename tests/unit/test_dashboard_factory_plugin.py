@@ -151,3 +151,48 @@ def test_dashboard_plugin_uses_native_web_read_only_contract() -> None:
     assert '@router.get("/snapshot")' in backend
     for method in ("post", "put", "patch", "delete"):
         assert f"@router.{method}(" not in backend
+
+
+def test_dashboard_plugin_renders_required_factory_domains() -> None:
+    bundle = (PLUGIN_ROOT / "dist" / "index.js").read_text(encoding="utf-8")
+
+    required_labels = {
+        "Portfolio / Projects",
+        "Epics / Work Packages / Requirements",
+        "Kanban / Execution",
+        "Profiles / Skills",
+        "SCM / CI",
+        "JDS Gates",
+        "UAT",
+        "Findings / Rework",
+        "HITL",
+        "Runtime",
+        "Evidence Freshness",
+        "Acceptance / Release",
+    }
+    for label in required_labels:
+        assert label in bundle
+
+    required_keys = {
+        "projects",
+        "epics",
+        "work_packages",
+        "requirements",
+        "kanban",
+        "scm",
+        "uat",
+        "corrective_action",
+        "hitl",
+        "runtime",
+        "acceptance",
+        "evidence",
+        "jds_gates",
+        "agent_evals",
+        "skill_evals",
+    }
+    for key in required_keys:
+        assert f'"{key}"' in bundle
+
+    assert "FACTORY_SECTIONS" in bundle
+    assert "renderFactorySection" in bundle
+    assert "JSON.stringify(state.data, null, 2)" not in bundle
