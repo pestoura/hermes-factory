@@ -1,8 +1,11 @@
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from hermes_factory.skills.artifacts import compile_skill_artifact
 
 
 class AgentCompileError(ValueError):
@@ -22,6 +25,7 @@ def compile_profile_distribution(
     destination: Path,
     *,
     cron_jobs: list[dict[str, Any]],
+    skill_artifacts: Mapping[str, Path] | None = None,
 ) -> Path:
     agent = agent_document.get("agent")
     if not isinstance(agent, dict):
@@ -44,8 +48,16 @@ def compile_profile_distribution(
     if not_admitted:
         raise AgentCompileError(f"Skill(s) not admitted for {agent_id}: {not_admitted}")
 
+    artifact_map = skill_artifacts or {}
+    missing_artifacts = sorted(set(requested) - set(artifact_map))
+    if missing_artifacts:
+        raise AgentCompileError(
+            f"canonical Skill artifact(s) missing for {agent_id}: {missing_artifacts}"
+        )
+
     destination.mkdir(parents=True, exist_ok=True)
-    (destination / "skills").mkdir(exist_ok=True)
+    skills_destination = destination / "skills"
+    skills_destination.mkdir(exist_ok=True)
     (destination / "cron").mkdir(exist_ok=True)
 
     manifest = {
@@ -76,7 +88,11 @@ def compile_profile_distribution(
     (destination / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
     (destination / "mcp.json").write_text(json.dumps({}, indent=2) + "\n")
     for skill in requested:
-        (destination / "skills" / f"{skill}.skillref").write_text(skill + "\n")
+        compile_skill_artifact(
+            artifact_map[skill],
+            canonical_id=skill,
+            destination_root=skills_destination,
+        )
     for job in cron_jobs:
         job_id = job.get("id")
         if not isinstance(job_id, str) or not job_id or "/" in job_id:
