@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-import re
 
 from hermes_factory.gates.exact_sha import ExactSHAState, evaluate_exact_sha
 from hermes_factory.governance.candidate_identity import digest_artifact
