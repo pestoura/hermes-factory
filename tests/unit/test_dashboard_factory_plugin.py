@@ -137,9 +137,14 @@ def test_dashboard_plugin_uses_native_read_only_contract() -> None:
     assert manifest["api"] == "plugin_api.py"
 
     bundle = (PLUGIN_ROOT / "dist" / "index.js").read_text(encoding="utf-8")
-    assert "__HERMES_PLUGIN_SDK__" in bundle
-    assert "__HERMES_PLUGINS__" in bundle
-    assert "/api/plugins/hermes-factory/snapshot" in bundle
+    assert "export default" in bundle
+    assert 'id: "hermes-factory"' in bundle
+    assert "register(ctx)" in bundle
+    assert "ctx.register(" in bundle
+    assert 'ctx.rest("/snapshot")' in bundle
+    assert "__HERMES_PLUGIN_SDK__" not in bundle
+    assert "__HERMES_PLUGINS__" not in bundle
+    assert "/api/plugins/hermes-factory/snapshot" not in bundle
 
     backend = (PLUGIN_ROOT / "plugin_api.py").read_text(encoding="utf-8")
     assert '@router.get("/snapshot")' in backend
