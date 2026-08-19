@@ -355,6 +355,36 @@ class SemanticRegistry:
             for row in rows
         ]
 
+    def list_latest_entities(
+        self,
+        entity_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if entity_type is not None and entity_type not in SUPPORTED_ENTITY_TYPES:
+            raise ValueError(f"unsupported trace entity type: {entity_type}")
+        where = " WHERE entity_type=?" if entity_type is not None else ""
+        values: tuple[str, ...] = (entity_type,) if entity_type is not None else ()
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT v.entity_id, v.entity_type, v.revision, v.payload_json, "
+                "v.recorded_at FROM entity_versions AS v JOIN ("
+                "SELECT entity_type, entity_id, MAX(sequence) AS sequence "
+                f"FROM entity_versions{where} GROUP BY entity_type, entity_id"
+                ") AS latest ON latest.entity_type=v.entity_type "
+                "AND latest.entity_id=v.entity_id AND latest.sequence=v.sequence "
+                "ORDER BY v.entity_type, v.entity_id",
+                values,
+            ).fetchall()
+        return [
+            {
+                "entity_id": row["entity_id"],
+                "entity_type": row["entity_type"],
+                "revision": row["revision"],
+                "payload": json.loads(row["payload_json"]),
+                "recorded_at": row["recorded_at"],
+            }
+            for row in rows
+        ]
+
     def add_edge(self, source_id: str, target_id: str, relation: str) -> None:
         with self._connect() as db:
             db.execute(
@@ -462,6 +492,30 @@ class SemanticRegistry:
             "candidate": row["candidate"],
             "payload": json.loads(row["payload_json"]),
         }
+
+    def list_evidence(
+        self,
+        *,
+        candidate: str | None = None,
+    ) -> list[dict[str, Any]]:
+        where = " WHERE candidate=?" if candidate is not None else ""
+        values: tuple[str, ...] = (candidate,) if candidate is not None else ()
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT evidence_id, kind, state, candidate, payload_json "
+                f"FROM evidence{where} ORDER BY evidence_id",
+                values,
+            ).fetchall()
+        return [
+            {
+                "evidence_id": row["evidence_id"],
+                "kind": row["kind"],
+                "state": row["state"],
+                "candidate": row["candidate"],
+                "payload": json.loads(row["payload_json"]),
+            }
+            for row in rows
+        ]
 
     def record_handoff(
         self,
