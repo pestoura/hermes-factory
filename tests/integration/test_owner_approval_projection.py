@@ -9,6 +9,7 @@ def test_owner_approval_is_projected_without_runtime_activation() -> None:
     approval = yaml.safe_load((ROOT / "approvals/architecture-v1.2.yaml").read_text())["approval"]
     catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
     skill_policy = yaml.safe_load((ROOT / "skills/registry-policy-v1.2.yaml").read_text())
+    skill_registry = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())["registry"]
 
     assert approval["decision"] == "APPROVED"
     assert approval["implementation_authority"] == "GRANTED"
@@ -23,3 +24,10 @@ def test_owner_approval_is_projected_without_runtime_activation() -> None:
     assert skill_policy["implementation_authority"] == "GRANTED"
     assert skill_policy["admission"]["active_lifecycle_required_for_runtime_use"] is True
     assert skill_policy["lifecycle"]["active_without_successful_evals"] == "forbidden"
+
+    assert skill_registry["lifecycle"] == "approved_for_implementation"
+    assert skill_registry["implementation_authority"] == "GRANTED"
+    assert skill_registry["policy"]["active_without_successful_evals"] == "forbidden"
+    for skill in skill_registry["proposed_v1_2_skills"].values():
+        assert skill["lifecycle"] == "proposed"
+        assert skill["test_status"] == "not_run"
