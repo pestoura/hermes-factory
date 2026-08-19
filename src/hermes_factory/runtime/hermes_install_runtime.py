@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -44,6 +46,7 @@ _SUPPORTED_ACTIONS = {
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
+    "REGISTER_DASHBOARD_PLUGIN",
 }
 
 
@@ -69,8 +72,14 @@ class HermesJarvasInstallRuntime:
     until every remaining symbolic operation has an equally concrete mapping.
     """
 
-    def __init__(self, *, command_runner: CommandRunner | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        command_runner: CommandRunner | None = None,
+        hermes_home: Path | None = None,
+    ) -> None:
         self._runner = command_runner or SubprocessCommandRunner()
+        self._hermes_home = Path(hermes_home) if hermes_home is not None else None
 
     @staticmethod
     def _profile_id(operation: InstallOperation) -> str:
@@ -111,8 +120,42 @@ class HermesJarvasInstallRuntime:
             raise RuntimeError("Profile cron target does not match Profile id")
         return profile_id
 
-    @classmethod
-    def _validate_operation(cls, operation: InstallOperation) -> None:
+    def _dashboard_paths(
+        self,
+        operation: InstallOperation,
+        *,
+        target_must_be_absent: bool,
+    ) -> tuple[Path, Path, Path]:
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Dashboard plugin registration")
+        if self._hermes_home.is_symlink() or not self._hermes_home.is_dir():
+            raise RuntimeError("Hermes home must be an existing regular directory")
+        if operation.source is None:
+            raise RuntimeError("Dashboard plugin source is required")
+        source = Path(operation.source)
+        if source.is_symlink() or not source.is_dir():
+            raise RuntimeError("Dashboard plugin source must be a regular directory")
+        if any(path.is_symlink() for path in source.rglob("*")):
+            raise RuntimeError("Dashboard plugin source must not contain symlinks")
+        manifest = source / "dashboard" / "manifest.json"
+        if manifest.is_symlink() or not manifest.is_file():
+            raise RuntimeError("Dashboard plugin manifest is required")
+        if operation.target != "HERMES_HOME/plugins/hermes-factory":
+            raise RuntimeError("Dashboard plugin target is invalid")
+        plugins_root = self._hermes_home / "plugins"
+        if plugins_root.exists() and (plugins_root.is_symlink() or not plugins_root.is_dir()):
+            raise RuntimeError("Hermes plugins root must be a regular directory")
+        target = plugins_root / "hermes-factory"
+        if target_must_be_absent and (target.exists() or target.is_symlink()):
+            raise RuntimeError("Dashboard plugin target already exists")
+        return source, target, plugins_root
+
+    def _validate_operation(
+        self,
+        operation: InstallOperation,
+        *,
+        allow_dashboard_target_exists: bool = False,
+    ) -> None:
         if operation.action not in _SUPPORTED_ACTIONS:
             raise RuntimeError(
                 f"unsupported install operation: {operation.component.value}:"
@@ -121,12 +164,20 @@ class HermesJarvasInstallRuntime:
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             if operation.component is not RuntimeComponent.PROFILE_DISTRIBUTIONS:
                 raise RuntimeError("Profile install operation has wrong component")
-            cls._profile_id(operation)
+            self._profile_id(operation)
             return
         if operation.action == "CREATE_NATIVE_PROFILE_CRON_DUTY":
             if operation.component is not RuntimeComponent.NATIVE_PROFILE_CRON:
                 raise RuntimeError("Profile cron operation has wrong component")
-            cls._cron_profile_id(operation)
+            self._cron_profile_id(operation)
+            return
+        if operation.action == "REGISTER_DASHBOARD_PLUGIN":
+            if operation.component is not RuntimeComponent.DASHBOARD_PLUGIN:
+                raise RuntimeError("Dashboard plugin operation has wrong component")
+            self._dashboard_paths(
+                operation,
+                target_must_be_absent=not allow_dashboard_target_exists,
+            )
             return
         if operation.component is not RuntimeComponent.NATIVE_PROFILE_CRON:
             raise RuntimeError("empty cron plan operation has wrong component")
@@ -142,6 +193,31 @@ class HermesJarvasInstallRuntime:
         if result.returncode != 0:
             raise RuntimeError(f"{label} failed with exit code {result.returncode}")
         return result
+
+    def _apply_dashboard(self, operation: InstallOperation) -> str:
+        source, target, plugins_root = self._dashboard_paths(
+            operation,
+            target_must_be_absent=True,
+        )
+        plugins_root_created = not plugins_root.exists()
+        try:
+            if plugins_root_created:
+                plugins_root.mkdir(parents=False)
+            shutil.copytree(source, target)
+        except OSError:
+            if target.exists() and not target.is_symlink():
+                shutil.rmtree(target)
+            if plugins_root_created:
+                with suppress(OSError):
+                    plugins_root.rmdir()
+            raise
+        return _receipt(
+            {
+                "kind": "DASHBOARD_PLUGIN_INSTALL",
+                "plugins_root_created": "true" if plugins_root_created else "false",
+                "target": str(target),
+            }
+        )
 
     def apply(self, operation: InstallOperation) -> str:
         self._validate_operation(operation)
@@ -164,10 +240,13 @@ class HermesJarvasInstallRuntime:
                 }
             )
 
+        if operation.action == "REGISTER_DASHBOARD_PLUGIN":
+            return self._apply_dashboard(operation)
+
         return _receipt({"kind": "EMPTY_CRON_PLAN"})
 
     def rollback(self, operation: InstallOperation, receipt: str) -> None:
-        self._validate_operation(operation)
+        self._validate_operation(operation, allow_dashboard_target_exists=True)
         payload = _load_receipt(receipt)
 
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
@@ -194,6 +273,27 @@ class HermesJarvasInstallRuntime:
                 ("hermes", "-p", profile_id, "cron", "remove", job_id),
                 "native Profile cron rollback",
             )
+            return
+
+        if operation.action == "REGISTER_DASHBOARD_PLUGIN":
+            _, target, plugins_root = self._dashboard_paths(
+                operation,
+                target_must_be_absent=False,
+            )
+            plugins_root_created = payload.get("plugins_root_created")
+            if (
+                payload.get("kind") != "DASHBOARD_PLUGIN_INSTALL"
+                or payload.get("target") != str(target)
+                or plugins_root_created not in {"true", "false"}
+            ):
+                raise RuntimeError("Dashboard rollback receipt does not match operation")
+            if target.is_symlink():
+                raise RuntimeError("Dashboard rollback target became a symlink")
+            if target.exists():
+                shutil.rmtree(target)
+            if plugins_root_created == "true":
+                with suppress(OSError):
+                    plugins_root.rmdir()
             return
 
         if payload != {"kind": "EMPTY_CRON_PLAN"}:
