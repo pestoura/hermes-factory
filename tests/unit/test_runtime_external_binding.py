@@ -7,7 +7,6 @@ from hermes_factory.runtime.admission import (
     RuntimeComponent,
 )
 
-
 ROOT = Path(__file__).parents[2]
 BINDING = ROOT / "hermes-integration" / "mcp-bridge" / "factory-northbound.yaml"
 
