@@ -129,7 +129,7 @@ def test_dashboard_projection_preserves_factory_truth_boundaries(tmp_path: Path)
     assert required_sections.issubset(snapshot)
 
 
-def test_dashboard_plugin_uses_native_read_only_contract() -> None:
+def test_dashboard_plugin_uses_native_web_read_only_contract() -> None:
     manifest = json.loads((PLUGIN_ROOT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["name"] == "hermes-factory"
     assert manifest["tab"]["path"] == "/factory"
@@ -137,14 +137,15 @@ def test_dashboard_plugin_uses_native_read_only_contract() -> None:
     assert manifest["api"] == "plugin_api.py"
 
     bundle = (PLUGIN_ROOT / "dist" / "index.js").read_text(encoding="utf-8")
-    assert "export default" in bundle
-    assert 'id: "hermes-factory"' in bundle
-    assert "register(ctx)" in bundle
-    assert "ctx.register(" in bundle
-    assert 'ctx.rest("/snapshot")' in bundle
-    assert "__HERMES_PLUGIN_SDK__" not in bundle
-    assert "__HERMES_PLUGINS__" not in bundle
-    assert "/api/plugins/hermes-factory/snapshot" not in bundle
+    assert "(function ()" in bundle
+    assert "window.__HERMES_PLUGIN_SDK__" in bundle
+    assert 'window.__HERMES_PLUGINS__.register("hermes-factory"' in bundle
+    assert 'SDK.fetchJSON("/api/plugins/hermes-factory/snapshot")' in bundle
+    assert "@hermes/plugin-sdk" not in bundle
+    assert "ROUTES_AREA" not in bundle
+    assert "SIDEBAR_NAV_AREA" not in bundle
+    assert "ctx.rest(" not in bundle
+    assert "export default" not in bundle
 
     backend = (PLUGIN_ROOT / "plugin_api.py").read_text(encoding="utf-8")
     assert '@router.get("/snapshot")' in backend
