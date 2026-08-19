@@ -19,6 +19,8 @@ def _contract():
 
 
 def _artifacts(tmp_path: Path):
+    package = tmp_path / "hermes_factory-0.1.0-py3-none-any.whl"
+    package.write_bytes(b"exact candidate package")
     profile = tmp_path / "factory-orchestrator"
     profile.mkdir()
     (profile / "distribution.yaml").write_text("name: factory-orchestrator\n", encoding="utf-8")
@@ -29,7 +31,7 @@ def _artifacts(tmp_path: Path):
     )
     northbound = tmp_path / "factory-northbound.yaml"
     northbound.write_text("component: NORTHBOUND_CONTROL_INTEGRATION\n", encoding="utf-8")
-    return profile, dashboard, northbound
+    return package, profile, dashboard, northbound
 
 
 def _passing_components():
@@ -38,13 +40,15 @@ def _passing_components():
 
 def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evidence(tmp_path: Path):
     builder_type, _ = _contract()
-    profile, dashboard, northbound = _artifacts(tmp_path)
+    package, profile, dashboard, northbound = _artifacts(tmp_path)
     profile_digest = digest_artifact(profile)
     cron_plan = NativeCronPlanBuilder().build({})
 
     plan = builder_type().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
+        factory_package_source=package,
+        expected_factory_package_digest=digest_artifact(package),
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": profile_digest},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
@@ -66,6 +70,12 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
         operation.argv == ("hermes", "profile", "install", str(profile))
         for operation in plan.operations
     )
+    package_operation = next(
+        operation
+        for operation in plan.operations
+        if operation.component is RuntimeComponent.FACTORY_PACKAGE
+    )
+    assert package_operation.source == str(package)
     dashboard_operation = next(
         operation
         for operation in plan.operations
@@ -77,13 +87,15 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
 
 def test_controlled_install_plan_collects_not_run_blocked_and_sha_mismatch_without_execution(tmp_path: Path):
     builder_type, _ = _contract()
-    profile, dashboard, northbound = _artifacts(tmp_path)
+    package, profile, dashboard, northbound = _artifacts(tmp_path)
     components = _passing_components()
     components[RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION] = AdmissionEvidenceState.BLOCKED
 
     plan = builder_type().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="b" * 40,
+        factory_package_source=package,
+        expected_factory_package_digest=digest_artifact(package),
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.NOT_RUN},
@@ -106,13 +118,15 @@ def test_controlled_install_plan_collects_not_run_blocked_and_sha_mismatch_witho
 
 def test_controlled_install_plan_detects_profile_artifact_digest_drift(tmp_path: Path):
     builder_type, _ = _contract()
-    profile, dashboard, northbound = _artifacts(tmp_path)
+    package, profile, dashboard, northbound = _artifacts(tmp_path)
     expected = digest_artifact(profile)
     (profile / "SOUL.md").write_text("changed after eval\n", encoding="utf-8")
 
     plan = builder_type().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
+        factory_package_source=package,
+        expected_factory_package_digest=digest_artifact(package),
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": expected},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
@@ -130,7 +144,7 @@ def test_controlled_install_plan_detects_profile_artifact_digest_drift(tmp_path:
 
 def test_controlled_install_plan_rejects_missing_install_surfaces_and_secret_like_paths(tmp_path: Path):
     builder_type, error_type = _contract()
-    profile, _, northbound = _artifacts(tmp_path)
+    package, profile, _, northbound = _artifacts(tmp_path)
     unsafe_dashboard = tmp_path / ".env" / "hermes-factory"
     unsafe_dashboard.mkdir(parents=True)
 
@@ -138,6 +152,8 @@ def test_controlled_install_plan_rejects_missing_install_surfaces_and_secret_lik
         builder_type().build(
             accepted_hermes_sha="a" * 40,
             observed_hermes_sha="a" * 40,
+            factory_package_source=package,
+            expected_factory_package_digest=digest_artifact(package),
             profile_artifacts={"factory-orchestrator": profile},
             expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
             profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
