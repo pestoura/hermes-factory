@@ -28,6 +28,9 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
     catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
     registry_document = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())
     registry = registry_document["registry"]
+    runtime_policies = yaml.safe_load(
+        (ROOT / "agents/_shared/runtime-policies.yaml").read_text()
+    )
     skill_artifacts = discover_skill_artifacts(ROOT / "skills", registry)
 
     profile_artifacts = {}
@@ -40,6 +43,7 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
             out,
             cron_jobs=[],
             skill_artifacts=skill_artifacts,
+            runtime_policies=runtime_policies,
         )
         profile_artifacts[agent_id] = out
 
