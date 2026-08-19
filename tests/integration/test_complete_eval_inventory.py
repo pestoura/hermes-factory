@@ -4,7 +4,10 @@ import yaml
 
 from hermes_factory.agents import compile_profile_distribution
 from hermes_factory.governance.eval_evidence import EvalEvidenceStore
-from hermes_factory.governance.eval_inventory import EvalInventoryBuilder
+from hermes_factory.governance.eval_inventory import (
+    EvalInventoryBuilder,
+    discover_skill_artifacts,
+)
 from hermes_factory.runtime.admission import AdmissionEvidenceState
 from hermes_factory.traceability.registry import SemanticRegistry
 
@@ -24,7 +27,6 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
     catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
     registry_document = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())
     registry = registry_document["registry"]
-    aliases = registry["legacy_source_aliases"]
 
     profile_artifacts = {}
     for agent_id in catalog["active_candidates"]:
@@ -43,16 +45,12 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
         for group in _SKILL_GROUPS
         for skill_id in registry[group]
     }
-    skill_artifacts = {}
-    for skill_file in sorted(ROOT.glob("skills/*/*/SKILL.md")):
-        source_name = skill_file.parent.name
-        canonical_id = aliases.get(source_name, f"factory-{source_name}")
-        assert canonical_id not in skill_artifacts, canonical_id
-        skill_artifacts[canonical_id] = skill_file
+    skill_artifacts = discover_skill_artifacts(ROOT / "skills", registry)
 
     assert len(profile_artifacts) == 17
     assert set(skill_artifacts) == expected_skill_ids
     assert set(registry["proposed_v1_2_skills"]) <= expected_skill_ids
+    assert "factory-verifying-exact-sha" not in skill_artifacts
 
     store = EvalEvidenceStore(SemanticRegistry(tmp_path / "factory.db"))
     inventory = EvalInventoryBuilder(store).build(
