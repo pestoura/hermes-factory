@@ -56,10 +56,17 @@ class ExactSHAEvidenceGate:
         if any(record.get("state") == "STALE" for record in records):
             return ExactSHAState.EVIDENCE_STALE
 
-        return evaluate_exact_sha(
-            candidate_sha,
-            (record.get("candidate") for record in records),
-        )
+        identities: list[str | None] = []
+        for record in records:
+            identity = record.get("candidate")
+            if identity is None:
+                identities.append(None)
+            elif isinstance(identity, str):
+                identities.append(identity)
+            else:
+                return ExactSHAState.IDENTITY_UNKNOWN
+
+        return evaluate_exact_sha(candidate_sha, identities)
 
     def transition_candidate(
         self,
