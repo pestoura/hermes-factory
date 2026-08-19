@@ -108,6 +108,8 @@ class ControlledInstallPlanBuilder:
         *,
         accepted_hermes_sha: str,
         observed_hermes_sha: str,
+        factory_package_source: Path,
+        expected_factory_package_digest: str,
         profile_artifacts: Mapping[str, Path],
         expected_profile_digests: Mapping[str, str],
         profile_eval_states: Mapping[str, AdmissionEvidenceState],
@@ -118,8 +120,10 @@ class ControlledInstallPlanBuilder:
         gateway_adapter_module: str,
         northbound_binding_source: Path,
     ) -> ControlledInstallPlan:
+        factory_package_source = Path(factory_package_source)
         dashboard_plugin_source = Path(dashboard_plugin_source)
         northbound_binding_source = Path(northbound_binding_source)
+        _require_regular_file(factory_package_source, "Factory package source")
         _require_directory(dashboard_plugin_source, "dashboard plugin source")
         _require_regular_file(
             dashboard_plugin_source / "dashboard" / "manifest.json",
@@ -134,6 +138,13 @@ class ControlledInstallPlanBuilder:
         if sha_state is not ExactSHAState.SHA_MATCH:
             blockers.append(
                 f"exact Hermes SHA required: accepted={accepted_hermes_sha} observed={observed_hermes_sha}"
+            )
+
+        observed_package_digest = digest_artifact(factory_package_source)
+        if observed_package_digest != expected_factory_package_digest:
+            blockers.append(
+                "Factory package digest drift: "
+                f"expected={expected_factory_package_digest} observed={observed_package_digest}"
             )
 
         profile_ids = tuple(sorted(profile_artifacts))
@@ -174,7 +185,7 @@ class ControlledInstallPlanBuilder:
             InstallOperation(
                 component=RuntimeComponent.FACTORY_PACKAGE,
                 action="STAGE_FACTORY_PACKAGE",
-                source="pestoura/hermes-factory",
+                source=str(factory_package_source),
                 target="HERMES_RUNTIME_ENV",
             )
         ]
