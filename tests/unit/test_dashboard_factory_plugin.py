@@ -1,8 +1,7 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 from hermes_factory.traceability.registry import SemanticRegistry
-
 
 REPO_ROOT = Path(__file__).parents[2]
 PLUGIN_ROOT = (
