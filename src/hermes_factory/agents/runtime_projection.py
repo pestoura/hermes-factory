@@ -23,9 +23,11 @@ def project_native_profile_config(
         raise RuntimePolicyProjectionError("runtime policy implementation authority is not granted")
 
     model_class = agent.get("model_class")
+    if not isinstance(model_class, str):
+        raise RuntimePolicyProjectionError(f"unknown model class {model_class!r}")
     model_classes = _require_mapping(runtime_policies.get("model_classes"), "model_classes")
     model_policy = model_classes.get(model_class)
-    if not isinstance(model_class, str) or not isinstance(model_policy, dict):
+    if not isinstance(model_policy, dict):
         raise RuntimePolicyProjectionError(f"unknown model class {model_class!r}")
     if model_policy.get("selection") != "factory-model-policy":
         raise RuntimePolicyProjectionError(
@@ -33,11 +35,13 @@ def project_native_profile_config(
         )
 
     tool_policy_class = agent.get("tool_policy_class")
+    if not isinstance(tool_policy_class, str):
+        raise RuntimePolicyProjectionError(f"unknown tool policy {tool_policy_class!r}")
     tool_policies = _require_mapping(
         runtime_policies.get("tool_policy_classes"), "tool_policy_classes"
     )
     tool_policy = tool_policies.get(tool_policy_class)
-    if not isinstance(tool_policy_class, str) or not isinstance(tool_policy, dict):
+    if not isinstance(tool_policy, dict):
         raise RuntimePolicyProjectionError(f"unknown tool policy {tool_policy_class!r}")
 
     toolsets = tool_policy.get("hermes_toolsets")
