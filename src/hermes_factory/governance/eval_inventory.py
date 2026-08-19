@@ -68,7 +68,7 @@ def discover_skill_artifacts(
             )
         if canonical_id in discovered:
             raise EvalInventoryError(f"duplicate Skill artifact for {canonical_id}")
-        discovered[canonical_id] = skill_file
+        discovered[canonical_id] = skill_file.parent
 
     missing = sorted(expected - set(discovered))
     if missing:
