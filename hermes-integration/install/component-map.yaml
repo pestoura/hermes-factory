@@ -24,38 +24,67 @@ components:
     mechanism: install_verified_factory_wheel
     source: verified_exact_head_factory_package_candidate
     target: HERMES_RUNTIME_ENV
+    runtime_adapter_status: SUPPORTED
 
   PROFILE_DISTRIBUTIONS:
     mechanism: hermes profile install
     source: compiled_native_profile_distributions
     target: HERMES_PROFILE_HOME
+    runtime_adapter_status: SUPPORTED
 
   FACTORY_SKILLS:
     mechanism: profile_scoped_native_skill_directories
     source: canonical_factory_skill_artifacts
     target: PROFILE_SCOPED_SKILLS
+    runtime_adapter_status: BLOCKED
+    blocker_code: STRUCTURAL_DECISION_REQUIRED
+    blocker: >-
+      Required Skills already travel inside evaluated Profile Distributions, but
+      task-optional Skills require an explicit approved projection mechanism.
+      Installing every optional Skill into the base Profile would widen worker
+      capability before task-level authorization.
 
   KANBAN_HIGH_ASSURANCE_POLICY:
     mechanism: native_hermes_kanban_policy
     source: hermes_factory_kanban_adapter_and_policy
     target: HERMES_KANBAN
+    runtime_adapter_status: BLOCKED
+    blocker_code: UPSTREAM_CAPABILITY_GAP
+    blocker: >-
+      Current upstream Hermes exposes kanban.auto_decompose but no verified
+      native equivalent of the Factory policy key
+      kanban.dispatch_approval_mode=structured.
 
   NATIVE_PROFILE_CRON:
     mechanism: hermes -p PROFILE cron create
     source: digest_bound_validated_factory_duties
     target: HERMES_PROFILE_CRON
+    runtime_adapter_status: SUPPORTED
 
   DASHBOARD_PLUGIN:
     mechanism: hermes_dashboard_plugin_registration
     source: hermes-integration/dashboard-plugin/hermes-factory
     target: HERMES_HOME/plugins/hermes-factory
+    runtime_adapter_status: SUPPORTED
 
   GATEWAY_HITL_ADAPTER:
     mechanism: native_hermes_gateway_send_clarify_adapter
     source: hermes_factory.adapters.hermes_gateway
     target: HERMES_GATEWAY
+    runtime_adapter_status: BLOCKED
+    blocker_code: RUNTIME_BINDING_MISSING
+    blocker: >-
+      The transport-independent Factory adapter exists and targets the native
+      PlatformAdapter send_clarify primitive, but no runtime composition yet
+      binds it to a concrete Hermes Gateway PlatformAdapter instance.
 
   NORTHBOUND_CONTROL_INTEGRATION:
     mechanism: hermes_mcp_bridge_northbound_registration
     source: hermes-integration/mcp-bridge/factory-northbound.yaml
     target: HERMES_MCP_BRIDGE
+    runtime_adapter_status: BLOCKED
+    blocker_code: EXTERNAL_CI_BLOCKED
+    blocker: >-
+      Hermes MCP Bridge PR #111 remains externally blocked: repository CI and
+      release-governance jobs fail before their first workflow step, so no
+      independent repository/runtime admission evidence exists yet.
