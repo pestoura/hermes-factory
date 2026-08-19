@@ -73,14 +73,11 @@ class RuntimeReadinessAssessor:
             identity: skill_eval_states.get(identity, AdmissionEvidenceState.ABSENT)
             for identity in required_skills
         }
-        components = (
-            {
-                component: component_states.get(component, AdmissionEvidenceState.ABSENT)
-                for component in RuntimeComponent
-            }
-            if component_states is not None
-            else {}
-        )
+        observed_components = component_states or {}
+        components = {
+            component: observed_components.get(component, AdmissionEvidenceState.ABSENT)
+            for component in RuntimeComponent
+        }
 
         profile_blockers = [
             f"Profile {identity}={state.value}"
