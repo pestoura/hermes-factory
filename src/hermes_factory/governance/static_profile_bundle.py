@@ -31,6 +31,7 @@ _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 class StaticProfileEvalBundle:
     manifest_path: Path
     registry_path: Path
+    behavioral_plan_path: Path
     report: StaticProfileEvalReport
     remaining_work_items: int
 
@@ -56,7 +57,11 @@ def build_static_profile_eval_bundle(
     destination.mkdir(parents=True, exist_ok=True)
     registry_path = destination / "static-profile-evals.db"
     manifest_path = destination / "static-profile-evals.json"
-    if registry_path.exists() or manifest_path.exists():
+    behavioral_plan_path = destination / "behavioral-eval-plan.json"
+    if any(
+        path.exists()
+        for path in (registry_path, manifest_path, behavioral_plan_path)
+    ):
         raise FileExistsError("static Profile eval bundle output already exists")
 
     catalog_document = _load_yaml(root / "agents/catalog-v1.2.yaml")
@@ -134,6 +139,31 @@ def build_static_profile_eval_bundle(
         )
         remaining_work_items = len(execution_plan.items)
 
+    profile_work_items = sum(
+        item.candidate_kind == "PROFILE" for item in execution_plan.items
+    )
+    skill_work_items = sum(
+        item.candidate_kind == "SKILL" for item in execution_plan.items
+    )
+    independent_reviews = sum(
+        item.requires_independent_reviewer for item in execution_plan.items
+    )
+    behavioral_handoff = {
+        "schema": "hermes.factory/behavioral-eval-handoff/v1",
+        "candidate_sha": candidate_sha.lower(),
+        "static_evidence_ref": evidence_ref,
+        "work_item_count": remaining_work_items,
+        "profile_work_item_count": profile_work_items,
+        "skill_work_item_count": skill_work_items,
+        "independent_review_count": independent_reviews,
+        "plan_digest": execution_plan.digest,
+        "plan": execution_plan.to_manifest(),
+    }
+    behavioral_plan_path.write_text(
+        json.dumps(behavioral_handoff, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
     manifest = {
         "schema": "hermes.factory/static-profile-eval-bundle/v1",
         "candidate_sha": candidate_sha.lower(),
@@ -146,6 +176,7 @@ def build_static_profile_eval_bundle(
             "state": report.state,
         },
         "remaining_work_items": remaining_work_items,
+        "behavioral_plan_digest": execution_plan.digest,
         "profiles": {
             agent_id: {
                 "digest": profile_digests[agent_id],
@@ -162,6 +193,7 @@ def build_static_profile_eval_bundle(
     return StaticProfileEvalBundle(
         manifest_path=manifest_path,
         registry_path=registry_path,
+        behavioral_plan_path=behavioral_plan_path,
         report=report,
         remaining_work_items=remaining_work_items,
     )
