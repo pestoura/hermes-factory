@@ -28,6 +28,7 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
     catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
     registry_document = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())
     registry = registry_document["registry"]
+    skill_artifacts = discover_skill_artifacts(ROOT / "skills", registry)
 
     profile_artifacts = {}
     for agent_id in catalog["active_candidates"]:
@@ -38,6 +39,7 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
             registry_document,
             out,
             cron_jobs=[],
+            skill_artifacts=skill_artifacts,
         )
         profile_artifacts[agent_id] = out
 
@@ -46,7 +48,6 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
         for group in _SKILL_GROUPS
         for skill_id in registry[group]
     }
-    skill_artifacts = discover_skill_artifacts(ROOT / "skills", registry)
 
     assert len(profile_artifacts) == 17
     assert len(expected_skill_ids) == 29
