@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
+from dataclasses import dataclass
 
 from hermes_factory.runtime.admission import AdmissionEvidenceState
-
 
 RUNTIME_ACCEPTANCE_SCENARIOS = (
     "project_onboarding_compile",
