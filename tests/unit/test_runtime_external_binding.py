@@ -2,7 +2,10 @@ from pathlib import Path
 
 import yaml
 
-from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
+from hermes_factory.runtime.admission import (
+    AdmissionEvidenceState,
+    RuntimeComponent,
+)
 
 
 ROOT = Path(__file__).parents[2]
