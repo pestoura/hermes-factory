@@ -85,8 +85,12 @@ def _ready_plan(tmp_path: Path):
 class FakeRuntime:
     def __init__(self, *, fail_at: int | None = None) -> None:
         self.fail_at = fail_at
+        self.preflighted = []
         self.applied = []
         self.rolled_back = []
+
+    def preflight(self, operations):
+        self.preflighted.append(tuple(operations))
 
     def apply(self, operation):
         index = len(self.applied)
@@ -123,6 +127,7 @@ def test_executor_refuses_blocked_plan_without_touching_runtime(tmp_path: Path):
     with pytest.raises(error_type, match="not READY"):
         executor_type(runtime).execute(blocked, _authorization(blocked))
 
+    assert runtime.preflighted == []
     assert runtime.applied == []
     assert runtime.rolled_back == []
 
@@ -142,6 +147,7 @@ def test_executor_requires_digest_bound_explicit_authorization(tmp_path: Path):
             ),
         )
 
+    assert runtime.preflighted == []
     assert runtime.applied == []
 
 
@@ -156,6 +162,7 @@ def test_executor_applies_every_operation_only_after_authorization(tmp_path: Pat
     assert report.plan_digest == plan.digest
     assert report.applied_count == len(plan.operations)
     assert report.rolled_back_count == 0
+    assert runtime.preflighted == [plan.operations]
     assert len(runtime.applied) == len(plan.operations)
     assert runtime.rolled_back == []
     assert report.execute is True
@@ -195,4 +202,5 @@ def test_executor_never_treats_empty_approval_provenance_as_authorized(tmp_path:
             ),
         )
 
+    assert runtime.preflighted == []
     assert runtime.applied == []
