@@ -36,6 +36,7 @@ class InstallOperation:
     action: str
     argv: tuple[str, ...] = ()
     source: str | None = None
+    source_digest: str | None = None
     target: str | None = None
 
     def to_manifest(self) -> dict[str, object]:
@@ -46,6 +47,8 @@ class InstallOperation:
         }
         if self.source is not None:
             payload["source"] = self.source
+        if self.source_digest is not None:
+            payload["source_digest"] = self.source_digest
         if self.target is not None:
             payload["target"] = self.target
         return payload
@@ -186,6 +189,7 @@ class ControlledInstallPlanBuilder:
                 component=RuntimeComponent.FACTORY_PACKAGE,
                 action="STAGE_FACTORY_PACKAGE",
                 source=str(factory_package_source),
+                source_digest=expected_factory_package_digest,
                 target="HERMES_RUNTIME_ENV",
             )
         ]
