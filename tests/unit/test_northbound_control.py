@@ -95,3 +95,89 @@ def test_northbound_reads_are_external_candidate_bound_and_read_only(tmp_path) -
             candidate_sha="sha-1",
             caller=NorthboundCaller(principal=" ", origin=NorthboundOrigin.EXTERNAL),
         )
+
+
+def test_protected_mutation_is_non_executable_and_provenance_bound(tmp_path) -> None:
+    from hermes_factory.control import (
+        NorthboundCaller,
+        NorthboundControl,
+        NorthboundMutationDenied,
+        NorthboundOrigin,
+        ProtectedMutationAction,
+    )
+
+    registry = SemanticRegistry(tmp_path / "registry.db")
+    registry.record_evidence(
+        "evidence:authority",
+        kind="OWNER_AUTHORITY",
+        state="PASS",
+        candidate="sha-1",
+        payload={"actor_id": "owner:factory"},
+    )
+    registry.record_evidence(
+        "evidence:wrong-sha",
+        kind="OWNER_AUTHORITY",
+        state="PASS",
+        candidate="sha-2",
+        payload={"actor_id": "owner:factory"},
+    )
+    registry.repository("HumanDecision").put(
+        "HumanDecision:HITL-1",
+        "1",
+        {
+            "request_id": "HITL-1",
+            "request_version": 1,
+            "candidate_revision": "sha-1",
+            "responder_identity": "owner:factory",
+            "decision": "APPROVE_RELEASE",
+        },
+    )
+
+    control = NorthboundControl(registry)
+    external = NorthboundCaller(
+        principal="mcp:authorized-client",
+        origin=NorthboundOrigin.EXTERNAL,
+    )
+    before_events = registry.list_events()
+
+    response = control.protected_mutation_intent(
+        action=ProtectedMutationAction.RELEASE,
+        resource="project:factory",
+        candidate_sha="sha-1",
+        caller=external,
+        authority_evidence_id="evidence:authority",
+        human_decision_id="HumanDecision:HITL-1",
+    )
+
+    assert response["schema_version"] == "1.0"
+    assert response["operation"] == "PROTECTED_MUTATION_INTENT"
+    assert response["candidate_sha"] == "sha-1"
+    intent = response["data"]
+    assert intent["action"] == "RELEASE"
+    assert intent["resource"] == "project:factory"
+    assert intent["principal"] == "mcp:authorized-client"
+    assert intent["authority_evidence_id"] == "evidence:authority"
+    assert intent["human_decision_id"] == "HumanDecision:HITL-1"
+    assert intent["execute"] is False
+    assert isinstance(intent["intent_id"], str) and len(intent["intent_id"]) == 64
+    assert registry.list_events() == before_events
+
+    with pytest.raises(NorthboundMutationDenied, match="authority evidence"):
+        control.protected_mutation_intent(
+            action=ProtectedMutationAction.RELEASE,
+            resource="project:factory",
+            candidate_sha="sha-1",
+            caller=external,
+            authority_evidence_id="evidence:wrong-sha",
+            human_decision_id="HumanDecision:HITL-1",
+        )
+
+    with pytest.raises(NorthboundMutationDenied, match="HumanDecision"):
+        control.protected_mutation_intent(
+            action=ProtectedMutationAction.RELEASE,
+            resource="project:factory",
+            candidate_sha="sha-1",
+            caller=external,
+            authority_evidence_id="evidence:authority",
+            human_decision_id="HumanDecision:missing",
+        )
