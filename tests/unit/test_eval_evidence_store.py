@@ -1,11 +1,14 @@
 from hermes_factory.agents.evals import ProfileEvalEvidence, ProfileEvalState
-from hermes_factory.governance.eval_evidence import EvalEvidenceStore
 from hermes_factory.runtime.admission import AdmissionEvidenceState
 from hermes_factory.skills.evals import SkillEvalEvidence, SkillEvalState
 from hermes_factory.traceability.registry import SemanticRegistry
 
 
 def _store(tmp_path):
+    try:
+        from hermes_factory.governance.eval_evidence import EvalEvidenceStore
+    except ModuleNotFoundError as exc:
+        raise AssertionError("digest-bound eval evidence store is not implemented") from exc
     return EvalEvidenceStore(SemanticRegistry(tmp_path / "factory.db"))
 
 
