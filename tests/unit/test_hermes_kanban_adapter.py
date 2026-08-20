@@ -14,6 +14,7 @@ class FakeNativeKanban:
         self.calls: list[tuple[str, object]] = []
         self.ids_by_key: dict[str, str] = {}
         self.counter = 0
+        self.unblock_result = True
 
     def create_board(self, slug: str, **kwargs: object) -> dict[str, object]:
         self.calls.append(("create_board", (slug, kwargs)))
@@ -32,17 +33,22 @@ class FakeNativeKanban:
             self.ids_by_key[key] = f"t_{self.counter}"
         return self.ids_by_key[key]
 
-    def approve_dispatch(
+    def add_comment(
         self,
         conn: object,
         task_id: str,
-        *,
-        actor: str,
-        source: str,
-        **kwargs: object,
-    ) -> object:
-        self.calls.append(("approve_dispatch", (task_id, actor, source, kwargs)))
-        return None
+        author: str,
+        body: str,
+    ) -> int:
+        self.calls.append(("add_comment", (task_id, author, body)))
+        return 1
+
+    def unblock_task(self, conn: object, task_id: str) -> bool:
+        self.calls.append(("unblock_task", task_id))
+        return self.unblock_result
+
+    def approve_dispatch(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("approve_dispatch is not a native Hermes primitive")
 
     def dispatch_once(self, *args: object, **kwargs: object) -> None:
         raise AssertionError("Factory adapter must not own Hermes dispatch")
@@ -112,7 +118,7 @@ def _authorized_adapter(
     )
 
 
-def test_projection_uses_native_task_with_semantic_idempotency_and_no_dispatch() -> None:
+def test_projection_uses_native_blocked_task_with_semantic_idempotency_and_no_dispatch() -> None:
     native = FakeNativeKanban()
     adapter = _authorized_adapter(native)
 
@@ -130,9 +136,10 @@ def test_projection_uses_native_task_with_semantic_idempotency_and_no_dispatch()
     assert kwargs["board"] == "jarvas-cli"
     assert kwargs["project_id"] == "jarvas-cli"
     assert kwargs["workspace_kind"] == "worktree"
+    assert kwargs["initial_status"] == "blocked"
 
 
-def test_structured_authorization_uses_native_approval_and_never_dispatches() -> None:
+def test_structured_authorization_records_native_audit_then_unblocks_without_dispatching() -> None:
     native = FakeNativeKanban()
     adapter = _authorized_adapter(native)
 
@@ -144,15 +151,38 @@ def test_structured_authorization_uses_native_approval_and_never_dispatches() ->
         source="factory-continuous-handoff",
     )
 
-    approvals = [payload for name, payload in native.calls if name == "approve_dispatch"]
-    assert approvals == [
+    comments = [payload for name, payload in native.calls if name == "add_comment"]
+    assert comments == [
         (
             "t_1",
             "factory-orchestrator",
-            "factory-continuous-handoff",
-            {},
+            '[factory:dispatch-authorization/v1] {"actor":"factory-orchestrator",'
+            '"source":"factory-continuous-handoff","task_id":"t_1"}',
         )
     ]
+    unblocks = [payload for name, payload in native.calls if name == "unblock_task"]
+    assert unblocks == ["t_1"]
+    assert [name for name, _ in native.calls].index("add_comment") < [
+        name for name, _ in native.calls
+    ].index("unblock_task")
+
+
+def test_structured_authorization_fails_closed_when_native_unblock_fails() -> None:
+    native = FakeNativeKanban()
+    native.unblock_result = False
+    adapter = _authorized_adapter(native)
+    task_id = adapter.project_task(_spec())
+
+    with pytest.raises(RuntimeError, match="could not release"):
+        adapter.authorize_dispatch(
+            board="jarvas-cli",
+            task_id=task_id,
+            actor="factory-orchestrator",
+            source="factory-continuous-handoff",
+        )
+
+    assert any(name == "add_comment" for name, _ in native.calls)
+    assert [payload for name, payload in native.calls if name == "unblock_task"] == ["t_1"]
 
 
 def test_projection_rejects_incomplete_semantic_identity_before_native_write() -> None:
@@ -227,62 +257,35 @@ def test_board_reconciliation_uses_native_idempotent_board_api() -> None:
     ]
 
 
-def test_high_assurance_patch_matches_native_hermes_config_keys() -> None:
+def test_high_assurance_patch_matches_verified_native_hermes_config_keys() -> None:
     adapter = HermesKanbanAdapter(FakeNativeKanban())
 
     assert adapter.high_assurance_config_patch() == {
         "kanban": {
             "auto_decompose": False,
-            "dispatch_approval_mode": "structured",
         }
     }
 
 
-def test_high_assurance_verification_fails_closed_on_permissive_defaults() -> None:
+def test_high_assurance_verification_fails_closed_on_permissive_auto_decompose() -> None:
     adapter = HermesKanbanAdapter(FakeNativeKanban())
 
     with pytest.raises(ValueError, match="auto_decompose"):
-        adapter.assert_high_assurance_config(
-            {
-                "kanban": {
-                    "auto_decompose": True,
-                    "dispatch_approval_mode": "compat",
-                }
-            }
-        )
+        adapter.assert_high_assurance_config({"kanban": {"auto_decompose": True}})
 
 
-def test_high_assurance_verification_accepts_required_values_with_extra_config() -> None:
+def test_high_assurance_verification_accepts_native_config_without_fabricated_dispatch_mode() -> None:
     adapter = HermesKanbanAdapter(FakeNativeKanban())
 
     adapter.assert_high_assurance_config(
         {
             "kanban": {
                 "auto_decompose": False,
-                "dispatch_approval_mode": "structured",
                 "max_spawn": 4,
             },
             "agent": {"max_turns": 500},
         }
     )
-
-
-def test_high_assurance_verification_rejects_missing_or_compat_dispatch_mode() -> None:
-    adapter = HermesKanbanAdapter(FakeNativeKanban())
-
-    with pytest.raises(ValueError, match="dispatch_approval_mode"):
-        adapter.assert_high_assurance_config(
-            {"kanban": {"auto_decompose": False}}
-        )
-    with pytest.raises(ValueError, match="dispatch_approval_mode"):
-        adapter.assert_high_assurance_config(
-            {
-                "kanban": {
-                    "auto_decompose": False,
-                    "dispatch_approval_mode": "compat",
-                }
-            }
-        )
 
 
 def test_task_skill_authorization_is_recomputed_and_aliases_are_canonicalized() -> None:
