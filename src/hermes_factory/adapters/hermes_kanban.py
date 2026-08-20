@@ -5,6 +5,8 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
+from hermes_factory.skills.system import SkillAdmissionError, SkillRegistry
+
 
 class NativeKanban(Protocol):
     def create_board(self, slug: str, **kwargs: object) -> dict[str, object]: ...
@@ -66,10 +68,27 @@ class HermesKanbanAdapter:
 
     The adapter deliberately does not dispatch workers or write Hermes' SQLite
     schema directly. Hermes remains the sole queue/dispatcher owner.
+
+    Task projection fails closed unless a Factory Skill Registry and the exact
+    admitted Skill identities are supplied. ``approved_skills`` on the task
+    projection is treated as an untrusted task request; effective Skills are
+    always recomputed from the canonical consumer policy before native write.
     """
 
-    def __init__(self, native: NativeKanban) -> None:
+    def __init__(
+        self,
+        native: NativeKanban,
+        *,
+        skill_registry: SkillRegistry | None = None,
+        admitted_skill_ids: frozenset[str] | None = None,
+    ) -> None:
+        if (skill_registry is None) != (admitted_skill_ids is None):
+            raise ValueError(
+                "skill_registry and admitted_skill_ids must be supplied together"
+            )
         self._native = native
+        self._skill_registry = skill_registry
+        self._admitted_skill_ids = admitted_skill_ids
 
     @staticmethod
     def high_assurance_config_patch() -> dict[str, dict[str, object]]:
@@ -122,8 +141,20 @@ class HermesKanbanAdapter:
             project_id=project_id,
         )
 
+    def _effective_skills(self, spec: KanbanTaskProjection) -> tuple[str, ...]:
+        if self._skill_registry is None or self._admitted_skill_ids is None:
+            raise SkillAdmissionError(
+                "Skill authorization context is required before Kanban task projection"
+            )
+        return self._skill_registry.effective_skills(
+            spec.assignee,
+            task_approved=spec.approved_skills,
+            admitted=self._admitted_skill_ids,
+        )
+
     def project_task(self, spec: KanbanTaskProjection) -> str:
         spec.validate()
+        effective_skills = self._effective_skills(spec)
         with self._native.connect_closing(board=spec.board) as conn:
             return self._native.create_task(
                 conn,
@@ -134,7 +165,7 @@ class HermesKanbanAdapter:
                 priority=spec.priority,
                 parents=spec.parent_task_ids,
                 idempotency_key=spec.idempotency_key,
-                skills=spec.approved_skills,
+                skills=effective_skills,
                 board=spec.board,
                 project_id=spec.project_id,
             )
