@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.hermes_install_runtime import CommandRunner
@@ -73,7 +74,7 @@ class HermesTaskSkillPreparer:
         ):
             raise RuntimeError("native Hermes task Skills must be explicit strings")
         if not isinstance(task.workspace_kind, str):
-            raise RuntimeError("native Hermes task workspace kind is invalid")
+            raise TypeError("native Hermes task workspace kind is invalid")
         return task
 
     def _optional_skills(self, task: NativeTask) -> tuple[str, ...]:
@@ -211,12 +212,12 @@ class HermesTaskSkillPreparer:
                 raise RuntimeError("task Skill trust verification returned invalid JSON") from exc
             if not isinstance(trusted, list) or str(workspace) not in trusted:
                 raise RuntimeError("task Skill trust verification failed")
-        except Exception as exc:
-            compensation_error: Exception | None = None
+        except RuntimeError as exc:
+            compensation_error: RuntimeError | None = None
             if trust_attempted:
                 try:
                     self._untrust(profile=profile, workspace=workspace)
-                except Exception as rollback_exc:
+                except RuntimeError as rollback_exc:
                     compensation_error = rollback_exc
             self._cleanup(created)
             if compensation_error is not None:
