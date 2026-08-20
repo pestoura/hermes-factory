@@ -1,0 +1,6 @@
+name: hermes-factory
+version: "1.2.0"
+description: "Hermes Software Factory runtime enforcement and dashboard integration"
+author: "Hermes Software Factory"
+hooks:
+  - pre_tool_call
