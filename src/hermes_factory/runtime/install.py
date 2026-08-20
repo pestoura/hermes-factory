@@ -13,6 +13,7 @@ from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComp
 from hermes_factory.runtime.cron_projection import NativeCronPlan
 from hermes_factory.runtime.package_candidate import FactoryPackageCandidate
 from hermes_factory.runtime.readiness import RuntimeReadinessAssessor
+from hermes_factory.runtime.skill_catalog_candidate import FactorySkillCatalogCandidate
 
 
 class InstallPlanError(ValueError):
@@ -117,6 +118,7 @@ class ControlledInstallPlanBuilder:
         observed_hermes_sha: str,
         expected_factory_candidate_sha: str,
         factory_package_candidate: FactoryPackageCandidate,
+        factory_skill_catalog_candidate: FactorySkillCatalogCandidate,
         profile_artifacts: Mapping[str, Path],
         expected_profile_digests: Mapping[str, str],
         profile_eval_states: Mapping[str, AdmissionEvidenceState],
@@ -134,9 +136,12 @@ class ControlledInstallPlanBuilder:
 
         factory_package_source = Path(factory_package_candidate.wheel_path)
         expected_factory_package_digest = factory_package_candidate.artifact_digest
+        skill_catalog_source = Path(factory_skill_catalog_candidate.candidate_root)
+        expected_skill_catalog_digest = factory_skill_catalog_candidate.artifact_digest
         dashboard_plugin_source = Path(dashboard_plugin_source)
         northbound_binding_source = Path(northbound_binding_source)
         _require_regular_file(factory_package_source, "Factory package source")
+        _require_directory(skill_catalog_source, "Factory Skill catalog source")
         _require_directory(dashboard_plugin_source, "dashboard plugin source")
         _require_regular_file(
             dashboard_plugin_source / "dashboard" / "manifest.json",
@@ -153,11 +158,18 @@ class ControlledInstallPlanBuilder:
                 f"exact Hermes SHA required: accepted={accepted_hermes_sha} observed={observed_hermes_sha}"
             )
 
-        if factory_package_candidate.candidate_sha.lower() != expected_factory_candidate_sha.lower():
+        expected_factory_sha = expected_factory_candidate_sha.lower()
+        if factory_package_candidate.candidate_sha.lower() != expected_factory_sha:
             blockers.append(
                 "exact Factory candidate SHA required: "
-                f"expected={expected_factory_candidate_sha.lower()} "
+                f"expected={expected_factory_sha} "
                 f"observed={factory_package_candidate.candidate_sha.lower()}"
+            )
+        if factory_skill_catalog_candidate.candidate_sha.lower() != expected_factory_sha:
+            blockers.append(
+                "exact Factory Skill catalog candidate SHA required: "
+                f"expected={expected_factory_sha} "
+                f"observed={factory_skill_catalog_candidate.candidate_sha.lower()}"
             )
 
         observed_package_digest = digest_artifact(factory_package_source)
@@ -165,6 +177,14 @@ class ControlledInstallPlanBuilder:
             blockers.append(
                 "Factory package digest drift: "
                 f"expected={expected_factory_package_digest} observed={observed_package_digest}"
+            )
+
+        observed_skill_catalog_digest = digest_artifact(skill_catalog_source)
+        if observed_skill_catalog_digest != expected_skill_catalog_digest:
+            blockers.append(
+                "Factory Skill catalog digest drift: "
+                f"expected={expected_skill_catalog_digest} "
+                f"observed={observed_skill_catalog_digest}"
             )
 
         dashboard_plugin_digest = digest_artifact(dashboard_plugin_source)
@@ -211,7 +231,14 @@ class ControlledInstallPlanBuilder:
                 source=str(factory_package_source),
                 source_digest=expected_factory_package_digest,
                 target="HERMES_RUNTIME_ENV",
-            )
+            ),
+            InstallOperation(
+                component=RuntimeComponent.FACTORY_SKILLS,
+                action="STAGE_FACTORY_SKILL_CATALOG",
+                source=str(skill_catalog_source),
+                source_digest=expected_skill_catalog_digest,
+                target=f"HERMES_HOME/factory/skill-catalog/{expected_factory_sha}",
+            ),
         ]
         for profile_id in profile_ids:
             artifact = Path(profile_artifacts[profile_id])
@@ -234,20 +261,12 @@ class ControlledInstallPlanBuilder:
                 )
             )
 
-        operations.extend(
-            [
-                InstallOperation(
-                    component=RuntimeComponent.FACTORY_SKILLS,
-                    action="INSTALL_FACTORY_SKILLS_WITH_PROFILE_DISTRIBUTIONS",
-                    source="canonical factory-* Skill artifacts",
-                    target="PROFILE_SCOPED_SKILLS",
-                ),
-                InstallOperation(
-                    component=RuntimeComponent.KANBAN_HIGH_ASSURANCE_POLICY,
-                    action="APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY",
-                    target="HERMES_KANBAN",
-                ),
-            ]
+        operations.append(
+            InstallOperation(
+                component=RuntimeComponent.KANBAN_HIGH_ASSURANCE_POLICY,
+                action="APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY",
+                target="HERMES_KANBAN",
+            )
         )
 
         if cron_plan.commands:
