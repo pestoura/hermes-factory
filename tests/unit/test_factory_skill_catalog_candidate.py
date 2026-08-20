@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from hermes_factory.runtime.skill_catalog_candidate import (
     SkillCatalogCandidateError,
     build_skill_catalog_candidate,
