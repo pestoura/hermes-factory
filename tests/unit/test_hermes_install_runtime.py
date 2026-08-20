@@ -35,9 +35,9 @@ def test_runtime_preflight_rejects_unsupported_operation_before_any_command(tmp_
     runner = FakeRunner([result_type(0, "", "")])
     runtime = runtime_type(command_runner=runner)
     unsupported = InstallOperation(
-        component=RuntimeComponent.KANBAN_HIGH_ASSURANCE_POLICY,
-        action="APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY",
-        target="HERMES_KANBAN",
+        component=RuntimeComponent.FACTORY_SKILLS,
+        action="INSTALL_FACTORY_SKILLS_WITH_PROFILE_DISTRIBUTIONS",
+        target="PROFILE_SCOPED_SKILLS",
     )
 
     with pytest.raises(RuntimeError, match="unsupported install operation"):
