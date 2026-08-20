@@ -39,8 +39,7 @@ def test_runtime_verifies_gateway_hitl_binding_in_target_python() -> None:
         (
             "/runtime/python",
             "-c",
-            "from hermes_factory.adapters.hermes_gateway import "
-            "HermesGatewayHITLBinding; assert callable(HermesGatewayHITLBinding)",
+            "from hermes_factory.adapters.hermes_gateway import HermesGatewayHITLBinding; assert callable(HermesGatewayHITLBinding)",
         )
     ]
     assert receipt == '{"kind":"GATEWAY_HITL_BINDING_VERIFIED"}'
