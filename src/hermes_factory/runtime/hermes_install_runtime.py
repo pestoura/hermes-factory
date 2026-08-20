@@ -44,12 +44,18 @@ _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _JOB_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _CREATED_JOB = re.compile(r"^Created job:\s*(\S+)\s*$", re.MULTILINE)
 _FACTORY_DISTRIBUTION = "hermes-factory"
+_GATEWAY_BINDING_MODULE = "hermes_factory.adapters.hermes_gateway"
+_GATEWAY_BINDING_PROBE = (
+    "from hermes_factory.adapters.hermes_gateway import "
+    "HermesGatewayHITLBinding; assert callable(HermesGatewayHITLBinding)"
+)
 _SUPPORTED_ACTIONS = {
     "STAGE_FACTORY_PACKAGE",
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
+    "VERIFY_GATEWAY_HITL_BINDING",
 }
 
 
@@ -174,6 +180,19 @@ class HermesJarvasInstallRuntime:
             raise RuntimeError("Dashboard plugin target already exists")
         return source, target, plugins_root
 
+    @staticmethod
+    def _validate_gateway_binding(operation: InstallOperation) -> None:
+        if operation.component is not RuntimeComponent.GATEWAY_HITL_ADAPTER:
+            raise RuntimeError("Gateway HITL binding operation has wrong component")
+        if operation.source != _GATEWAY_BINDING_MODULE:
+            raise RuntimeError("Gateway HITL binding source is invalid")
+        if operation.target != "HERMES_GATEWAY":
+            raise RuntimeError("Gateway HITL binding target is invalid")
+        if operation.argv:
+            raise RuntimeError("Gateway HITL binding verification must not contain argv")
+        if operation.source_digest is not None:
+            raise RuntimeError("Gateway HITL binding inherits Factory package identity")
+
     def _validate_operation(
         self,
         operation: InstallOperation,
@@ -205,6 +224,9 @@ class HermesJarvasInstallRuntime:
                 operation,
                 target_must_be_absent=not allow_dashboard_target_exists,
             )
+            return
+        if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
+            self._validate_gateway_binding(operation)
             return
         if operation.component is not RuntimeComponent.NATIVE_PROFILE_CRON:
             raise RuntimeError("empty cron plan operation has wrong component")
@@ -313,6 +335,13 @@ class HermesJarvasInstallRuntime:
         if operation.action == "REGISTER_DASHBOARD_PLUGIN":
             return self._apply_dashboard(operation)
 
+        if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
+            self._run_checked(
+                (self._python_executable, "-c", _GATEWAY_BINDING_PROBE),
+                "Gateway HITL binding verification",
+            )
+            return _receipt({"kind": "GATEWAY_HITL_BINDING_VERIFIED"})
+
         return _receipt({"kind": "EMPTY_CRON_PLAN"})
 
     def rollback(self, operation: InstallOperation, receipt: str) -> None:
@@ -385,6 +414,11 @@ class HermesJarvasInstallRuntime:
             if plugins_root_created == "true":
                 with suppress(OSError):
                     plugins_root.rmdir()
+            return
+
+        if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
+            if payload != {"kind": "GATEWAY_HITL_BINDING_VERIFIED"}:
+                raise RuntimeError("Gateway HITL binding receipt does not match operation")
             return
 
         if payload != {"kind": "EMPTY_CRON_PLAN"}:
