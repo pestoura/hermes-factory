@@ -68,15 +68,15 @@ components:
     runtime_adapter_status: SUPPORTED
 
   GATEWAY_HITL_ADAPTER:
-    mechanism: native_hermes_gateway_send_clarify_adapter
+    mechanism: verify_native_hermes_gateway_send_clarify_binding
     source: hermes_factory.adapters.hermes_gateway
     target: HERMES_GATEWAY
-    runtime_adapter_status: BLOCKED
-    blocker_code: RUNTIME_BINDING_MISSING
-    blocker: >-
-      The transport-independent Factory adapter exists and targets the native
-      PlatformAdapter send_clarify primitive, but no runtime composition yet
-      binds it to a concrete Hermes Gateway PlatformAdapter instance.
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      Phase P verifies that the digest-bound Factory package exposes
+      HermesGatewayHITLBinding in the target Python runtime. Live injection of
+      a concrete Hermes PlatformAdapter and callback execution remain runtime
+      evidence and are NOT_RUN until controlled runtime verification.
 
   NORTHBOUND_CONTROL_INTEGRATION:
     mechanism: hermes_mcp_bridge_northbound_registration
