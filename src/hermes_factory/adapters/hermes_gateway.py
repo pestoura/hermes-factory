@@ -3,12 +3,30 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 from hermes_factory.workflow import HITLRequest, HITLState, HumanDecision
 
 
 class GatewayHITLProjectionError(ValueError):
     pass
+
+
+class GatewaySendResult(Protocol):
+    success: bool
+    message_id: str | None
+
+
+class GatewayClarifySender(Protocol):
+    async def send_clarify(
+        self,
+        chat_id: str,
+        question: str,
+        choices: list[str],
+        clarify_id: str,
+        session_key: str,
+        metadata: dict[str, object] | None = None,
+    ) -> GatewaySendResult: ...
 
 
 @dataclass(frozen=True)
@@ -41,6 +59,58 @@ class GatewayHITLProjection:
             "clarify_id": self.clarify_id,
             "session_key": self.session_key,
         }
+
+
+@dataclass(frozen=True)
+class GatewayHITLDelivery:
+    platform: str
+    chat_id: str
+    clarify_id: str
+    message_id: str
+
+
+class HermesGatewayHITLBinding:
+    """Bind Factory HITL projections to Hermes' native PlatformAdapter surface."""
+
+    def __init__(
+        self,
+        *,
+        platform_name: str,
+        platform_adapter: GatewayClarifySender,
+    ) -> None:
+        normalized = platform_name.strip().lower()
+        if not normalized:
+            raise ValueError("Hermes Gateway platform name is required")
+        self._platform_name = normalized
+        self._platform_adapter = platform_adapter
+
+    async def deliver(self, projection: GatewayHITLProjection) -> GatewayHITLDelivery:
+        if projection.platform != self._platform_name:
+            raise GatewayHITLProjectionError(
+                "HITL projection platform does not match Hermes Gateway binding"
+            )
+
+        result = await self._platform_adapter.send_clarify(
+            chat_id=projection.chat_id,
+            question=projection.question,
+            choices=list(projection.choices),
+            clarify_id=projection.clarify_id,
+            session_key=projection.session_key,
+            metadata=None,
+        )
+        if not result.success:
+            raise GatewayHITLProjectionError("Hermes Gateway send_clarify failed")
+        if result.message_id is None or not str(result.message_id).strip():
+            raise GatewayHITLProjectionError(
+                "Hermes Gateway send_clarify returned no message identity"
+            )
+
+        return GatewayHITLDelivery(
+            platform=projection.platform,
+            chat_id=projection.chat_id,
+            clarify_id=projection.clarify_id,
+            message_id=str(result.message_id),
+        )
 
 
 class HermesGatewayHITLAdapter:
