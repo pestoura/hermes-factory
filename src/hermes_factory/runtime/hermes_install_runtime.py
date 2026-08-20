@@ -10,8 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.admission import RuntimeComponent
 from hermes_factory.runtime.install import InstallOperation
+from hermes_factory.runtime.skill_catalog_candidate import (
+    SkillCatalogCandidateError,
+    load_skill_catalog_candidate,
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,9 @@ class SubprocessCommandRunner:
 _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _JOB_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _CREATED_JOB = re.compile(r"^Created job:\s*(\S+)\s*$", re.MULTILINE)
+_SKILL_CATALOG_TARGET = re.compile(
+    r"^HERMES_HOME/factory/skill-catalog/([0-9a-fA-F]{40})$"
+)
 _FACTORY_DISTRIBUTION = "hermes-factory"
 _GATEWAY_BINDING_MODULE = "hermes_factory.adapters.hermes_gateway"
 _GATEWAY_BINDING_PROBE = (
@@ -52,6 +60,7 @@ _GATEWAY_BINDING_PROBE = (
 _KANBAN_AUTO_DECOMPOSE_KEY = "kanban.auto_decompose"
 _SUPPORTED_ACTIONS = {
     "STAGE_FACTORY_PACKAGE",
+    "STAGE_FACTORY_SKILL_CATALOG",
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
@@ -112,6 +121,55 @@ class HermesJarvasInstallRuntime:
         if operation.source_digest is None or not operation.source_digest.startswith("sha256:"):
             raise RuntimeError("Factory package source digest is required")
         return source
+
+    def _skill_catalog_paths(
+        self,
+        operation: InstallOperation,
+        *,
+        target_must_be_absent: bool,
+    ) -> tuple[Path, Path, Path, Path, str]:
+        if operation.component is not RuntimeComponent.FACTORY_SKILLS:
+            raise RuntimeError("Factory Skill catalog operation has wrong component")
+        if operation.argv:
+            raise RuntimeError("Factory Skill catalog operation must not contain argv")
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Factory Skill catalog staging")
+        if self._hermes_home.is_symlink() or not self._hermes_home.is_dir():
+            raise RuntimeError("Hermes home must be an existing regular directory")
+        if operation.source is None or not operation.source.strip():
+            raise RuntimeError("Factory Skill catalog source is required")
+        if operation.source_digest is None or not operation.source_digest.startswith("sha256:"):
+            raise RuntimeError("Factory Skill catalog source digest is required")
+        match = _SKILL_CATALOG_TARGET.fullmatch(operation.target or "")
+        if match is None:
+            raise RuntimeError("Factory Skill catalog target is invalid")
+        candidate_sha = match.group(1).lower()
+        source = Path(operation.source)
+        try:
+            candidate = load_skill_catalog_candidate(
+                candidate_root=source,
+                expected_candidate_sha=candidate_sha,
+            )
+        except SkillCatalogCandidateError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if candidate.artifact_digest != operation.source_digest:
+            raise RuntimeError(
+                "Factory Skill catalog source digest mismatch: "
+                f"expected {operation.source_digest}, observed {candidate.artifact_digest}"
+            )
+
+        factory_root = self._hermes_home / "factory"
+        catalog_root = factory_root / "skill-catalog"
+        for path, label in (
+            (factory_root, "Factory private root"),
+            (catalog_root, "Factory Skill catalog root"),
+        ):
+            if path.exists() and (path.is_symlink() or not path.is_dir()):
+                raise RuntimeError(f"{label} must be a regular directory")
+        target = catalog_root / candidate_sha
+        if target_must_be_absent and (target.exists() or target.is_symlink()):
+            raise RuntimeError("Factory Skill catalog target already exists")
+        return source, target, factory_root, catalog_root, candidate_sha
 
     @staticmethod
     def _profile_id(operation: InstallOperation) -> str:
@@ -211,6 +269,7 @@ class HermesJarvasInstallRuntime:
         operation: InstallOperation,
         *,
         allow_dashboard_target_exists: bool = False,
+        allow_skill_catalog_target_exists: bool = False,
     ) -> None:
         if operation.action not in _SUPPORTED_ACTIONS:
             raise RuntimeError(
@@ -219,6 +278,12 @@ class HermesJarvasInstallRuntime:
             )
         if operation.action == "STAGE_FACTORY_PACKAGE":
             self._factory_package_source(operation)
+            return
+        if operation.action == "STAGE_FACTORY_SKILL_CATALOG":
+            self._skill_catalog_paths(
+                operation,
+                target_must_be_absent=not allow_skill_catalog_target_exists,
+            )
             return
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             if operation.component is not RuntimeComponent.PROFILE_DISTRIBUTIONS:
@@ -323,6 +388,45 @@ class HermesJarvasInstallRuntime:
             }
         )
 
+    def _apply_skill_catalog(self, operation: InstallOperation) -> str:
+        source, target, factory_root, catalog_root, candidate_sha = self._skill_catalog_paths(
+            operation,
+            target_must_be_absent=True,
+        )
+        factory_root_created = not factory_root.exists()
+        catalog_root_created = not catalog_root.exists()
+        try:
+            if factory_root_created:
+                factory_root.mkdir(parents=False)
+            if catalog_root_created:
+                catalog_root.mkdir(parents=False)
+            shutil.copytree(source, target)
+            observed_digest = digest_artifact(target)
+            if observed_digest != operation.source_digest:
+                raise RuntimeError(
+                    "Factory Skill catalog staged digest mismatch: "
+                    f"expected {operation.source_digest}, observed {observed_digest}"
+                )
+        except Exception:
+            if target.exists() and not target.is_symlink():
+                shutil.rmtree(target)
+            if catalog_root_created:
+                with suppress(OSError):
+                    catalog_root.rmdir()
+            if factory_root_created:
+                with suppress(OSError):
+                    factory_root.rmdir()
+            raise
+        return _receipt(
+            {
+                "candidate_sha": candidate_sha,
+                "catalog_root_created": "true" if catalog_root_created else "false",
+                "factory_root_created": "true" if factory_root_created else "false",
+                "kind": "FACTORY_SKILL_CATALOG_STAGE",
+                "target": str(target),
+            }
+        )
+
     def _apply_dashboard(self, operation: InstallOperation) -> str:
         source, target, plugins_root = self._dashboard_paths(
             operation,
@@ -381,6 +485,8 @@ class HermesJarvasInstallRuntime:
         self._validate_operation(operation)
         if operation.action == "STAGE_FACTORY_PACKAGE":
             return self._apply_factory_package(operation)
+        if operation.action == "STAGE_FACTORY_SKILL_CATALOG":
+            return self._apply_skill_catalog(operation)
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             profile_id = self._profile_id(operation)
             self._run_checked(operation.argv, "native Profile install")
@@ -416,7 +522,11 @@ class HermesJarvasInstallRuntime:
         return _receipt({"kind": "EMPTY_CRON_PLAN"})
 
     def rollback(self, operation: InstallOperation, receipt: str) -> None:
-        self._validate_operation(operation, allow_dashboard_target_exists=True)
+        self._validate_operation(
+            operation,
+            allow_dashboard_target_exists=True,
+            allow_skill_catalog_target_exists=True,
+        )
         payload = _load_receipt(receipt)
 
         if operation.action == "STAGE_FACTORY_PACKAGE":
@@ -438,6 +548,33 @@ class HermesJarvasInstallRuntime:
                 ),
                 "Factory package rollback",
             )
+            return
+
+        if operation.action == "STAGE_FACTORY_SKILL_CATALOG":
+            _, target, factory_root, catalog_root, candidate_sha = self._skill_catalog_paths(
+                operation,
+                target_must_be_absent=False,
+            )
+            catalog_root_created = payload.get("catalog_root_created")
+            factory_root_created = payload.get("factory_root_created")
+            if (
+                payload.get("kind") != "FACTORY_SKILL_CATALOG_STAGE"
+                or payload.get("candidate_sha") != candidate_sha
+                or payload.get("target") != str(target)
+                or catalog_root_created not in {"true", "false"}
+                or factory_root_created not in {"true", "false"}
+            ):
+                raise RuntimeError("Factory Skill catalog rollback receipt does not match operation")
+            if target.is_symlink():
+                raise RuntimeError("Factory Skill catalog rollback target became a symlink")
+            if target.exists():
+                shutil.rmtree(target)
+            if catalog_root_created == "true":
+                with suppress(OSError):
+                    catalog_root.rmdir()
+            if factory_root_created == "true":
+                with suppress(OSError):
+                    factory_root.rmdir()
             return
 
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
