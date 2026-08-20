@@ -287,7 +287,7 @@ class HermesJarvasInstallRuntime:
                 "kanban.auto_decompose resolved value is not valid JSON"
             ) from exc
         if not isinstance(value, bool):
-            raise RuntimeError("kanban.auto_decompose resolved value must be boolean")
+            raise TypeError("kanban.auto_decompose resolved value must be boolean")
         return value
 
     def _apply_factory_package(self, operation: InstallOperation) -> str:
