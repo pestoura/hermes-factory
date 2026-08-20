@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from hermes_factory.runtime.admission import RuntimeComponent
 from hermes_factory.runtime.hermes_install_runtime import (
     CommandResult,
@@ -99,9 +101,5 @@ def test_kanban_policy_rejects_non_boolean_resolved_value() -> None:
     runner = FakeRunner([CommandResult(0, '"false"\n', "")])
     runtime = HermesJarvasInstallRuntime(command_runner=runner)
 
-    try:
+    with pytest.raises(TypeError, match="boolean"):
         runtime.apply(_operation())
-    except RuntimeError as exc:
-        assert "boolean" in str(exc)
-    else:
-        raise AssertionError("non-boolean kanban.auto_decompose value must fail closed")
