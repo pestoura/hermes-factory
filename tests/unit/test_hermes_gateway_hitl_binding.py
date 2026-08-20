@@ -1,11 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from hermes_factory.adapters.hermes_gateway import (
-    GatewayHITLProjectionError,
-    HermesGatewayHITLAdapter,
-    HermesGatewayHITLBinding,
-)
+import hermes_factory.adapters.hermes_gateway as gateway
 from hermes_factory.workflow import HITLRequest, HITLState
 
 
@@ -43,6 +39,12 @@ class _FakePlatformAdapter:
         return self.result
 
 
+def _binding_type():
+    binding_type = getattr(gateway, "HermesGatewayHITLBinding", None)
+    assert binding_type is not None, "HermesGatewayHITLBinding is not implemented"
+    return binding_type
+
+
 def _projection():
     request = HITLRequest(
         request_id="HITL-42",
@@ -52,7 +54,7 @@ def _projection():
         allowed_responder="telegram:1001",
         state=HITLState.PENDING,
     )
-    adapter = HermesGatewayHITLAdapter(redact_text=lambda value: value)
+    adapter = gateway.HermesGatewayHITLAdapter(redact_text=lambda value: value)
     return adapter.project_clarify(
         request,
         chat_id="1001",
@@ -64,7 +66,7 @@ def _projection():
 
 def test_gateway_binding_delivers_projection_through_native_send_clarify() -> None:
     platform = _FakePlatformAdapter(_SendResult(success=True, message_id="msg-77"))
-    binding = HermesGatewayHITLBinding(
+    binding = _binding_type()(
         platform_name="telegram",
         platform_adapter=platform,
     )
@@ -90,14 +92,14 @@ def test_gateway_binding_delivers_projection_through_native_send_clarify() -> No
 
 def test_gateway_binding_rejects_projection_for_another_platform_before_send() -> None:
     platform = _FakePlatformAdapter(_SendResult(success=True, message_id="msg-77"))
-    binding = HermesGatewayHITLBinding(
+    binding = _binding_type()(
         platform_name="discord",
         platform_adapter=platform,
     )
 
     try:
         asyncio.run(binding.deliver(_projection()))
-    except GatewayHITLProjectionError as error:
+    except gateway.GatewayHITLProjectionError as error:
         assert "platform" in str(error).lower()
     else:
         raise AssertionError("cross-platform HITL projection must fail closed")
@@ -109,14 +111,14 @@ def test_gateway_binding_fails_closed_when_native_delivery_fails() -> None:
     platform = _FakePlatformAdapter(
         _SendResult(success=False, error="transport detail must not leak")
     )
-    binding = HermesGatewayHITLBinding(
+    binding = _binding_type()(
         platform_name="telegram",
         platform_adapter=platform,
     )
 
     try:
         asyncio.run(binding.deliver(_projection()))
-    except GatewayHITLProjectionError as error:
+    except gateway.GatewayHITLProjectionError as error:
         assert str(error) == "Hermes Gateway send_clarify failed"
         assert "transport detail" not in str(error)
     else:
