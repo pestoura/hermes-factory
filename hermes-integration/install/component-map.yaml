@@ -48,12 +48,15 @@ components:
     mechanism: native_hermes_kanban_policy
     source: hermes_factory_kanban_adapter_and_policy
     target: HERMES_KANBAN
-    runtime_adapter_status: BLOCKED
-    blocker_code: UPSTREAM_CAPABILITY_GAP
-    blocker: >-
-      Current upstream Hermes exposes kanban.auto_decompose but no verified
-      native equivalent of the Factory policy key
-      kanban.dispatch_approval_mode=structured.
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      The install runtime enforces the verified native
+      kanban.auto_decompose=false setting with read-back verification and
+      compensation. Structured dispatch approval is enforced by the Factory
+      adapter using native blocked task creation, a Factory authorization audit
+      record, and native task unblock only after authorization; no unverified
+      kanban.dispatch_approval_mode key is written. Live application remains
+      NOT_RUN until controlled runtime verification.
 
   NATIVE_PROFILE_CRON:
     mechanism: hermes -p PROFILE cron create
