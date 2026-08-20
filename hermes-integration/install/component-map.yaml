@@ -6,6 +6,7 @@ requires:
   exact_hermes_sha: true
   exact_factory_candidate_sha: true
   verified_factory_package_candidate_v2: true
+  verified_factory_skill_catalog_candidate_v1: true
   all_profile_evals_pass: true
   all_skill_evals_pass: true
   all_component_evidence_pass: true
@@ -18,6 +19,8 @@ prohibitions:
   - internal_mcp_ipc
   - implicit_execution
   - mutable_factory_package_source
+  - mutable_factory_skill_source
+  - worker_skill_self_expansion
 
 components:
   FACTORY_PACKAGE:
@@ -33,16 +36,23 @@ components:
     runtime_adapter_status: SUPPORTED
 
   FACTORY_SKILLS:
-    mechanism: profile_scoped_native_skill_directories
-    source: canonical_factory_skill_artifacts
-    target: PROFILE_SCOPED_SKILLS
-    runtime_adapter_status: BLOCKED
-    blocker_code: STRUCTURAL_DECISION_REQUIRED
-    blocker: >-
-      Required Skills already travel inside evaluated Profile Distributions, but
-      task-optional Skills require an explicit approved projection mechanism.
-      Installing every optional Skill into the base Profile would widen worker
-      capability before task-level authorization.
+    mechanism: exact_head_private_catalog_plus_task_scoped_native_projection
+    source: verified_exact_head_factory_skill_catalog_candidate
+    target: HERMES_HOME/factory/skill-catalog/EXACT_SHA_and_task_worktree/.hermes/skills
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      The complete Factory Skill catalog is staged under a private, digest-bound
+      exact-head Factory runtime path and is not installed into Hermes global
+      Skill discovery. Required Skills remain Profile-owned. Task-approved
+      optional Skills are re-authorized from the canonical Skill Registry,
+      digest-verified, projected only into the native task worktree
+      .hermes/skills directory, and the exact worktree is trusted with native
+      Hermes trust/read-back verification before Factory dispatch authorization
+      may write its audit record or call native task unblock. Factory Profiles
+      prohibit the Hermes skills toolset when worker_self_expansion is forbidden,
+      while the hermes-factory pre_tool_call hook blocks Skill discovery and
+      non-task-pinned skill_view requests. Live installation and behavioral
+      verification remain NOT_RUN.
 
   KANBAN_HIGH_ASSURANCE_POLICY:
     mechanism: native_hermes_kanban_policy
