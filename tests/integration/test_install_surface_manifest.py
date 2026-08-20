@@ -17,6 +17,7 @@ def test_install_surface_declares_all_phase_p_components_and_never_executes_by_d
     assert payload["requires"]["exact_hermes_sha"] is True
     assert payload["requires"]["exact_factory_candidate_sha"] is True
     assert payload["requires"]["verified_factory_package_candidate_v2"] is True
+    assert payload["requires"]["verified_factory_skill_catalog_candidate_v1"] is True
     assert payload["requires"]["all_profile_evals_pass"] is True
     assert payload["requires"]["all_skill_evals_pass"] is True
     assert payload["requires"]["all_component_evidence_pass"] is True
@@ -28,6 +29,8 @@ def test_install_surface_declares_all_phase_p_components_and_never_executes_by_d
         "internal_mcp_ipc",
         "implicit_execution",
         "mutable_factory_package_source",
+        "mutable_factory_skill_source",
+        "worker_skill_self_expansion",
     ]
 
     components = payload["components"]
@@ -37,7 +40,13 @@ def test_install_surface_declares_all_phase_p_components_and_never_executes_by_d
         "verified_exact_head_factory_package_candidate"
     )
     assert components["PROFILE_DISTRIBUTIONS"]["mechanism"] == "hermes profile install"
-    assert components["FACTORY_SKILLS"]["mechanism"] == "profile_scoped_native_skill_directories"
+    assert components["FACTORY_SKILLS"]["mechanism"] == (
+        "exact_head_private_catalog_plus_task_scoped_native_projection"
+    )
+    assert components["FACTORY_SKILLS"]["source"] == (
+        "verified_exact_head_factory_skill_catalog_candidate"
+    )
+    assert components["FACTORY_SKILLS"]["runtime_adapter_status"] == "SUPPORTED"
     assert components["NATIVE_PROFILE_CRON"]["mechanism"] == "hermes -p PROFILE cron create"
     assert components["DASHBOARD_PLUGIN"]["source"] == (
         "hermes-integration/dashboard-plugin/hermes-factory"
