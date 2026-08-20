@@ -109,3 +109,15 @@ def test_runtime_policy_rejects_internal_mcp_and_toolset_policy_contradictions()
             {"model_class": "reasoning-high", "tool_policy_class": "control-read"},
             policies,
         )
+
+
+def test_runtime_policy_rejects_skills_toolset_when_worker_self_expansion_is_forbidden() -> None:
+    error_type, project = _projection_contract()
+    policies = _policies()
+    policies["skill_authorization"] = {"worker_self_expansion": "forbidden"}
+
+    with pytest.raises(error_type, match="worker self-expansion"):
+        project(
+            {"model_class": "reasoning-high", "tool_policy_class": "review"},
+            policies,
+        )
