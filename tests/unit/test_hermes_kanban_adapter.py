@@ -6,6 +6,7 @@ from hermes_factory.adapters.hermes_kanban import (
     HermesKanbanAdapter,
     KanbanTaskProjection,
 )
+from hermes_factory.skills.system import SkillAdmissionError, SkillRegistry
 
 
 class FakeNativeKanban:
@@ -62,6 +63,26 @@ def _spec() -> KanbanTaskProjection:
         priority=20,
         workspace_kind="worktree",
         project_id="jarvas-cli",
+    )
+
+
+def _skill_registry() -> SkillRegistry:
+    return SkillRegistry(
+        aliases={"legacy-debug": "factory-debugging-systematically"},
+        registered=frozenset(
+            {
+                "factory-tdd-implementation",
+                "factory-debugging-systematically",
+                "factory-cli-engineering",
+            }
+        ),
+        consumers={
+            "factory-software-engineer": {
+                "required": ("factory-tdd-implementation",),
+                "task_optional": ("factory-debugging-systematically",),
+            }
+        },
+        superseded=frozenset(),
     )
 
 
@@ -225,3 +246,81 @@ def test_high_assurance_verification_rejects_missing_or_compat_dispatch_mode() -
                 }
             }
         )
+
+
+def test_task_skill_authorization_is_recomputed_and_aliases_are_canonicalized() -> None:
+    native = FakeNativeKanban()
+    adapter = HermesKanbanAdapter(
+        native,
+        skill_registry=_skill_registry(),
+        admitted_skill_ids=frozenset(
+            {"factory-tdd-implementation", "factory-debugging-systematically"}
+        ),
+    )
+    spec = _spec()
+
+    task_id = adapter.project_task(
+        KanbanTaskProjection(
+            **{
+                **spec.__dict__,
+                "approved_skills": ("legacy-debug",),
+            }
+        )
+    )
+
+    assert task_id == "t_1"
+    creates = [payload for name, payload in native.calls if name == "create_task"]
+    assert creates[0]["skills"] == (
+        "factory-debugging-systematically",
+        "factory-tdd-implementation",
+    )
+
+
+def test_task_skill_authorization_rejects_registered_but_unauthorized_skill_before_write() -> None:
+    native = FakeNativeKanban()
+    adapter = HermesKanbanAdapter(
+        native,
+        skill_registry=_skill_registry(),
+        admitted_skill_ids=frozenset(
+            {
+                "factory-tdd-implementation",
+                "factory-debugging-systematically",
+                "factory-cli-engineering",
+            }
+        ),
+    )
+    spec = _spec()
+
+    with pytest.raises(SkillAdmissionError, match="not authorized"):
+        adapter.project_task(
+            KanbanTaskProjection(
+                **{
+                    **spec.__dict__,
+                    "approved_skills": ("factory-cli-engineering",),
+                }
+            )
+        )
+
+    assert not any(name == "create_task" for name, _ in native.calls)
+
+
+def test_task_skill_authorization_rejects_unadmitted_required_skill_before_write() -> None:
+    native = FakeNativeKanban()
+    adapter = HermesKanbanAdapter(
+        native,
+        skill_registry=_skill_registry(),
+        admitted_skill_ids=frozenset({"factory-debugging-systematically"}),
+    )
+    spec = _spec()
+
+    with pytest.raises(SkillAdmissionError, match="not admitted"):
+        adapter.project_task(
+            KanbanTaskProjection(
+                **{
+                    **spec.__dict__,
+                    "approved_skills": ("factory-debugging-systematically",),
+                }
+            )
+        )
+
+    assert not any(name == "create_task" for name, _ in native.calls)
