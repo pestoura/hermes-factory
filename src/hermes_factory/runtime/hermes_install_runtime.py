@@ -290,6 +290,14 @@ class HermesJarvasInstallRuntime:
             raise TypeError("kanban.auto_decompose resolved value must be boolean")
         return value
 
+    def _restore_kanban_auto_decompose_true(self, *, label: str) -> None:
+        self._run_checked(
+            ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "true"),
+            label,
+        )
+        if self._read_kanban_auto_decompose() is not True:
+            raise RuntimeError(f"{label} verification failed")
+
     def _apply_factory_package(self, operation: InstallOperation) -> str:
         source = self._factory_package_source(operation)
         # Repeat the read-only absence probe immediately before mutation to
@@ -344,12 +352,23 @@ class HermesJarvasInstallRuntime:
         previous = self._read_kanban_auto_decompose()
         changed = previous
         if changed:
-            self._run_checked(
-                ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "false"),
-                "Kanban high-assurance config apply",
-            )
-            if self._read_kanban_auto_decompose() is not False:
-                raise RuntimeError("Kanban high-assurance config verification failed")
+            try:
+                self._run_checked(
+                    ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "false"),
+                    "Kanban high-assurance config apply",
+                )
+                if self._read_kanban_auto_decompose() is not False:
+                    raise RuntimeError("Kanban high-assurance config verification failed")
+            except (RuntimeError, TypeError):
+                try:
+                    self._restore_kanban_auto_decompose_true(
+                        label="Kanban high-assurance compensation"
+                    )
+                except (RuntimeError, TypeError) as compensation_exc:
+                    raise RuntimeError(
+                        "Kanban high-assurance compensation failed; runtime state is unknown"
+                    ) from compensation_exc
+                raise
         return _receipt(
             {
                 "changed": "true" if changed else "false",
@@ -488,12 +507,9 @@ class HermesJarvasInstallRuntime:
             ):
                 raise RuntimeError("Kanban high-assurance receipt does not match operation")
             if payload["changed"] == "true":
-                self._run_checked(
-                    ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "true"),
-                    "Kanban high-assurance rollback",
+                self._restore_kanban_auto_decompose_true(
+                    label="Kanban high-assurance rollback"
                 )
-                if self._read_kanban_auto_decompose() is not True:
-                    raise RuntimeError("Kanban high-assurance rollback verification failed")
             return
 
         if payload != {"kind": "EMPTY_CRON_PLAN"}:
