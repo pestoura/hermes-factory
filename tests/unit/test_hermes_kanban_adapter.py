@@ -152,14 +152,11 @@ def test_structured_authorization_records_native_audit_then_unblocks_without_dis
     )
 
     comments = [payload for name, payload in native.calls if name == "add_comment"]
-    assert comments == [
-        (
-            "t_1",
-            "factory-orchestrator",
-            '[factory:dispatch-authorization/v1] {"actor":"factory-orchestrator",'
-            '"source":"factory-continuous-handoff","task_id":"t_1"}',
-        )
-    ]
+    expected_body = (
+        '[factory:dispatch-authorization/v1] {"actor":"factory-orchestrator",'
+        '"source":"factory-continuous-handoff","task_id":"t_1"}'
+    )
+    assert comments == [("t_1", "factory-orchestrator", expected_body)]
     unblocks = [payload for name, payload in native.calls if name == "unblock_task"]
     assert unblocks == ["t_1"]
     assert [name for name, _ in native.calls].index("add_comment") < [
