@@ -49,6 +49,7 @@ _GATEWAY_BINDING_PROBE = (
     "from hermes_factory.adapters.hermes_gateway import "
     "HermesGatewayHITLBinding; assert callable(HermesGatewayHITLBinding)"
 )
+_KANBAN_AUTO_DECOMPOSE_KEY = "kanban.auto_decompose"
 _SUPPORTED_ACTIONS = {
     "STAGE_FACTORY_PACKAGE",
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
@@ -56,6 +57,7 @@ _SUPPORTED_ACTIONS = {
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
     "VERIFY_GATEWAY_HITL_BINDING",
+    "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY",
 }
 
 
@@ -193,6 +195,17 @@ class HermesJarvasInstallRuntime:
         if operation.source_digest is not None:
             raise RuntimeError("Gateway HITL binding inherits Factory package identity")
 
+    @staticmethod
+    def _validate_kanban_policy(operation: InstallOperation) -> None:
+        if operation.component is not RuntimeComponent.KANBAN_HIGH_ASSURANCE_POLICY:
+            raise RuntimeError("Kanban high-assurance operation has wrong component")
+        if operation.target != "HERMES_KANBAN":
+            raise RuntimeError("Kanban high-assurance target is invalid")
+        if operation.argv:
+            raise RuntimeError("Kanban high-assurance operation must not contain argv")
+        if operation.source is not None or operation.source_digest is not None:
+            raise RuntimeError("Kanban high-assurance policy has no external source")
+
     def _validate_operation(
         self,
         operation: InstallOperation,
@@ -228,6 +241,9 @@ class HermesJarvasInstallRuntime:
         if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
             self._validate_gateway_binding(operation)
             return
+        if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
+            self._validate_kanban_policy(operation)
+            return
         if operation.component is not RuntimeComponent.NATIVE_PROFILE_CRON:
             raise RuntimeError("empty cron plan operation has wrong component")
         if operation.argv:
@@ -258,6 +274,21 @@ class HermesJarvasInstallRuntime:
         if result.returncode != 0:
             raise RuntimeError(f"{label} failed with exit code {result.returncode}")
         return result
+
+    def _read_kanban_auto_decompose(self) -> bool:
+        result = self._run_checked(
+            ("hermes", "config", "get", _KANBAN_AUTO_DECOMPOSE_KEY, "--json"),
+            "Kanban high-assurance config read",
+        )
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "kanban.auto_decompose resolved value is not valid JSON"
+            ) from exc
+        if not isinstance(value, bool):
+            raise RuntimeError("kanban.auto_decompose resolved value must be boolean")
+        return value
 
     def _apply_factory_package(self, operation: InstallOperation) -> str:
         source = self._factory_package_source(operation)
@@ -309,6 +340,24 @@ class HermesJarvasInstallRuntime:
             }
         )
 
+    def _apply_kanban_policy(self) -> str:
+        previous = self._read_kanban_auto_decompose()
+        changed = previous
+        if changed:
+            self._run_checked(
+                ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "false"),
+                "Kanban high-assurance config apply",
+            )
+            if self._read_kanban_auto_decompose() is not False:
+                raise RuntimeError("Kanban high-assurance config verification failed")
+        return _receipt(
+            {
+                "changed": "true" if changed else "false",
+                "kind": "KANBAN_HIGH_ASSURANCE_POLICY",
+                "previous": "true" if previous else "false",
+            }
+        )
+
     def apply(self, operation: InstallOperation) -> str:
         self._validate_operation(operation)
         if operation.action == "STAGE_FACTORY_PACKAGE":
@@ -341,6 +390,9 @@ class HermesJarvasInstallRuntime:
                 "Gateway HITL binding verification",
             )
             return _receipt({"kind": "GATEWAY_HITL_BINDING_VERIFIED"})
+
+        if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
+            return self._apply_kanban_policy()
 
         return _receipt({"kind": "EMPTY_CRON_PLAN"})
 
@@ -419,6 +471,29 @@ class HermesJarvasInstallRuntime:
         if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
             if payload != {"kind": "GATEWAY_HITL_BINDING_VERIFIED"}:
                 raise RuntimeError("Gateway HITL binding receipt does not match operation")
+            return
+
+        if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
+            if payload not in (
+                {
+                    "changed": "false",
+                    "kind": "KANBAN_HIGH_ASSURANCE_POLICY",
+                    "previous": "false",
+                },
+                {
+                    "changed": "true",
+                    "kind": "KANBAN_HIGH_ASSURANCE_POLICY",
+                    "previous": "true",
+                },
+            ):
+                raise RuntimeError("Kanban high-assurance receipt does not match operation")
+            if payload["changed"] == "true":
+                self._run_checked(
+                    ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "true"),
+                    "Kanban high-assurance rollback",
+                )
+                if self._read_kanban_auto_decompose() is not True:
+                    raise RuntimeError("Kanban high-assurance rollback verification failed")
             return
 
         if payload != {"kind": "EMPTY_CRON_PLAN"}:
