@@ -126,6 +126,7 @@ def _authorized_adapter(
                 }
             )
         ),
+        task_skill_preparer=FakeTaskSkillPreparer(native),
     )
 
 
