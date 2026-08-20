@@ -56,6 +56,52 @@ jobs:
             artifacts/static-profile-evals/behavioral-eval-plan.json
           if-no-files-found: error
 
+  factory-skill-catalog-candidate:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      FACTORY_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FACTORY_CANDIDATE_SHA }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: pip install -e '.[dev]'
+      - name: Build exact-head Factory Skill catalog candidate
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          import yaml
+
+          from hermes_factory.runtime.skill_catalog_candidate import (
+              build_skill_catalog_candidate,
+          )
+
+          registry = yaml.safe_load(
+              Path("skills/registry.yaml").read_text(encoding="utf-8")
+          )
+          if not isinstance(registry, dict):
+              raise SystemExit("skills/registry.yaml must contain a mapping")
+
+          build_skill_catalog_candidate(
+              source_root=Path("skills"),
+              registry_document=registry,
+              candidate_sha=os.environ["FACTORY_CANDIDATE_SHA"],
+              output_root=Path("artifacts/factory-skill-catalog"),
+          )
+          PY
+      - name: Upload exact-head Factory Skill catalog candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-skill-catalog-candidate-${{ env.FACTORY_CANDIDATE_SHA }}
+          path: artifacts/factory-skill-catalog
+          if-no-files-found: error
+
   factory-package-candidate:
     needs: test
     runs-on: ubuntu-latest
