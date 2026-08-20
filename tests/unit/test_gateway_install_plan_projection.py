@@ -1,14 +1,16 @@
 from pathlib import Path
 
 from hermes_factory.governance.candidate_identity import digest_artifact
-from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
+from hermes_factory.runtime.admission import (
+    AdmissionEvidenceState,
+    RuntimeComponent,
+)
 from hermes_factory.runtime.cron_projection import NativeCronPlanBuilder
 from hermes_factory.runtime.install import ControlledInstallPlanBuilder
 from hermes_factory.runtime.package_candidate import (
     build_package_candidate_manifest,
     load_package_candidate,
 )
-
 
 _FACTORY_SHA = "f" * 40
 
