@@ -54,6 +54,17 @@ class FakeNativeKanban:
         raise AssertionError("Factory adapter must not own Hermes dispatch")
 
 
+class FakeTaskSkillPreparer:
+    def __init__(self, native: FakeNativeKanban, *, fail: bool = False) -> None:
+        self._native = native
+        self._fail = fail
+
+    def prepare(self, *, board: str, task_id: str) -> None:
+        self._native.calls.append(("prepare_task_skills", (board, task_id)))
+        if self._fail:
+            raise RuntimeError("task Skill preparation failed")
+
+
 def _spec() -> KanbanTaskProjection:
     return KanbanTaskProjection(
         project_key="jarvas-cli",
@@ -162,6 +173,67 @@ def test_structured_authorization_records_native_audit_then_unblocks_without_dis
     assert [name for name, _ in native.calls].index("add_comment") < [
         name for name, _ in native.calls
     ].index("unblock_task")
+
+
+def test_dispatch_authorization_prepares_task_skills_before_audit_or_unblock() -> None:
+    native = FakeNativeKanban()
+    preparer = FakeTaskSkillPreparer(native)
+    adapter = HermesKanbanAdapter(
+        native,
+        skill_registry=_skill_registry(),
+        admitted_skill_ids=frozenset(
+            {
+                "factory-tdd-implementation",
+                "factory-debugging-systematically",
+                "factory-cli-engineering",
+            }
+        ),
+        task_skill_preparer=preparer,
+    )
+
+    task_id = adapter.project_task(_spec())
+    adapter.authorize_dispatch(
+        board="jarvas-cli",
+        task_id=task_id,
+        actor="factory-orchestrator",
+        source="factory-continuous-handoff",
+    )
+
+    names = [name for name, _ in native.calls]
+    assert names.index("prepare_task_skills") < names.index("add_comment")
+    assert names.index("prepare_task_skills") < names.index("unblock_task")
+    assert [payload for name, payload in native.calls if name == "prepare_task_skills"] == [
+        ("jarvas-cli", "t_1")
+    ]
+
+
+def test_dispatch_authorization_preparer_failure_leaves_task_blocked_without_audit() -> None:
+    native = FakeNativeKanban()
+    preparer = FakeTaskSkillPreparer(native, fail=True)
+    adapter = HermesKanbanAdapter(
+        native,
+        skill_registry=_skill_registry(),
+        admitted_skill_ids=frozenset(
+            {
+                "factory-tdd-implementation",
+                "factory-debugging-systematically",
+                "factory-cli-engineering",
+            }
+        ),
+        task_skill_preparer=preparer,
+    )
+    task_id = adapter.project_task(_spec())
+
+    with pytest.raises(RuntimeError, match="task Skill preparation failed"):
+        adapter.authorize_dispatch(
+            board="jarvas-cli",
+            task_id=task_id,
+            actor="factory-orchestrator",
+            source="factory-continuous-handoff",
+        )
+
+    assert not any(name == "add_comment" for name, _ in native.calls)
+    assert not any(name == "unblock_task" for name, _ in native.calls)
 
 
 def test_structured_authorization_fails_closed_when_native_unblock_fails() -> None:
