@@ -280,7 +280,7 @@ class ControlledInstallPlanBuilder:
                 ),
                 InstallOperation(
                     component=RuntimeComponent.GATEWAY_HITL_ADAPTER,
-                    action="REGISTER_GATEWAY_HITL_ADAPTER",
+                    action="VERIFY_GATEWAY_HITL_BINDING",
                     source=gateway_adapter_module,
                     target="HERMES_GATEWAY",
                 ),
