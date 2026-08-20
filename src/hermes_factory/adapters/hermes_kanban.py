@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -15,14 +16,15 @@ class NativeKanban(Protocol):
 
     def create_task(self, conn: object, **kwargs: object) -> str: ...
 
-    def approve_dispatch(
+    def add_comment(
         self,
         conn: object,
         task_id: str,
-        *,
-        actor: str,
-        source: str,
-    ) -> object: ...
+        author: str,
+        body: str,
+    ) -> int: ...
+
+    def unblock_task(self, conn: object, task_id: str) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,12 @@ class HermesKanbanAdapter:
     admitted Skill identities are supplied. ``approved_skills`` on the task
     projection is treated as an untrusted task request; effective Skills are
     always recomputed from the canonical consumer policy before native write.
+
+    Factory tasks are projected into Hermes as ``blocked``. Structured dispatch
+    authorization is mirrored into the native task audit trail before the
+    adapter calls Hermes' native ``unblock_task`` primitive. This avoids a
+    fabricated dispatch-approval API while ensuring an unauthorized task is
+    never born dispatchable.
     """
 
     def __init__(
@@ -92,32 +100,22 @@ class HermesKanbanAdapter:
 
     @staticmethod
     def high_assurance_config_patch() -> dict[str, dict[str, object]]:
-        """Return the minimal native Hermes config required by Factory boards.
+        """Return the verified native Hermes config required by Factory boards.
 
-        This is a projection, not a live mutation. Phase P applies the patch
-        through Hermes' supported configuration surface and then calls
-        :meth:`assert_high_assurance_config` against the resolved config.
+        Dispatch authorization is enforced by blocked task creation plus the
+        native unblock lifecycle, not by an unverified configuration key.
         """
-        return {
-            "kanban": {
-                "auto_decompose": False,
-                "dispatch_approval_mode": "structured",
-            }
-        }
+        return {"kanban": {"auto_decompose": False}}
 
     @staticmethod
     def assert_high_assurance_config(config: Mapping[str, object]) -> None:
-        """Fail closed unless the resolved Hermes config enforces Factory policy."""
+        """Fail closed unless resolved native Hermes config disables decomposition."""
         kanban = config.get("kanban")
         if not isinstance(kanban, Mapping):
             raise TypeError("kanban config is required for high-assurance mode")
         if kanban.get("auto_decompose") is not False:
             raise ValueError(
                 "kanban.auto_decompose must be false for Factory high-assurance boards"
-            )
-        if kanban.get("dispatch_approval_mode") != "structured":
-            raise ValueError(
-                "kanban.dispatch_approval_mode must be structured for Factory high-assurance boards"
             )
 
     def ensure_board(
@@ -166,6 +164,7 @@ class HermesKanbanAdapter:
                 parents=spec.parent_task_ids,
                 idempotency_key=spec.idempotency_key,
                 skills=effective_skills,
+                initial_status="blocked",
                 board=spec.board,
                 project_id=spec.project_id,
             )
@@ -186,10 +185,16 @@ class HermesKanbanAdapter:
         }.items():
             if not value.strip():
                 raise ValueError(f"{name} is required")
+
+        payload = json.dumps(
+            {"actor": actor, "source": source, "task_id": task_id},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        body = f"[factory:dispatch-authorization/v1] {payload}"
         with self._native.connect_closing(board=board) as conn:
-            self._native.approve_dispatch(
-                conn,
-                task_id,
-                actor=actor,
-                source=source,
-            )
+            self._native.add_comment(conn, task_id, actor, body)
+            if not self._native.unblock_task(conn, task_id):
+                raise RuntimeError(
+                    f"native Hermes task {task_id} could not release for dispatch"
+                )
