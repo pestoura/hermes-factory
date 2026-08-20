@@ -56,6 +56,17 @@ def project_native_profile_config(
             f"tool policy {tool_policy_class} contains duplicate Hermes toolsets"
         )
 
+    skill_authorization = runtime_policies.get("skill_authorization")
+    if isinstance(skill_authorization, dict):
+        if (
+            skill_authorization.get("worker_self_expansion") == "forbidden"
+            and "skills" in toolsets
+        ):
+            raise RuntimePolicyProjectionError(
+                f"tool policy {tool_policy_class} enables worker self-expansion "
+                "through the Hermes skills toolset"
+            )
+
     mcp = tool_policy.get("mcp")
     if mcp != []:
         raise RuntimePolicyProjectionError(
