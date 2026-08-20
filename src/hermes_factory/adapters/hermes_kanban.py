@@ -27,6 +27,12 @@ class NativeKanban(Protocol):
     def unblock_task(self, conn: object, task_id: str) -> bool: ...
 
 
+class TaskSkillPreparer(Protocol):
+    """Prepare task-scoped Factory Skills before native dispatch release."""
+
+    def prepare(self, *, board: str, task_id: str) -> None: ...
+
+
 @dataclass(frozen=True)
 class KanbanTaskProjection:
     project_key: str
@@ -76,11 +82,11 @@ class HermesKanbanAdapter:
     projection is treated as an untrusted task request; effective Skills are
     always recomputed from the canonical consumer policy before native write.
 
-    Factory tasks are projected into Hermes as ``blocked``. Structured dispatch
-    authorization is mirrored into the native task audit trail before the
-    adapter calls Hermes' native ``unblock_task`` primitive. This avoids a
-    fabricated dispatch-approval API while ensuring an unauthorized task is
-    never born dispatchable.
+    Factory tasks are projected into Hermes as ``blocked``. Before structured
+    dispatch authorization is mirrored into the native task audit trail, the
+    configured task Skill preparer must complete. Only then may the adapter call
+    Hermes' native ``unblock_task`` primitive. This ensures task-scoped Skill
+    projection cannot be bypassed through a legacy authorization path.
     """
 
     def __init__(
@@ -89,6 +95,7 @@ class HermesKanbanAdapter:
         *,
         skill_registry: SkillRegistry | None = None,
         admitted_skill_ids: frozenset[str] | None = None,
+        task_skill_preparer: TaskSkillPreparer | None = None,
     ) -> None:
         if (skill_registry is None) != (admitted_skill_ids is None):
             raise ValueError(
@@ -97,6 +104,7 @@ class HermesKanbanAdapter:
         self._native = native
         self._skill_registry = skill_registry
         self._admitted_skill_ids = admitted_skill_ids
+        self._task_skill_preparer = task_skill_preparer
 
     @staticmethod
     def high_assurance_config_patch() -> dict[str, dict[str, object]]:
@@ -185,6 +193,12 @@ class HermesKanbanAdapter:
         }.items():
             if not value.strip():
                 raise ValueError(f"{name} is required")
+
+        if self._task_skill_preparer is None:
+            raise RuntimeError(
+                "task Skill preparation is required before dispatch authorization"
+            )
+        self._task_skill_preparer.prepare(board=board, task_id=task_id)
 
         payload = json.dumps(
             {"actor": actor, "source": source, "task_id": task_id},
