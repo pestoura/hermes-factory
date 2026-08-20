@@ -9,6 +9,7 @@ from hermes_factory.runtime.package_candidate import (
     build_package_candidate_manifest,
     load_package_candidate,
 )
+from hermes_factory.runtime.skill_catalog_candidate import build_skill_catalog_candidate
 
 _FACTORY_SHA = "f" * 40
 
@@ -24,6 +25,37 @@ def _contract():
     return ControlledInstallPlanBuilder, InstallPlanError
 
 
+def _skill_candidate(tmp_path: Path):
+    source = tmp_path / "skills" / "core" / "reading-project-truth"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text(
+        "---\nname: factory-reading-project-truth\ndescription: Test Skill\n---\n# Test\n",
+        encoding="utf-8",
+    )
+    registry = {
+        "schema": "hermes.factory/skills/v1.2",
+        "registry": {
+            "core": ["factory-reading-project-truth"],
+            "control_workforce": [],
+            "product_architecture": [],
+            "documentation": [],
+            "engineering_quality": [],
+            "security_assurance": [],
+            "governance_operations": [],
+            "proposed_v1_2_skills": {},
+            "legacy_source_aliases": {},
+            "superseded_skill_concepts": {},
+            "consumers": {},
+        },
+    }
+    return build_skill_catalog_candidate(
+        source_root=tmp_path / "skills",
+        registry_document=registry,
+        candidate_sha=_FACTORY_SHA,
+        output_root=tmp_path / "skill-candidate",
+    )
+
+
 def _artifacts(tmp_path: Path):
     package = tmp_path / "hermes_factory-0.1.0-py3-none-any.whl"
     package.write_bytes(b"exact candidate package")
@@ -37,7 +69,7 @@ def _artifacts(tmp_path: Path):
     )
     northbound = tmp_path / "factory-northbound.yaml"
     northbound.write_text("component: NORTHBOUND_CONTROL_INTEGRATION\n", encoding="utf-8")
-    return package, profile, dashboard, northbound
+    return package, _skill_candidate(tmp_path), profile, dashboard, northbound
 
 
 def _package_candidate(package: Path):
@@ -60,7 +92,7 @@ def _passing_components():
 
 def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evidence(tmp_path: Path):
     builder_type, _ = _contract()
-    package, profile, dashboard, northbound = _artifacts(tmp_path)
+    package, skill_candidate, profile, dashboard, northbound = _artifacts(tmp_path)
     candidate = _package_candidate(package)
     profile_digest = digest_artifact(profile)
     cron_plan = NativeCronPlanBuilder().build({})
@@ -70,6 +102,7 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
         observed_hermes_sha="a" * 40,
         expected_factory_candidate_sha=_FACTORY_SHA,
         factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": profile_digest},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
@@ -108,6 +141,13 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
     )
     assert package_operation.source == str(package)
     assert package_operation.source_digest == candidate.artifact_digest
+    skills_operation = next(
+        operation
+        for operation in plan.operations
+        if operation.component is RuntimeComponent.FACTORY_SKILLS
+    )
+    assert skills_operation.action == "STAGE_FACTORY_SKILL_CATALOG"
+    assert skills_operation.source_digest == skill_candidate.artifact_digest
     dashboard_operation = next(
         operation
         for operation in plan.operations
@@ -119,7 +159,7 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
 
 def test_controlled_install_plan_collects_not_run_blocked_and_sha_mismatch_without_execution(tmp_path: Path):
     builder_type, _ = _contract()
-    package, profile, dashboard, northbound = _artifacts(tmp_path)
+    package, skill_candidate, profile, dashboard, northbound = _artifacts(tmp_path)
     candidate = _package_candidate(package)
     components = _passing_components()
     components[RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION] = AdmissionEvidenceState.BLOCKED
@@ -129,6 +169,7 @@ def test_controlled_install_plan_collects_not_run_blocked_and_sha_mismatch_witho
         observed_hermes_sha="b" * 40,
         expected_factory_candidate_sha=_FACTORY_SHA,
         factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.NOT_RUN},
@@ -151,7 +192,7 @@ def test_controlled_install_plan_collects_not_run_blocked_and_sha_mismatch_witho
 
 def test_controlled_install_plan_detects_profile_artifact_digest_drift(tmp_path: Path):
     builder_type, _ = _contract()
-    package, profile, dashboard, northbound = _artifacts(tmp_path)
+    package, skill_candidate, profile, dashboard, northbound = _artifacts(tmp_path)
     candidate = _package_candidate(package)
     expected = digest_artifact(profile)
     (profile / "SOUL.md").write_text("changed after eval\n", encoding="utf-8")
@@ -161,6 +202,7 @@ def test_controlled_install_plan_detects_profile_artifact_digest_drift(tmp_path:
         observed_hermes_sha="a" * 40,
         expected_factory_candidate_sha=_FACTORY_SHA,
         factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": expected},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
@@ -178,7 +220,7 @@ def test_controlled_install_plan_detects_profile_artifact_digest_drift(tmp_path:
 
 def test_controlled_install_plan_rejects_missing_install_surfaces_and_secret_like_paths(tmp_path: Path):
     builder_type, error_type = _contract()
-    package, profile, _, northbound = _artifacts(tmp_path)
+    package, skill_candidate, profile, _, northbound = _artifacts(tmp_path)
     candidate = _package_candidate(package)
     unsafe_dashboard = tmp_path / ".env" / "hermes-factory"
     unsafe_dashboard.mkdir(parents=True)
@@ -189,6 +231,7 @@ def test_controlled_install_plan_rejects_missing_install_surfaces_and_secret_lik
             observed_hermes_sha="a" * 40,
             expected_factory_candidate_sha=_FACTORY_SHA,
             factory_package_candidate=candidate,
+            factory_skill_catalog_candidate=skill_candidate,
             profile_artifacts={"factory-orchestrator": profile},
             expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
             profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},

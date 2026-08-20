@@ -16,6 +16,7 @@ from hermes_factory.runtime.package_candidate import (
     build_package_candidate_manifest,
     load_package_candidate,
 )
+from hermes_factory.runtime.skill_catalog_candidate import build_skill_catalog_candidate
 from hermes_factory.traceability.registry import SemanticRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,6 +85,12 @@ def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(
         wheel_path=package,
         expected_candidate_sha=_FACTORY_SHA,
     )
+    skill_candidate = build_skill_catalog_candidate(
+        source_root=ROOT / "skills",
+        registry_document=registry_document,
+        candidate_sha=_FACTORY_SHA,
+        output_root=tmp_path / "skill-candidate",
+    )
 
     plan = ControlledInstallPlanBuilder().build(
         # Synthetic matching SHAs intentionally isolate F/G + northbound blockers.
@@ -93,6 +100,7 @@ def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(
         observed_hermes_sha="a" * 40,
         expected_factory_candidate_sha=_FACTORY_SHA,
         factory_package_candidate=package_candidate,
+        factory_skill_catalog_candidate=skill_candidate,
         profile_artifacts=profile_artifacts,
         expected_profile_digests=inventory.profile_digests,
         profile_eval_states=inventory.profile_states,

@@ -8,6 +8,38 @@ from hermes_factory.runtime.package_candidate import (
     build_package_candidate_manifest,
     load_package_candidate,
 )
+from hermes_factory.runtime.skill_catalog_candidate import build_skill_catalog_candidate
+
+
+def _skill_candidate(tmp_path: Path, candidate_sha: str):
+    source = tmp_path / "skills" / "core" / "reading-project-truth"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text(
+        "---\nname: factory-reading-project-truth\ndescription: Test Skill\n---\n# Test\n",
+        encoding="utf-8",
+    )
+    registry = {
+        "schema": "hermes.factory/skills/v1.2",
+        "registry": {
+            "core": ["factory-reading-project-truth"],
+            "control_workforce": [],
+            "product_architecture": [],
+            "documentation": [],
+            "engineering_quality": [],
+            "security_assurance": [],
+            "governance_operations": [],
+            "proposed_v1_2_skills": {},
+            "legacy_source_aliases": {},
+            "superseded_skill_concepts": {},
+            "consumers": {},
+        },
+    }
+    return build_skill_catalog_candidate(
+        source_root=tmp_path / "skills",
+        registry_document=registry,
+        candidate_sha=candidate_sha,
+        output_root=tmp_path / "skill-candidate",
+    )
 
 
 def _inputs(tmp_path: Path, candidate_sha: str):
@@ -42,11 +74,13 @@ def _inputs(tmp_path: Path, candidate_sha: str):
 
 def _build(tmp_path: Path, expected_factory_candidate_sha: str, actual_candidate_sha: str):
     candidate, profile, dashboard, northbound = _inputs(tmp_path, actual_candidate_sha)
+    skill_candidate = _skill_candidate(tmp_path, actual_candidate_sha)
     return ControlledInstallPlanBuilder().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
         expected_factory_candidate_sha=expected_factory_candidate_sha,
         factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},

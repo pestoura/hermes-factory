@@ -8,12 +8,44 @@ from hermes_factory.runtime.package_candidate import (
     build_package_candidate_manifest,
     load_package_candidate,
 )
+from hermes_factory.runtime.skill_catalog_candidate import build_skill_catalog_candidate
 
 _FACTORY_SHA = "f" * 40
 
 
 def _passing_components():
     return {component: AdmissionEvidenceState.PASS for component in RuntimeComponent}
+
+
+def _skill_candidate(tmp_path: Path):
+    source = tmp_path / "skills" / "core" / "reading-project-truth"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text(
+        "---\nname: factory-reading-project-truth\ndescription: Test Skill\n---\n# Test\n",
+        encoding="utf-8",
+    )
+    registry = {
+        "schema": "hermes.factory/skills/v1.2",
+        "registry": {
+            "core": ["factory-reading-project-truth"],
+            "control_workforce": [],
+            "product_architecture": [],
+            "documentation": [],
+            "engineering_quality": [],
+            "security_assurance": [],
+            "governance_operations": [],
+            "proposed_v1_2_skills": {},
+            "legacy_source_aliases": {},
+            "superseded_skill_concepts": {},
+            "consumers": {},
+        },
+    }
+    return build_skill_catalog_candidate(
+        source_root=tmp_path / "skills",
+        registry_document=registry,
+        candidate_sha=_FACTORY_SHA,
+        output_root=tmp_path / "skill-candidate",
+    )
 
 
 def _surfaces(tmp_path: Path):
@@ -49,12 +81,13 @@ def _candidate(package: Path):
     )
 
 
-def _build(package, candidate, profile, dashboard, northbound):
+def _build(package, candidate, skill_candidate, profile, dashboard, northbound):
     return ControlledInstallPlanBuilder().build(
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
         expected_factory_candidate_sha=_FACTORY_SHA,
         factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
         profile_artifacts={"factory-orchestrator": profile},
         expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
         profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
@@ -70,7 +103,8 @@ def _build(package, candidate, profile, dashboard, northbound):
 def test_controlled_install_binds_factory_package_to_exact_artifact_digest(tmp_path: Path):
     package, profile, dashboard, northbound = _surfaces(tmp_path)
     candidate = _candidate(package)
-    plan = _build(package, candidate, profile, dashboard, northbound)
+    skill_candidate = _skill_candidate(tmp_path)
+    plan = _build(package, candidate, skill_candidate, profile, dashboard, northbound)
 
     assert plan.ready_for_controlled_execution is True
     package_operation = next(
@@ -86,9 +120,10 @@ def test_controlled_install_binds_factory_package_to_exact_artifact_digest(tmp_p
 def test_controlled_install_blocks_factory_package_digest_drift(tmp_path: Path):
     package, profile, dashboard, northbound = _surfaces(tmp_path)
     candidate = _candidate(package)
+    skill_candidate = _skill_candidate(tmp_path)
     package.write_bytes(b"changed after package identity was recorded")
 
-    plan = _build(package, candidate, profile, dashboard, northbound)
+    plan = _build(package, candidate, skill_candidate, profile, dashboard, northbound)
 
     assert plan.ready_for_controlled_execution is False
     assert plan.execution_state == "BLOCKED"
