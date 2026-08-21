@@ -21,9 +21,10 @@ from hermes_factory.traceability.registry import SemanticRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
 _FACTORY_SHA = "f" * 40
+_BRIDGE_SHA = "2bc624f4f91dce4cdb13f904647bf41bffa36941"
 
 
-def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(tmp_path):
+def test_phase_p_preflight_is_blocked_only_by_current_eval_truth(tmp_path):
     catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
     registry_document = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())
     runtime_policies = yaml.safe_load(
@@ -62,13 +63,12 @@ def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(
     northbound = RuntimeComponentBinding.from_mapping(
         yaml.safe_load(northbound_path.read_text())
     )
-    assert northbound.admission_state is AdmissionEvidenceState.BLOCKED
+    assert northbound.candidate_sha == _BRIDGE_SHA
+    assert northbound.admission_state is AdmissionEvidenceState.PASS
 
-    # Isolate the known current blockers: all other Phase P component evidence
-    # is treated as PASS in this integration test; northbound retains its
-    # repository-declared external BLOCKED state.
+    # All Phase P component evidence is PASS. The only remaining pre-install
+    # blockers are the 17 Profile and 29 Skill evaluation/admission states.
     components = {component: AdmissionEvidenceState.PASS for component in RuntimeComponent}
-    components[RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION] = northbound.admission_state
 
     # Synthetic package bytes isolate package-candidate contract behavior only.
     # The v2 manifest is verified before use; nothing is installed by this test.
@@ -93,9 +93,9 @@ def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(
     )
 
     plan = ControlledInstallPlanBuilder().build(
-        # Synthetic matching SHAs intentionally isolate F/G + northbound blockers.
-        # This test does not claim or infer the live accepted Hermes runtime SHA
-        # or a live Factory install candidate SHA.
+        # Synthetic matching SHAs intentionally isolate F/G blockers. This
+        # test does not claim or infer live accepted Hermes runtime SHA or a
+        # live Factory install candidate SHA.
         accepted_hermes_sha="a" * 40,
         observed_hermes_sha="a" * 40,
         expected_factory_candidate_sha=_FACTORY_SHA,
@@ -117,7 +117,7 @@ def test_phase_p_preflight_stays_blocked_with_current_eval_and_northbound_truth(
     assert plan.ready_for_controlled_execution is False
     assert plan.execute is False
     assert plan.execution_state == "BLOCKED"
-    assert len(plan.blockers) == 17 + 29 + 1
-    assert "Component NORTHBOUND_CONTROL_INTEGRATION=BLOCKED" in plan.blockers
+    assert len(plan.blockers) == 17 + 29
+    assert not any("NORTHBOUND_CONTROL_INTEGRATION" in blocker for blocker in plan.blockers)
     assert sum(blocker.startswith("Profile ") for blocker in plan.blockers) == 17
     assert sum(blocker.startswith("Skill ") for blocker in plan.blockers) == 29
