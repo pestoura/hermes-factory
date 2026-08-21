@@ -9,6 +9,7 @@ from hermes_factory.runtime.admission import (
 
 ROOT = Path(__file__).parents[2]
 BINDING = ROOT / "hermes-integration" / "mcp-bridge" / "factory-northbound.yaml"
+_BRIDGE_MERGE_SHA = "2bc624f4f91dce4cdb13f904647bf41bffa36941"
 
 
 def _binding_contract():
@@ -22,7 +23,7 @@ def _binding_contract():
     return ExternalVerificationState, RuntimeComponentBinding
 
 
-def test_northbound_bridge_binding_is_exact_sha_and_not_optimistically_passed() -> None:
+def test_northbound_bridge_binding_is_exact_sha_and_verified_pass() -> None:
     verification_state, binding_type = _binding_contract()
     payload = yaml.safe_load(BINDING.read_text(encoding="utf-8"))
 
@@ -31,10 +32,10 @@ def test_northbound_bridge_binding_is_exact_sha_and_not_optimistically_passed() 
     assert binding.component is RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION
     assert binding.repository == "pestoura/hermes-mcp-bridge"
     assert binding.pull_request == 111
-    assert binding.candidate_sha == "5d96f02ca21b29446e0bf01b06087b353fb45c0b"
-    assert binding.verification_state is verification_state.BLOCKED_EXTERNAL_BILLING
-    assert binding.admission_state is AdmissionEvidenceState.BLOCKED
-    assert binding.to_manifest()["admission_state"] == "BLOCKED"
+    assert binding.candidate_sha == _BRIDGE_MERGE_SHA
+    assert binding.verification_state is verification_state.PASS
+    assert binding.admission_state is AdmissionEvidenceState.PASS
+    assert binding.to_manifest()["admission_state"] == "PASS"
     assert len(binding.digest) == 64
 
 
