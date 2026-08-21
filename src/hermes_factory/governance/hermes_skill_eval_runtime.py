@@ -233,11 +233,11 @@ class HermesSkillEvalRuntime:
                     "Hermes oneshot produced no Skill behavioral evaluation response"
                 )
 
-            state = (
-                SkillEvalState.PASS
-                if response == case.expected_response.strip()
-                else SkillEvalState.FAIL
-            )
+            matches_target = response == case.expected_response.strip()
+            if item.check == "baseline_red":
+                state = SkillEvalState.FAIL if matches_target else SkillEvalState.PASS
+            else:
+                state = SkillEvalState.PASS if matches_target else SkillEvalState.FAIL
             return SkillEvalEvidence(
                 skill_id=item.candidate_id,
                 source_digest=item.candidate_digest,
