@@ -23,7 +23,7 @@ Determine the narrowest evidence-supported cause of a Finding before corrective 
 1. Reproduce or inspect the failure using the original evidence and candidate/context identity.
 2. Separate symptom, trigger, contributing conditions and root cause.
 3. Test competing hypotheses with the least invasive diagnostic evidence available.
-4. Record unsupported hypotheses as rejected rather than silently discarding them.
+4. Record each unsupported explanation as a `rejected hypothesis` rather than silently discarding it.
 5. Set root cause to a supported statement or retain `UNKNOWN` when proof is insufficient.
 6. Hand off the cause and evidence to bounded rework planning.
 

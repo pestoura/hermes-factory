@@ -94,6 +94,7 @@ class SkillBehavioralEvalCase:
     prompt: str
     toolsets: tuple[str, ...]
     expected_response: str
+    canonical_labels: tuple[str, ...]
     timeout_seconds: int = 90
 
     def __post_init__(self) -> None:
@@ -114,6 +115,13 @@ class SkillBehavioralEvalCase:
             raise ValueError(
                 "Skill behavioral eval expected_response must be a short single-line value"
             )
+        labels = tuple(label.strip() for label in self.canonical_labels)
+        if not labels or any(not label or "\n" in label or len(label) > 64 for label in labels):
+            raise ValueError("Skill behavioral eval canonical_labels must be short single-line values")
+        if len(set(labels)) != len(labels):
+            raise ValueError("Skill behavioral eval canonical_labels must be unique")
+        if expected not in labels:
+            raise ValueError("Skill behavioral eval expected_response must be in canonical_labels")
         if self.timeout_seconds <= 0 or self.timeout_seconds > 900:
             raise ValueError("Skill behavioral eval timeout must be between 1 and 900 seconds")
 
@@ -178,6 +186,9 @@ def _skill_eval_prompt(scenario: str) -> str:
         "Apply the candidate Skill method when it is available in the current Hermes context. "
         "Do not invent missing evidence, authority, approvals, runtime state, requirements, or exceptions. "
         "Keep the decision bounded to the supplied scenario. "
+        "If the candidate Skill is unavailable, do not guess its canonical label. "
+        "When the candidate Skill is available, return the shortest exact canonical classification/action label "
+        "that appears verbatim in the method and best matches the scenario; do not return surrounding prose, paraphrases, or synonyms. "
         "Reply with exactly one token or short phrase representing the method's required "
         "classification/action, and nothing else."
     )
@@ -232,6 +243,12 @@ def load_skill_behavioral_case_registry(
             )
             for scenario_name in sorted(_SKILL_SCENARIO_NAMES)
         }
+        canonical_labels = tuple(
+            dict.fromkeys(
+                scenario_cases[name][1]
+                for name in ("core", "variation", "pressure")
+            )
+        )
         for gate, scenario_name in _SKILL_GATE_SCENARIOS.items():
             scenario, expected_response = scenario_cases[scenario_name]
             prompt = _skill_eval_prompt(scenario)
@@ -246,6 +263,7 @@ def load_skill_behavioral_case_registry(
                 prompt=prompt,
                 toolsets=("vision",),
                 expected_response=expected_response,
+                canonical_labels=canonical_labels,
                 timeout_seconds=90,
             )
             if case.key in cases:
@@ -352,10 +370,19 @@ class HermesSkillEvalRuntime:
                     destination_root=hermes_home / "skills",
                 )
 
+            runtime_prompt = case.prompt
+            if use_skill:
+                label_set = json.dumps(list(case.canonical_labels), ensure_ascii=False)
+                runtime_prompt += (
+                    f" Candidate method canonical labels: {label_set}. "
+                    "Select exactly one label from this set and return it verbatim; "
+                    "do not add surrounding prose, qualifiers, prefixes, suffixes, or synonyms."
+                )
+
             argv: list[str] = [
                 self._hermes_executable,
                 "-z",
-                case.prompt,
+                runtime_prompt,
                 "--model",
                 self._model,
                 "--toolsets",
@@ -391,7 +418,7 @@ class HermesSkillEvalRuntime:
                 source_digest=item.candidate_digest,
                 gate=item.check,
                 state=state,
-                evidence_ref=self._evidence_ref(item, case, response),
+                evidence_ref=self._evidence_ref(item, case, runtime_prompt, response),
                 evaluator=self._EVALUATOR,
             )
 
@@ -399,6 +426,7 @@ class HermesSkillEvalRuntime:
     def _evidence_ref(
         item: EvalWorkItem,
         case: SkillBehavioralEvalCase,
+        runtime_prompt: str,
         response: str,
     ) -> str:
         payload = json.dumps(
@@ -408,9 +436,10 @@ class HermesSkillEvalRuntime:
                 "candidate_digest": item.candidate_digest,
                 "gate": item.check,
                 "case": {
-                    "prompt": case.prompt,
+                    "prompt": runtime_prompt,
                     "toolsets": list(case.toolsets),
                     "expected_response": case.expected_response,
+                    "canonical_labels": list(case.canonical_labels),
                 },
                 "observed_response": response,
             },

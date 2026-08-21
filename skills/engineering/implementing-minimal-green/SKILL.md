@@ -34,7 +34,7 @@ Don't use for: rewriting acceptance tests or broad architectural changes not alr
 ## Procedure
 
 1. Reproduce the causal RED on the stated baseline. **Complete when the same intended failure is observed.**
-2. Identify the narrowest production code path that can satisfy the behavior. **Complete when proposed edits are bounded to the requirement.**
+2. Identify the narrowest production code path that can satisfy the behavior and treat that bounded approach as a `minimal change`. **Complete when proposed edits are bounded to the requirement.**
 3. Implement the simplest correct change without speculative abstraction. **Complete when the causal test passes.**
 4. Run required nearby/regression checks. **Complete when existing required behavior remains GREEN.**
 5. Harden only relevant edge/failure paths, keeping all checks GREEN. **Complete when no new unsourced behavior is added.**

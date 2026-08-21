@@ -106,3 +106,46 @@ def test_registry_rejects_missing_variation_or_pressure_case(tmp_path: Path) -> 
         assert "case set mismatch" in str(exc)
     else:
         raise AssertionError("incomplete Skill gate cases must fail closed")
+
+
+def test_prompt_requires_exact_canonical_skill_label_without_answer_leakage() -> None:
+    cases = hermes_skill_eval_runtime.load_skill_behavioral_case_registry(
+        CASE_REGISTRY,
+        skill_sources=_skill_sources(),
+    )
+
+    for case in cases.values():
+        assert "return the shortest exact canonical classification/action label" in case.prompt
+        assert "do not guess its canonical label" in case.prompt
+        assert "do not return surrounding prose, paraphrases, or synonyms" in case.prompt
+        assert case.expected_response not in case.prompt
+
+
+def test_every_expected_skill_outcome_exists_verbatim_in_candidate_method() -> None:
+    sources = _skill_sources()
+    cases = hermes_skill_eval_runtime.load_skill_behavioral_case_registry(
+        CASE_REGISTRY,
+        skill_sources=sources,
+    )
+
+    for case in cases.values():
+        method = (sources[case.candidate_id] / "SKILL.md").read_text(encoding="utf-8")
+        assert case.expected_response in method, (
+            f"{case.candidate_id} {case.gate} requires canonical outcome "
+            f"{case.expected_response!r} to exist verbatim in SKILL.md"
+        )
+
+
+def test_each_skill_case_exposes_the_full_canonical_label_vocabulary() -> None:
+    cases = hermes_skill_eval_runtime.load_skill_behavioral_case_registry(
+        CASE_REGISTRY,
+        skill_sources=_skill_sources(),
+    )
+
+    by_skill: dict[str, set[str]] = {}
+    for case in cases.values():
+        by_skill.setdefault(case.candidate_id, set()).add(case.expected_response)
+
+    for case in cases.values():
+        assert set(case.canonical_labels) == by_skill[case.candidate_id]
+        assert case.expected_response in case.canonical_labels

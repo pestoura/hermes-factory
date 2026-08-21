@@ -55,7 +55,12 @@ def _skill(tmp_path: Path) -> Path:
     return root
 
 
-def _case(gate: str, expected_response: str) -> SkillBehavioralEvalCase:
+def _case(
+    gate: str,
+    expected_response: str,
+    *,
+    canonical_labels: tuple[str, ...] | None = None,
+) -> SkillBehavioralEvalCase:
     return SkillBehavioralEvalCase(
         candidate_kind="SKILL",
         candidate_id=SKILL_ID,
@@ -63,6 +68,7 @@ def _case(gate: str, expected_response: str) -> SkillBehavioralEvalCase:
         prompt="Evaluate the bounded scenario and return one exact token.",
         toolsets=("vision",),
         expected_response=expected_response,
+        canonical_labels=canonical_labels or (expected_response,),
         timeout_seconds=90,
     )
 
@@ -133,6 +139,32 @@ def test_skill_green_compiles_and_selects_exact_canonical_skill(tmp_path: Path) 
     assert argv[argv.index("--skills") + 1] == SKILL_ID
     assert not Path(runner.calls[0][2]["HERMES_HOME"]).exists()
 
+
+
+def test_skilled_eval_receives_full_canonical_label_set_but_baseline_does_not(
+    tmp_path: Path,
+) -> None:
+    skill = _skill(tmp_path)
+    labels = ("BLOCKED", "STALE", "FAIL")
+
+    baseline = _case("baseline_red", "BLOCKED", canonical_labels=labels)
+    baseline_runner = RecordingRunner([EvalCommandResult(0, "UNAVAILABLE\n", "")])
+    _runtime(skill, baseline_runner, baseline).evaluate(_item(skill, "baseline_red"))
+    baseline_argv = baseline_runner.calls[0][0]
+    baseline_prompt = baseline_argv[baseline_argv.index("-z") + 1]
+    assert "Candidate method canonical labels" not in baseline_prompt
+
+    green = _case("skill_green", "BLOCKED", canonical_labels=labels)
+    green_runner = RecordingRunner([EvalCommandResult(0, "BLOCKED\n", "")])
+    evidence = _runtime(skill, green_runner, green).evaluate(_item(skill, "skill_green"))
+    green_argv = green_runner.calls[0][0]
+    green_prompt = green_argv[green_argv.index("-z") + 1]
+
+    assert evidence.state is SkillEvalState.PASS
+    assert "Candidate method canonical labels" in green_prompt
+    for label in labels:
+        assert label in green_prompt
+    assert "Select exactly one label from this set and return it verbatim" in green_prompt
 
 def test_variation_or_pressure_response_mismatch_is_behavioral_fail(tmp_path: Path) -> None:
     skill = _skill(tmp_path)
