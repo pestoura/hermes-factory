@@ -153,11 +153,10 @@ def _resolve_policy_ref(agent: dict[str, Any], policy_ref: str) -> object:
             )
         current = mapping[segment]
 
-    if separator:
-        if not isinstance(current, list) or member not in current:
-            raise BehavioralEvalRuntimeError(
-                f"policy_ref {policy_ref!r} does not resolve to an admitted policy item"
-            )
+    if separator and (not isinstance(current, list) or member not in current):
+        raise BehavioralEvalRuntimeError(
+            f"policy_ref {policy_ref!r} does not resolve to an admitted policy item"
+        )
 
     if current is None or current == "" or current == [] or current == {}:
         raise BehavioralEvalRuntimeError(
