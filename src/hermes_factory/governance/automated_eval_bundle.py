@@ -9,7 +9,7 @@ import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkdtemp
 from typing import Any, cast
 
 import yaml
@@ -354,13 +354,16 @@ def build_automated_behavioral_eval_bundle(
     if not hermes_executable.strip():
         raise AutomatedEvalBundleError("Hermes executable is required")
 
-    root = Path(repo_root).resolve()
-    source = Path(static_bundle_dir).resolve()
-    destination = Path(output_dir).resolve()
-    if source.is_symlink() or not source.is_dir():
+    raw_source = Path(static_bundle_dir)
+    raw_destination = Path(output_dir)
+    if raw_source.is_symlink() or not raw_source.is_dir():
         raise AutomatedEvalBundleError("static bundle directory must be a regular directory")
-    if destination.exists():
+    if raw_destination.is_symlink() or raw_destination.exists():
         raise AutomatedEvalBundleError("automated eval output directory already exists")
+
+    root = Path(repo_root).resolve()
+    source = raw_source.resolve()
+    destination = raw_destination.resolve()
     if verify_repo_head:
         _verify_repo_head(root, candidate_sha)
 
@@ -377,92 +380,103 @@ def build_automated_behavioral_eval_bundle(
         raise AutomatedEvalBundleError("independent review count does not match handoff")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.mkdir()
-    registry_path = destination / "automated-behavioral-evals.db"
-    report_path = destination / "automated-behavioral-evals.json"
-    residual_plan_path = destination / "residual-eval-plan.json"
-    shutil.copy2(source_db, registry_path)
+    staging = Path(mkdtemp(prefix=".automated-evals-", dir=destination.parent))
+    registry_name = "automated-behavioral-evals.db"
+    report_name = "automated-behavioral-evals.json"
+    residual_name = "residual-eval-plan.json"
+    staging_registry = staging / registry_name
+    staging_report = staging / report_name
+    staging_residual = staging / residual_name
 
-    store = EvalEvidenceStore(SemanticRegistry(registry_path))
-    with TemporaryDirectory(prefix="factory-automated-eval-sources-") as temporary:
-        profile_artifacts, skill_artifacts = _candidate_sources(
-            root,
-            profiles_root=Path(temporary) / "profiles",
-        )
-        selected_runtime = runtime or _native_runtime(
-            repo_root=root,
-            profile_artifacts=profile_artifacts,
-            skill_artifacts=skill_artifacts,
-            model=model,
-            base_environment=base_environment,
-            hermes_executable=hermes_executable,
-        )
-        execution_report = BehavioralEvalExecutor(store, selected_runtime).execute(
-            selection.automated_plan
-        )
-        residual_inventory = EvalInventoryBuilder(store).build(
-            profile_artifacts=profile_artifacts,
-            skill_artifacts=skill_artifacts,
-            scheduled_profile_ids=(),
-        )
-        residual_plan = EvalExecutionPlanBuilder(store).build(
-            residual_inventory,
-            scheduled_profile_ids=(),
-        )
+    try:
+        shutil.copy2(source_db, staging_registry)
+        store = EvalEvidenceStore(SemanticRegistry(staging_registry))
+        with TemporaryDirectory(prefix="factory-automated-eval-sources-") as temporary:
+            profile_artifacts, skill_artifacts = _candidate_sources(
+                root,
+                profiles_root=Path(temporary) / "profiles",
+            )
+            selected_runtime = runtime or _native_runtime(
+                repo_root=root,
+                profile_artifacts=profile_artifacts,
+                skill_artifacts=skill_artifacts,
+                model=model,
+                base_environment=base_environment,
+                hermes_executable=hermes_executable,
+            )
+            execution_report = BehavioralEvalExecutor(store, selected_runtime).execute(
+                selection.automated_plan
+            )
+            residual_inventory = EvalInventoryBuilder(store).build(
+                profile_artifacts=profile_artifacts,
+                skill_artifacts=skill_artifacts,
+                scheduled_profile_ids=(),
+            )
+            residual_plan = EvalExecutionPlanBuilder(store).build(
+                residual_inventory,
+                scheduled_profile_ids=(),
+            )
 
-    residual_automated = tuple(
-        item for item in residual_plan.items if not item.requires_independent_reviewer
-    )
-    residual_reviews = tuple(
-        item for item in residual_plan.items if item.requires_independent_reviewer
-    )
-    if residual_automated:
-        raise AutomatedEvalBundleError(
-            "automated execution completed with non-independent NOT_RUN work remaining"
+        residual_automated = tuple(
+            item for item in residual_plan.items if not item.requires_independent_reviewer
         )
-    if len(residual_reviews) != selection.independent_review_count:
-        raise AutomatedEvalBundleError("residual independent review set does not match source plan")
+        residual_reviews = tuple(
+            item for item in residual_plan.items if item.requires_independent_reviewer
+        )
+        if residual_automated:
+            raise AutomatedEvalBundleError(
+                "automated execution completed with non-independent NOT_RUN work remaining"
+            )
+        if len(residual_reviews) != selection.independent_review_count:
+            raise AutomatedEvalBundleError(
+                "residual independent review set does not match source plan"
+            )
 
-    if execution_report.state != "PASS" or residual_plan.blockers:
-        state = "AUTOMATED_FAIL"
-    elif residual_reviews:
-        state = "AUTOMATED_PASS_REVIEW_REQUIRED"
-    else:
-        state = "PASS"
+        if execution_report.state != "PASS" or residual_plan.blockers:
+            state = "AUTOMATED_FAIL"
+        elif residual_reviews:
+            state = "AUTOMATED_PASS_REVIEW_REQUIRED"
+        else:
+            state = "PASS"
 
-    residual_plan_path.write_text(
-        json.dumps(residual_plan.to_manifest(), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    report = {
-        "schema": _BUNDLE_SCHEMA,
-        "candidate_sha": candidate_sha.lower(),
-        "static_evidence_ref": handoff.static_evidence_ref,
-        "source_plan_digest": handoff.plan_digest,
-        "source_item_count": selection.source_item_count,
-        "automated_item_count": selection.automated_item_count,
-        "independent_review_count": len(residual_reviews),
-        "execution": {
-            "attempted_count": execution_report.attempted_count,
-            "recorded_count": execution_report.recorded_count,
-            "passed_count": execution_report.passed_count,
-            "failed_count": execution_report.failed_count,
-            "state": execution_report.state,
-        },
-        "residual_plan_digest": residual_plan.digest,
-        "residual_blocker_count": len(residual_plan.blockers),
-        "residual_item_count": len(residual_plan.items),
-        "state": state,
-    }
-    report_path.write_text(
-        json.dumps(report, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+        staging_residual.write_text(
+            json.dumps(residual_plan.to_manifest(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        report = {
+            "schema": _BUNDLE_SCHEMA,
+            "candidate_sha": candidate_sha.lower(),
+            "static_evidence_ref": handoff.static_evidence_ref,
+            "source_plan_digest": handoff.plan_digest,
+            "source_item_count": selection.source_item_count,
+            "automated_item_count": selection.automated_item_count,
+            "independent_review_count": len(residual_reviews),
+            "execution": {
+                "attempted_count": execution_report.attempted_count,
+                "recorded_count": execution_report.recorded_count,
+                "passed_count": execution_report.passed_count,
+                "failed_count": execution_report.failed_count,
+                "state": execution_report.state,
+            },
+            "residual_plan_digest": residual_plan.digest,
+            "residual_blocker_count": len(residual_plan.blockers),
+            "residual_item_count": len(residual_plan.items),
+            "state": state,
+        }
+        staging_report.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        staging.rename(destination)
+    except BaseException:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+        raise
 
     return AutomatedBehavioralEvalBundle(
-        registry_path=registry_path,
-        report_path=report_path,
-        residual_plan_path=residual_plan_path,
+        registry_path=destination / registry_name,
+        report_path=destination / report_name,
+        residual_plan_path=destination / residual_name,
         execution_report=execution_report,
         residual_plan=residual_plan,
         independent_review_count=len(residual_reviews),
