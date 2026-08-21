@@ -34,13 +34,17 @@ from hermes_factory.governance.eval_inventory import (
 )
 from hermes_factory.governance.hermes_behavioral_eval_runtime import (
     HermesBehavioralEvalRuntime,
-    SubprocessEvalCommandRunner as ProfileEvalCommandRunner,
     load_profile_behavioral_case_registry,
+)
+from hermes_factory.governance.hermes_behavioral_eval_runtime import (
+    SubprocessEvalCommandRunner as ProfileEvalCommandRunner,
 )
 from hermes_factory.governance.hermes_skill_eval_runtime import (
     HermesSkillEvalRuntime,
-    SubprocessEvalCommandRunner as SkillEvalCommandRunner,
     load_skill_behavioral_case_registry,
+)
+from hermes_factory.governance.hermes_skill_eval_runtime import (
+    SubprocessEvalCommandRunner as SkillEvalCommandRunner,
 )
 from hermes_factory.traceability.registry import SemanticRegistry
 
