@@ -91,10 +91,12 @@ def _runtime(
     )
 
 
-def test_baseline_red_runs_without_materializing_or_selecting_skill(tmp_path: Path) -> None:
+def test_baseline_red_passes_only_when_unskilled_response_misses_target(
+    tmp_path: Path,
+) -> None:
     skill = _skill(tmp_path)
     case = _case("baseline_red", "BLOCKED")
-    runner = RecordingRunner([EvalCommandResult(0, "BLOCKED\n", "")])
+    runner = RecordingRunner([EvalCommandResult(0, "TAKE\n", "")])
 
     evidence = _runtime(skill, runner, case).evaluate(_item(skill, "baseline_red"))
 
@@ -103,6 +105,18 @@ def test_baseline_red_runs_without_materializing_or_selecting_skill(tmp_path: Pa
     assert runner.skill_present_during_call == [False]
     assert "--skills" not in runner.calls[0][0]
     assert not Path(runner.calls[0][2]["HERMES_HOME"]).exists()
+
+
+def test_baseline_red_fails_when_unskilled_response_already_matches_target(
+    tmp_path: Path,
+) -> None:
+    skill = _skill(tmp_path)
+    case = _case("baseline_red", "BLOCKED")
+    runner = RecordingRunner([EvalCommandResult(0, "BLOCKED\n", "")])
+
+    evidence = _runtime(skill, runner, case).evaluate(_item(skill, "baseline_red"))
+
+    assert evidence.state is SkillEvalState.FAIL
 
 
 def test_skill_green_compiles_and_selects_exact_canonical_skill(tmp_path: Path) -> None:
