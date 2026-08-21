@@ -13,11 +13,10 @@ SUPPORTED = {
     "NATIVE_PROFILE_CRON",
     "DASHBOARD_PLUGIN",
     "GATEWAY_HITL_ADAPTER",
+    "NORTHBOUND_CONTROL_INTEGRATION",
 }
 
-BLOCKED = {
-    "NORTHBOUND_CONTROL_INTEGRATION": "EXTERNAL_CI_BLOCKED",
-}
+BLOCKED: dict[str, str] = {}
 
 
 def test_install_component_map_distinguishes_concrete_runtime_support_from_blockers():
