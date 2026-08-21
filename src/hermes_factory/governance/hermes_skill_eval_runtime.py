@@ -7,7 +7,9 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
+
+import yaml
 
 from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.governance.eval_execution import EvalWorkItem
@@ -74,6 +76,14 @@ class SubprocessEvalCommandRunner:
 _AUTOMATABLE_SKILL_GATES = frozenset(
     {"baseline_red", "skill_green", "variation_eval", "pressure_eval"}
 )
+_SKILL_CASE_SCHEMA = "hermes.factory/skill-behavioral-cases/v1.2"
+_SKILL_SCENARIO_NAMES = frozenset({"core", "variation", "pressure"})
+_SKILL_GATE_SCENARIOS = {
+    "baseline_red": "core",
+    "skill_green": "core",
+    "variation_eval": "variation",
+    "pressure_eval": "pressure",
+}
 
 
 @dataclass(frozen=True)
@@ -97,14 +107,153 @@ class SkillBehavioralEvalCase:
             raise ValueError("Skill behavioral eval prompt is required")
         if not self.toolsets or any(not value.strip() for value in self.toolsets):
             raise ValueError("Skill behavioral eval requires an explicit toolset allowlist")
-        if not self.expected_response.strip():
+        expected = self.expected_response.strip()
+        if not expected:
             raise ValueError("Skill behavioral eval expected_response is required")
+        if "\n" in expected or len(expected) > 64:
+            raise ValueError(
+                "Skill behavioral eval expected_response must be a short single-line value"
+            )
         if self.timeout_seconds <= 0 or self.timeout_seconds > 900:
             raise ValueError("Skill behavioral eval timeout must be between 1 and 900 seconds")
 
     @property
     def key(self) -> tuple[str, str, str]:
         return (self.candidate_kind, self.candidate_id, self.gate)
+
+
+def _require_mapping(value: object, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SkillEvalRuntimeError(f"{label} must be a mapping")
+    if any(not isinstance(key, str) for key in value):
+        raise SkillEvalRuntimeError(f"{label} keys must be strings")
+    return cast(dict[str, Any], value)
+
+
+def _load_yaml_mapping(path: Path, *, label: str) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        raise SkillEvalRuntimeError(f"{label} must be a regular file")
+    try:
+        document: object = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise SkillEvalRuntimeError(f"{label} could not be loaded") from exc
+    return _require_mapping(document, label=label)
+
+
+def _skill_case_entry(
+    skill_id: str,
+    scenario_name: str,
+    value: object,
+) -> tuple[str, str]:
+    entry = _require_mapping(
+        value,
+        label=f"Skill {skill_id} {scenario_name} case",
+    )
+    if set(entry) != {"scenario", "expected_response"}:
+        raise SkillEvalRuntimeError(
+            f"Skill {skill_id} {scenario_name} case must contain scenario and expected_response"
+        )
+    scenario = entry["scenario"]
+    expected = entry["expected_response"]
+    if not isinstance(scenario, str) or not scenario.strip():
+        raise SkillEvalRuntimeError(
+            f"Skill {skill_id} {scenario_name} scenario must be non-empty text"
+        )
+    if not isinstance(expected, str) or not expected.strip():
+        raise SkillEvalRuntimeError(
+            f"Skill {skill_id} {scenario_name} expected_response must be non-empty text"
+        )
+    expected = expected.strip()
+    if "\n" in expected or len(expected) > 64:
+        raise SkillEvalRuntimeError(
+            f"Skill {skill_id} {scenario_name} expected_response must be a short single-line value"
+        )
+    return scenario.strip(), expected
+
+
+def _skill_eval_prompt(skill_id: str, scenario: str) -> str:
+    return (
+        "Evaluate one bounded Hermes Software Factory Skill scenario. "
+        f"Candidate Skill: {skill_id}. "
+        f"Scenario: {scenario} "
+        "Apply the candidate Skill method when it is available in the current Hermes context. "
+        "Do not invent missing evidence, authority, approvals, runtime state, requirements, or exceptions. "
+        "Keep the decision bounded to the supplied scenario. "
+        "Reply with exactly one token or short phrase representing the method's required "
+        "classification/action, and nothing else."
+    )
+
+
+def load_skill_behavioral_case_registry(
+    registry_path: Path,
+    *,
+    skill_sources: Mapping[str, Path],
+) -> dict[tuple[str, str, str], SkillBehavioralEvalCase]:
+    document = _load_yaml_mapping(
+        registry_path,
+        label="Skill behavioral case registry",
+    )
+    if document.get("schema") != _SKILL_CASE_SCHEMA:
+        raise SkillEvalRuntimeError("unsupported Skill behavioral case registry schema")
+    skills = _require_mapping(
+        document.get("skills"),
+        label="Skill behavioral case registry skills",
+    )
+
+    expected_skill_ids = set(skill_sources)
+    observed_skill_ids = set(skills)
+    if observed_skill_ids != expected_skill_ids:
+        missing = sorted(expected_skill_ids - observed_skill_ids)
+        extra = sorted(observed_skill_ids - expected_skill_ids)
+        raise SkillEvalRuntimeError(
+            f"Skill set mismatch: missing={missing!r} extra={extra!r}"
+        )
+
+    cases: dict[tuple[str, str, str], SkillBehavioralEvalCase] = {}
+    for skill_id in sorted(expected_skill_ids):
+        source = Path(skill_sources[skill_id])
+        if source.is_symlink() or not source.is_dir():
+            raise SkillEvalRuntimeError(f"Skill source must be a regular directory: {skill_id}")
+        raw_skill_cases = _require_mapping(
+            skills[skill_id],
+            label=f"Skill {skill_id} cases",
+        )
+        if set(raw_skill_cases) != _SKILL_SCENARIO_NAMES:
+            raise SkillEvalRuntimeError(
+                f"Skill {skill_id} case set mismatch: "
+                f"expected={sorted(_SKILL_SCENARIO_NAMES)!r} "
+                f"observed={sorted(raw_skill_cases)!r}"
+            )
+
+        scenario_cases = {
+            scenario_name: _skill_case_entry(
+                skill_id,
+                scenario_name,
+                raw_skill_cases[scenario_name],
+            )
+            for scenario_name in sorted(_SKILL_SCENARIO_NAMES)
+        }
+        for gate, scenario_name in _SKILL_GATE_SCENARIOS.items():
+            scenario, expected_response = scenario_cases[scenario_name]
+            prompt = _skill_eval_prompt(skill_id, scenario)
+            if expected_response in prompt:
+                raise SkillEvalRuntimeError(
+                    f"Skill {skill_id} {scenario_name} case leaks expected_response in prompt"
+                )
+            case = SkillBehavioralEvalCase(
+                candidate_kind="SKILL",
+                candidate_id=skill_id,
+                gate=gate,
+                prompt=prompt,
+                toolsets=("vision",),
+                expected_response=expected_response,
+                timeout_seconds=90,
+            )
+            if case.key in cases:
+                raise SkillEvalRuntimeError(f"duplicate Skill behavioral eval case: {case.key!r}")
+            cases[case.key] = case
+
+    return cases
 
 
 class HermesSkillEvalRuntime:
