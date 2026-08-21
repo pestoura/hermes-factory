@@ -1,8 +1,8 @@
 schema: hermes.factory/skills/v1.2
 registry:
   version: 1.2.0
-  lifecycle: proposed_for_owner_review
-  implementation_authority: NOT_GRANTED
+  lifecycle: approved_for_implementation
+  implementation_authority: GRANTED
 
   policy:
     canonical_source: pestoura/hermes-factory

@@ -1,0 +1,13 @@
+{
+  "name": "hermes-factory",
+  "label": "Factory",
+  "description": "Read-only evidence-first Hermes Software Factory delivery overlay",
+  "icon": "Activity",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/factory",
+    "position": "end"
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

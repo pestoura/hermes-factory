@@ -1,7 +1,8 @@
 # Hermes Software Factory — Foundational Decisions
 
-**Status:** RECONCILED THROUGH v1.2  
-**Implementation authority:** NOT GRANTED
+**Status:** OWNER APPROVED — v1.2  
+**Implementation authority:** GRANTED  
+**Runtime activation:** GATED
 
 This index summarizes the current architectural decision set. Formal ADRs take precedence over earlier proposal wording. Where v1/v1.1 text conflicts with Architecture v1.2, the v1.2 canonical specification wins.
 
@@ -130,6 +131,8 @@ EXTERNAL GOVERNANCE       -> RITMO/external schedule via northbound control
 
 RITMO, host crontab, systemd timers and a Factory-specific scheduler are not internal Factory worker scheduling mechanisms.
 
-## Current approval gate
+## Current activation gate
 
-Architecture v1.2 remains `PROPOSED_FOR_OWNER_APPROVAL` until the clean branch audit proves the current human-readable and machine-readable sources are coherent. Approval of architecture will still not imply runtime mutation; a separate implementation plan follows.
+Architecture v1.2 is owner **APPROVED** and complete source implementation authority is **GRANTED** by `approvals/architecture-v1.2.yaml`. Runtime activation remains **GATED**.
+
+Architecture approval and implementation authority do not declare any unexecuted Profile, Skill, gate, deployment, install or runtime check PASS/ACTIVE. Runtime activation still requires the approved implementation plan, executed evaluation evidence, policy/authority validation, CI, exact-SHA controls, post-merge verification and controlled runtime verification before live acceptance.

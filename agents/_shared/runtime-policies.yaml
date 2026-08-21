@@ -1,7 +1,13 @@
 schema: hermes.factory/runtime-policies/v1.2
-status: proposed_for_owner_review
+status: approved_for_implementation
 architecture_baseline: 1.2
-implementation_authority: NOT_GRANTED
+implementation_authority: GRANTED
+
+profile_authority_decision:
+  REFUSE: the requested operation itself is explicitly prohibited
+  SEPARATE: the bounded work may continue with prohibited responsibility assigned to a distinct authorized actor
+  BLOCKED: the bounded work cannot continue because required authority or evidence is absent
+  separation_of_duties_precedence: SEPARATE_over_REFUSE_for_delegable_responsibility_conflict
 
 model_classes:
   reasoning-high:
@@ -73,9 +79,12 @@ external_control_boundary:
 # Tool policies are desired enforcement contracts. SOUL instructions are not
 # considered enforcement. The Agent Compiler must translate these to Hermes
 # platform toolsets, native/local adapters, sandbox/workspace mode and credential policy.
+# Factory Skills are preloaded only from governed Profile/task pins. The Hermes
+# `skills` discovery toolset is intentionally not exposed to Factory workers,
+# because worker_self_expansion is forbidden.
 tool_policy_classes:
   control-orchestrate:
-    hermes_toolsets: [skills, todo, kanban]
+    hermes_toolsets: [todo, kanban]
     local: [factory-semantic-read, factory-semantic-orchestrate, hermes-kanban-read, hermes-kanban-orchestrate, scm-read]
     mcp: []
     workspace: none
@@ -85,7 +94,7 @@ tool_policy_classes:
     runtime_write: false
 
   control-read:
-    hermes_toolsets: [skills, todo, kanban]
+    hermes_toolsets: [todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read]
     mcp: []
     workspace: none
@@ -95,7 +104,7 @@ tool_policy_classes:
     runtime_write: false
 
   engineering-readwrite-docs:
-    hermes_toolsets: [terminal, file, web, skills, todo, kanban]
+    hermes_toolsets: [terminal, file, web, todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
     mcp: []
     workspace: isolated-worktree
@@ -104,7 +113,7 @@ tool_policy_classes:
     runtime_write: false
 
   design-docs:
-    hermes_toolsets: [file, web, vision, skills, todo, kanban]
+    hermes_toolsets: [file, web, vision, todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
     mcp: []
     workspace: isolated-worktree
@@ -113,7 +122,7 @@ tool_policy_classes:
     runtime_write: false
 
   engineering-worktree:
-    hermes_toolsets: [terminal, file, web, skills, todo, kanban]
+    hermes_toolsets: [terminal, file, web, todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
     mcp: []
     workspace: isolated-worktree
@@ -122,7 +131,7 @@ tool_policy_classes:
     runtime_write: false
 
   review:
-    hermes_toolsets: [terminal, file, web, skills, todo, kanban]
+    hermes_toolsets: [terminal, file, web, todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read]
     mcp: []
     workspace: read-only-candidate-snapshot
@@ -131,7 +140,7 @@ tool_policy_classes:
     runtime_write: false
 
   review-observe:
-    hermes_toolsets: [terminal, file, skills, todo, kanban]
+    hermes_toolsets: [terminal, file, todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read]
     mcp: []
     workspace: read-only-candidate-snapshot
@@ -140,7 +149,7 @@ tool_policy_classes:
     runtime_write: false
 
   engineering-test:
-    hermes_toolsets: [terminal, file, skills, todo, kanban]
+    hermes_toolsets: [terminal, file, todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read, scm-engineering-write]
     mcp: []
     workspace: isolated-test-worktree
@@ -149,7 +158,7 @@ tool_policy_classes:
     runtime_write: false
 
   runtime-observe:
-    hermes_toolsets: [skills, todo, kanban]
+    hermes_toolsets: [todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read, runtime-read]
     mcp: []
     workspace: none
@@ -158,7 +167,7 @@ tool_policy_classes:
     runtime_write: false
 
   release-controlled:
-    hermes_toolsets: [skills, todo, kanban]
+    hermes_toolsets: [todo, kanban]
     local: [factory-semantic-read, hermes-kanban-read, scm-read, release-controlled]
     mcp: []
     workspace: none

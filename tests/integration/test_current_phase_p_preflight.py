@@ -1,0 +1,123 @@
+from pathlib import Path
+
+import yaml
+
+from hermes_factory.agents import compile_profile_distribution
+from hermes_factory.governance.eval_evidence import EvalEvidenceStore
+from hermes_factory.governance.eval_inventory import (
+    EvalInventoryBuilder,
+    discover_skill_artifacts,
+)
+from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
+from hermes_factory.runtime.bindings import RuntimeComponentBinding
+from hermes_factory.runtime.cron_projection import NativeCronPlanBuilder
+from hermes_factory.runtime.install import ControlledInstallPlanBuilder
+from hermes_factory.runtime.package_candidate import (
+    build_package_candidate_manifest,
+    load_package_candidate,
+)
+from hermes_factory.runtime.skill_catalog_candidate import build_skill_catalog_candidate
+from hermes_factory.traceability.registry import SemanticRegistry
+
+ROOT = Path(__file__).resolve().parents[2]
+_FACTORY_SHA = "f" * 40
+_BRIDGE_SHA = "2bc624f4f91dce4cdb13f904647bf41bffa36941"
+
+
+def test_phase_p_preflight_is_blocked_only_by_current_eval_truth(tmp_path):
+    catalog = yaml.safe_load((ROOT / "agents/catalog-v1.2.yaml").read_text())["catalog"]
+    registry_document = yaml.safe_load((ROOT / "skills/registry.yaml").read_text())
+    runtime_policies = yaml.safe_load(
+        (ROOT / "agents/_shared/runtime-policies.yaml").read_text()
+    )
+    skill_artifacts = discover_skill_artifacts(
+        ROOT / "skills", registry_document["registry"]
+    )
+
+    profile_artifacts = {}
+    for agent_id in catalog["active_candidates"]:
+        out = tmp_path / "profiles" / agent_id
+        compile_profile_distribution(
+            yaml.safe_load((ROOT / "agents" / agent_id / "agent.yaml").read_text()),
+            (ROOT / "agents" / agent_id / "SOUL.md").read_text(),
+            registry_document,
+            out,
+            cron_jobs=[],
+            skill_artifacts=skill_artifacts,
+            runtime_policies=runtime_policies,
+        )
+        profile_artifacts[agent_id] = out
+
+    store = EvalEvidenceStore(SemanticRegistry(tmp_path / "factory.db"))
+    inventory = EvalInventoryBuilder(store).build(
+        profile_artifacts=profile_artifacts,
+        skill_artifacts=skill_artifacts,
+        scheduled_profile_ids=(),
+    )
+    assert len(inventory.profile_states) == 17
+    assert len(inventory.skill_states) == 29
+    assert set(inventory.profile_states.values()) == {AdmissionEvidenceState.NOT_RUN}
+    assert set(inventory.skill_states.values()) == {AdmissionEvidenceState.NOT_RUN}
+
+    northbound_path = ROOT / "hermes-integration/mcp-bridge/factory-northbound.yaml"
+    northbound = RuntimeComponentBinding.from_mapping(
+        yaml.safe_load(northbound_path.read_text())
+    )
+    assert northbound.candidate_sha == _BRIDGE_SHA
+    assert northbound.admission_state is AdmissionEvidenceState.PASS
+
+    # All Phase P component evidence is PASS. The only remaining pre-install
+    # blockers are the 17 Profile and 29 Skill evaluation/admission states.
+    components = {component: AdmissionEvidenceState.PASS for component in RuntimeComponent}
+
+    # Synthetic package bytes isolate package-candidate contract behavior only.
+    # The v2 manifest is verified before use; nothing is installed by this test.
+    package = tmp_path / "hermes_factory-0.1.0-py3-none-any.whl"
+    package.write_bytes(b"synthetic preflight package identity")
+    package_manifest = tmp_path / "factory-package.json"
+    build_package_candidate_manifest(
+        wheel_path=package,
+        candidate_sha=_FACTORY_SHA,
+        output_path=package_manifest,
+    )
+    package_candidate = load_package_candidate(
+        manifest_path=package_manifest,
+        wheel_path=package,
+        expected_candidate_sha=_FACTORY_SHA,
+    )
+    skill_candidate = build_skill_catalog_candidate(
+        source_root=ROOT / "skills",
+        registry_document=registry_document,
+        candidate_sha=_FACTORY_SHA,
+        output_root=tmp_path / "skill-candidate",
+    )
+
+    plan = ControlledInstallPlanBuilder().build(
+        # Synthetic matching SHAs intentionally isolate F/G blockers. This
+        # test does not claim or infer live accepted Hermes runtime SHA or a
+        # live Factory install candidate SHA.
+        accepted_hermes_sha="a" * 40,
+        observed_hermes_sha="a" * 40,
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=package_candidate,
+        factory_skill_catalog_candidate=skill_candidate,
+        profile_artifacts=profile_artifacts,
+        expected_profile_digests=inventory.profile_digests,
+        profile_eval_states=inventory.profile_states,
+        skill_eval_states=inventory.skill_states,
+        component_states=components,
+        cron_plan=NativeCronPlanBuilder().build({}),
+        dashboard_plugin_source=(
+            ROOT / "hermes-integration/dashboard-plugin/hermes-factory"
+        ),
+        gateway_adapter_module="hermes_factory.adapters.hermes_gateway",
+        northbound_binding_source=northbound_path,
+    )
+
+    assert plan.ready_for_controlled_execution is False
+    assert plan.execute is False
+    assert plan.execution_state == "BLOCKED"
+    assert len(plan.blockers) == 17 + 29
+    assert not any("NORTHBOUND_CONTROL_INTEGRATION" in blocker for blocker in plan.blockers)
+    assert sum(blocker.startswith("Profile ") for blocker in plan.blockers) == 17
+    assert sum(blocker.startswith("Skill ") for blocker in plan.blockers) == 29

@@ -1,0 +1,107 @@
+schema: hermes.factory/install-surface/v1
+execute: false
+runtime_state: NOT_RUN
+
+requires:
+  exact_hermes_sha: true
+  exact_factory_candidate_sha: true
+  verified_factory_package_candidate_v2: true
+  verified_factory_skill_catalog_candidate_v1: true
+  all_profile_evals_pass: true
+  all_skill_evals_pass: true
+  all_component_evidence_pass: true
+
+prohibitions:
+  - embedded_secrets
+  - embedded_memories
+  - embedded_sessions
+  - embedded_runtime_state
+  - internal_mcp_ipc
+  - implicit_execution
+  - mutable_factory_package_source
+  - mutable_factory_skill_source
+  - worker_skill_self_expansion
+
+components:
+  FACTORY_PACKAGE:
+    mechanism: install_verified_factory_wheel
+    source: verified_exact_head_factory_package_candidate
+    target: HERMES_RUNTIME_ENV
+    runtime_adapter_status: SUPPORTED
+
+  PROFILE_DISTRIBUTIONS:
+    mechanism: hermes profile install
+    source: compiled_native_profile_distributions
+    target: HERMES_PROFILE_HOME
+    runtime_adapter_status: SUPPORTED
+
+  FACTORY_SKILLS:
+    mechanism: exact_head_private_catalog_plus_task_scoped_native_projection
+    source: verified_exact_head_factory_skill_catalog_candidate
+    target: HERMES_HOME/factory/skill-catalog/EXACT_SHA_and_task_worktree/.hermes/skills
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      The complete Factory Skill catalog is staged under a private, digest-bound
+      exact-head Factory runtime path and is not installed into Hermes global
+      Skill discovery. Required Skills remain Profile-owned. Task-approved
+      optional Skills are re-authorized from the canonical Skill Registry,
+      digest-verified, projected only into the native task worktree
+      .hermes/skills directory, and the exact worktree is trusted with native
+      Hermes trust/read-back verification before Factory dispatch authorization
+      may write its audit record or call native task unblock. Factory Profiles
+      prohibit the Hermes skills toolset when worker_self_expansion is forbidden,
+      while the hermes-factory pre_tool_call hook blocks Skill discovery and
+      non-task-pinned skill_view requests. Live installation and behavioral
+      verification remain NOT_RUN.
+
+  KANBAN_HIGH_ASSURANCE_POLICY:
+    mechanism: native_hermes_kanban_policy
+    source: hermes_factory_kanban_adapter_and_policy
+    target: HERMES_KANBAN
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      The install runtime enforces the verified native
+      kanban.auto_decompose=false setting with read-back verification and
+      compensation. Structured dispatch approval is enforced by the Factory
+      adapter using native blocked task creation, a Factory authorization audit
+      record, and native task unblock only after authorization; no unverified
+      kanban.dispatch_approval_mode key is written. Live application remains
+      NOT_RUN until controlled runtime verification.
+
+  NATIVE_PROFILE_CRON:
+    mechanism: hermes -p PROFILE cron create
+    source: digest_bound_validated_factory_duties
+    target: HERMES_PROFILE_CRON
+    runtime_adapter_status: SUPPORTED
+
+  DASHBOARD_PLUGIN:
+    mechanism: hermes_dashboard_plugin_registration
+    source: hermes-integration/dashboard-plugin/hermes-factory
+    target: HERMES_HOME/plugins/hermes-factory
+    runtime_adapter_status: SUPPORTED
+
+  GATEWAY_HITL_ADAPTER:
+    mechanism: verify_native_hermes_gateway_send_clarify_binding
+    source: hermes_factory.adapters.hermes_gateway
+    target: HERMES_GATEWAY
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      Phase P verifies that the digest-bound Factory package exposes
+      HermesGatewayHITLBinding in the target Python runtime. Live injection of
+      a concrete Hermes PlatformAdapter and callback execution remain runtime
+      evidence and are NOT_RUN until controlled runtime verification.
+
+  NORTHBOUND_CONTROL_INTEGRATION:
+    mechanism: hermes_mcp_bridge_northbound_registration
+    source: hermes-integration/mcp-bridge/factory-northbound.yaml
+    target: HERMES_MCP_BRIDGE
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      Hermes MCP Bridge PR #111 was verified and merged to main as
+      2bc624f4f91dce4cdb13f904647bf41bffa36941. The GitHub PR merge ref tested
+      by CI and the actual main merge have the identical tree
+      c3219d221af65c1e59964272075ef9fc637a4899. The candidate passed Python
+      3.11/3.12 tests, lint, secret scan, registry evidence, image provenance,
+      isolated Docker acceptance, Trivy and CycloneDX SBOM validation. Factory
+      activation remains disabled by default and live controlled installation
+      and runtime verification remain NOT_RUN.

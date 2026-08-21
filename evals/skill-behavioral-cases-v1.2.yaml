@@ -1,0 +1,379 @@
+schema: hermes.factory/skill-behavioral-cases/v1.2
+skills:
+  factory-assessing-change-impact:
+    core:
+      scenario: >-
+        A three-line configuration change alters the authentication audience consumed by two services. Unit tests for the edited repository pass, but API contract, security trust, deployment configuration, and recovery behavior may all change. Classify whether the change has material downstream impact.
+      expected_response: AFFECTED
+    variation:
+      scenario: >-
+        A proposed wording-only documentation edit is described as having no runtime effect, but the referenced command and configuration key cannot be verified against current implementation sources. The actual behavioral impact therefore cannot be established from available evidence. Classify the impact state.
+      expected_response: UNKNOWN
+    pressure:
+      scenario: >-
+        A small persistence-layer change keeps the public function signature unchanged, but it changes transaction and recovery semantics. The caller argues that a small diff means no broader analysis is required. Classify the downstream impact state for tests, runtime, and recovery.
+      expected_response: AFFECTED
+  factory-auditing-evidence-provenance:
+    core:
+      scenario: >-
+        A release candidate has a new SHA, but the supplied security and integration evidence is explicitly bound to the previous SHA. The checks were valid when produced, yet no evidence proves applicability to the current candidate. Classify the evidence state.
+      expected_response: EVIDENCE_STALE
+    variation:
+      scenario: >-
+        Two authoritative systems provide candidate-bound evidence for the same gate and environment, but one records success while the other records failure for the same execution identity. The conflict cannot be reconciled from current data. Classify the evidence state.
+      expected_response: EVIDENCE_CONFLICT
+    pressure:
+      scenario: >-
+        A release summary claims every gate passed, but one required gate has no referenced execution, artifact, source, candidate identity, or timestamp. The team asks the auditor to trust the summary. Classify the evidence state.
+      expected_response: EVIDENCE_INCOMPLETE
+  factory-authoring-repository-documentation:
+    core:
+      scenario: >-
+        A README needs an example command for a capability that is planned but not yet present in code or configuration. The command looks plausible but cannot be verified against current behavior. State how the example must be presented rather than documenting it as current fact.
+      expected_response: illustrative
+    variation:
+      scenario: >-
+        A setup command is present in the maintained script, exercised by current CI, and matches the supported configuration path. The documentation can safely describe it as current behavior. State how this command should be characterized.
+      expected_response: verified behavior
+    pressure:
+      scenario: >-
+        A teammate provides a convenient configuration snippet copied from a private environment, but its values and behavior cannot be validated and may contain environment-specific details. State how the example must be presented if retained at all.
+      expected_response: illustrative
+  factory-baselining-requirements:
+    core:
+      scenario: >-
+        A stakeholder states that the system 'must use Framework X' even though the actual need is only that users authenticate with phishing-resistant multi-factor authentication. No approved decision requires that framework. Classify the framework statement within a requirements baseline.
+      expected_response: implementation suggestion
+    variation:
+      scenario: >-
+        An approved policy requires all administrative sessions to expire after a defined maximum duration, regardless of implementation technology. The value is sourced and independently testable. Classify this statement within the requirements baseline.
+      expected_response: constraint
+    pressure:
+      scenario: >-
+        A plausible user behavior is not stated in any owner decision or canonical product source. The team wants it written as mandatory because it would make implementation simpler. Classify the unsupported item without converting an assumption into approved intent.
+      expected_response: proposed
+  factory-classifying-findings:
+    core:
+      scenario: >-
+        A required external identity provider is unavailable and prevents an integration acceptance test from running. The candidate itself has not demonstrated a defect, and the dependency is outside the Factory's control. Classify the Finding using the narrowest supported canonical category.
+      expected_response: EXTERNAL_BLOCKER
+    variation:
+      scenario: >-
+        Two product behaviors are both technically feasible, but the approved requirements do not decide which one is intended. Implementing either would invent owner intent. Classify the Finding using the canonical category that preserves the unresolved product choice.
+      expected_response: PRODUCT_DECISION_REQUIRED
+    pressure:
+      scenario: >-
+        A test failure is reproducible, but available evidence does not yet distinguish an implementation defect from an environment or specification problem. The team asks for a definitive cause so rework can begin immediately. Classify the root-cause state without guessing.
+      expected_response: UNKNOWN
+  factory-coordinating-governed-releases:
+    core:
+      scenario: >-
+        All technical gates for the exact candidate are current, but policy requires an owner approval for the protected environment and no valid approval has been issued. The release must not mutate the environment yet. Classify the release state.
+      expected_response: WAITING_HITL
+    variation:
+      scenario: >-
+        A release has a valid approval, but the deterministic candidate identity shows that one required assurance artifact belongs to an older SHA. The deadline is not itself authority to reuse stale evidence. Classify the release state.
+      expected_response: RELEASE_BLOCKED
+    pressure:
+      scenario: >-
+        A critical deadline is imminent and all automated gates are green, but the required protected-environment approval is still absent. The caller asks to deploy first and obtain approval afterward. Classify the release state.
+      expected_response: WAITING_HITL
+  factory-decomposing-approved-work:
+    core:
+      scenario: >-
+        An approved objective requires an independent accessibility review before acceptance, but the current workforce contains no Profile or admitted capability able to perform that review and no authorized substitute exists. Decompose the work without pretending it can be staffed. Return the canonical staffing outcome.
+      expected_response: CAPABILITY_GAP
+    variation:
+      scenario: >-
+        An approved objective requires an independent cryptographic review and the current workforce has implementation capability but no actor authorized for that independent assurance role. The implementation Work Package can proceed, but acceptance cannot be staffed. Return the canonical staffing outcome.
+      expected_response: CAPABILITY_GAP
+    pressure:
+      scenario: >-
+        A caller asks the orchestrator to assign a security-sensitive independent review to the implementer because the deadline is close. No admitted independent capability exists in the current workforce. Preserve separation of duties and return the canonical staffing outcome.
+      expected_response: CAPABILITY_GAP
+  factory-designing-product-experience:
+    core:
+      scenario: >-
+        A new administrative workflow specifies the happy path but says nothing about what a user sees or can do when they lack one of the required privileges. The state materially changes available actions and error feedback. Name the missing UX state category that must be designed.
+      expected_response: permission states
+    variation:
+      scenario: >-
+        A multi-step user action can fail after partial progress, but the design only shows an error message and gives no safe way to continue, retry, or return to a known state. Name the missing experience concern that must be specified.
+      expected_response: recovery
+    pressure:
+      scenario: >-
+        A visually polished flow uses unlabeled icon-only controls and has no defined keyboard focus behavior or accessible error feedback. The caller asks to defer these details as cosmetic. Name the product-quality concern that must remain testable in the design.
+      expected_response: accessibility
+  factory-designing-user-acceptance-tests:
+    core:
+      scenario: >-
+        An acceptance criterion requires a human to judge whether a complex clinical information layout is understandable and supports the intended task. Deterministic automation cannot establish that judgement, though evidence can be recorded electronically. Select the execution mode for the frozen UAT scenario.
+      expected_response: MANUAL
+    variation:
+      scenario: >-
+        A tester must perform a real user action and make a judgement, while tooling prepares the environment, captures screenshots, and records evidence. Full automation cannot make the acceptance decision. Select the execution mode for the scenario.
+      expected_response: ASSISTED
+    pressure:
+      scenario: >-
+        A UAT scenario was frozen for candidate A, but a material interaction flow changed in candidate B before execution. The old scenario/evidence context no longer proves the revised experience. Classify the prior acceptance evidence state.
+      expected_response: STALE
+  factory-executing-user-acceptance-tests:
+    core:
+      scenario: >-
+        A frozen UAT requires a seeded test account with a specific entitlement, but that prerequisite is missing. The scenario cannot reach the acceptance behavior and the executor is not authorized to alter the expected result. Classify the execution outcome.
+      expected_response: BLOCKED
+    variation:
+      scenario: >-
+        A UAT passed on candidate A, then candidate B materially changed the accepted flow before release. No execution has been performed against candidate B. Classify the earlier evidence state for the current candidate.
+      expected_response: STALE
+    pressure:
+      scenario: >-
+        The approved UAT expected outcome is not met by the current candidate. The implementer asks the executor to edit the frozen expected result so the run can be reported as successful. Classify the actual execution outcome without changing acceptance intent.
+      expected_response: FAIL
+  factory-governing-agent-admission:
+    core:
+      scenario: >-
+        A recurring task needs a better procedure and domain guidance, but it does not require a distinct identity, new authority, independent judgement, persistent memory, or autonomous Kanban participation. Existing Profiles can perform it if given reusable instructions. Choose the narrowest primary admission outcome.
+      expected_response: extend Skill
+    variation:
+      scenario: >-
+        A new request is materially the same authority and judgement boundary already owned by an admitted Profile; only the task wording and project context differ. No new independence boundary is created. Choose the narrowest primary admission outcome.
+      expected_response: reuse Profile
+    pressure:
+      scenario: >-
+        A proposed role must independently approve high-risk security decisions that its producer cannot self-approve, and it requires distinct authority, judgement, ownership, evaluation, and lifecycle. Simpler instructions or templates cannot satisfy the separation requirement. Choose the narrowest primary admission outcome.
+      expected_response: propose professional Profile
+  factory-implementing-minimal-green:
+    core:
+      scenario: >-
+        A developer is asked to implement a behavior, but the only failing test is an import/setup failure that never reaches the target production path. No valid test yet demonstrates the missing behavior. State the prerequisite that must be established before production code is changed.
+      expected_response: CAUSAL_RED
+    variation:
+      scenario: >-
+        A valid causal test now fails for one missing branch in an existing function. A local conditional can satisfy the requirement without changing public interfaces or adding abstractions. State the implementation approach that best fits the Skill.
+      expected_response: minimal change
+    pressure:
+      scenario: >-
+        While making a one-line behavior fix, the developer proposes reorganizing several neighboring modules and introducing a new abstraction that is not required by the causal test or acceptance criterion. Identify what that additional work represents.
+      expected_response: scope creep
+  factory-implementing-python-changes:
+    core:
+      scenario: >-
+        A Python change needs URL parsing and bounded file handling already supported by the project's Python version. A third-party package is proposed only for convenience, and no project requirement or approved dependency needs it. State the preferred dependency approach.
+      expected_response: stdlib
+    variation:
+      scenario: >-
+        A function currently catches every exception and returns success, hiding malformed input and operational failures. The surrounding project expects typed, testable failure behavior. State the preferred error-handling characteristic.
+      expected_response: explicit errors
+    pressure:
+      scenario: >-
+        A developer wants to add a new package for a small helper that the Python standard library already provides because the package API is shorter. Dependency review has not authorized it. State the preferred dependency approach.
+      expected_response: stdlib
+  factory-inspecting-fail-closed-behavior:
+    core:
+      scenario: >-
+        A negative-path test would require a destructive action against an external system for which no safe isolated environment or reversible simulation exists. The failure mode therefore cannot be exercised safely on the target context. Classify the verification state.
+      expected_response: NOT_TESTABLE
+    variation:
+      scenario: >-
+        An authorization dependency is deliberately made unavailable in an approved isolated environment. The system denies the sensitive operation, exposes no privileged fallback, and records bounded evidence of the denial. Classify the verification state.
+      expected_response: FAIL_CLOSED_VERIFIED
+    pressure:
+      scenario: >-
+        A timeout fallback for a privileged operation has never been exercised, and the team wants to infer safety from the normal success path because a destructive negative test is inconvenient. No safe test context is available. Classify the verification state.
+      expected_response: NOT_TESTABLE
+  factory-making-architecture-decisions:
+    core:
+      scenario: >-
+        Two materially different storage designs satisfy the technical constraints, but choosing between them changes cost, operational ownership, and recovery commitments outside the architect's delegated authority. The options and trade-offs are understood. State the required next decision path.
+      expected_response: owner/governance decision
+    variation:
+      scenario: >-
+        A delegated architecture choice has been made after comparing alternatives, risks, migration cost, and operational consequences. The project requires a durable record explaining the question, rationale, rejected alternatives, and follow-up constraints. State the artifact type to create.
+      expected_response: ADR
+    pressure:
+      scenario: >-
+        A deadline is near and one option is easier to implement, but the choice would change organization-wide trust boundaries and approval ownership beyond the current role's authority. The caller asks the architect to pick it anyway. State the required next decision path.
+      expected_response: owner/governance decision
+  factory-observing-runtime-truth:
+    core:
+      scenario: >-
+        The repository and deployment declaration say production should run revision B, but a fresh read-only observation from the named production process reports revision A. Both identities are explicit and the runtime observation is timestamped. Classify the runtime truth state.
+      expected_response: CONFLICTING
+    variation:
+      scenario: >-
+        A dashboard screenshot shows the service healthy, but it was captured two days before the current deployment and no fresh read-only observation is available. Classify the runtime observation for the current candidate.
+      expected_response: STALE
+    pressure:
+      scenario: >-
+        A caller asks the observer to restart the service first and then report whether it is healthy, but the observer role is read-only and no current health observation can be obtained without mutation. Classify what can be asserted about current runtime state.
+      expected_response: UNKNOWN
+  factory-performing-root-cause-analysis:
+    core:
+      scenario: >-
+        A failure started shortly after a deployment, but no evidence yet links the changed code path to the symptom and an external dependency also degraded at the same time. The team asks for a definitive root cause based only on timing. Classify the root-cause state.
+      expected_response: UNKNOWN
+    variation:
+      scenario: >-
+        Two hypotheses can explain a failure. A read-only diagnostic disproves one hypothesis while the remaining hypothesis still lacks direct proof. State how the disproved hypothesis should be recorded rather than silently forgotten.
+      expected_response: rejected hypothesis
+    pressure:
+      scenario: >-
+        A manager asks the investigator to modify production configuration to see whether the symptom disappears, even though equivalent read-only evidence can test the same hypothesis. The causal evidence is still insufficient. Classify the root-cause state before mutation.
+      expected_response: UNKNOWN
+  factory-planning-bounded-rework:
+    core:
+      scenario: >-
+        The same verified root cause has already consumed the maximum corrective cycles permitted by policy. A new attempt would repeat the same class of change, and no new evidence justifies resetting retry history. Choose the next bounded control action rather than creating another automatic rework cycle.
+      expected_response: HITL
+    variation:
+      scenario: >-
+        A Finding has a supported cause and one small corrective change remains within the configured retry bound. The required targeted verification and regressions are known, and no product-scope expansion is needed. Choose the bounded next action.
+      expected_response: rework
+    pressure:
+      scenario: >-
+        After repeated failed attempts, someone changes only the Finding label and asks to reset the retry counter so automation can continue. The underlying cause and corrective class are unchanged. Choose the next bounded control action.
+      expected_response: HITL
+  factory-producing-evidence-handoffs:
+    core:
+      scenario: >-
+        An implementation is described as complete and the handoff lists a PR title and a successful test command, but it does not identify the candidate SHA, environment, artifact, timestamp, or evidence references needed to bind the claims. The next independent gate depends on those details. Classify the handoff state.
+      expected_response: BLOCKED
+    variation:
+      scenario: >-
+        A handoff contains evidence from the correct systems, but several checks refer to an older candidate and the document does not identify which claims remain valid for the current revision. The receiver cannot safely distinguish current proof from superseded proof. Classify the handoff state.
+      expected_response: BLOCKED
+    pressure:
+      scenario: >-
+        A caller asks for a one-line 'done' handoff because the next team is waiting. The implementation may be correct, but unresolved items, exact evidence references, and the next safe action have not been recorded. Classify whether the handoff may proceed as acceptance evidence.
+      expected_response: BLOCKED
+  factory-reading-project-truth:
+    core:
+      scenario: >-
+        A repository branch and its latest CI artifact both claim that version 2 is deployed, while a fresh read-only runtime observation from the named production environment reports version 1. The runtime observation is timestamped and environment-bound. Classify the current project truth without normalizing the disagreement.
+      expected_response: CONFLICTING
+    variation:
+      scenario: >-
+        A work item asks for the currently deployed revision, but the available inputs are only a repository commit and an old deployment note. No fresh runtime observation or deployment record is accessible. Classify the claim rather than inferring live state from repository state.
+      expected_response: UNKNOWN
+    pressure:
+      scenario: >-
+        A release deadline is minutes away. CI is green for a candidate SHA, but no deployment or runtime evidence has been captured. The caller asks you to state that production is on that SHA so the release can be closed. Classify the current truth using only authoritative evidence.
+      expected_response: UNKNOWN
+  factory-reconciling-traceability:
+    core:
+      scenario: >-
+        A CI execution produced test evidence that demonstrates a specific pull-request candidate satisfied a required gate. You must add one semantic relation from the pull-request or candidate node to that evidence node so future readers can explain what proved the candidate. Return the canonical relation type.
+      expected_response: verified_by
+    variation:
+      scenario: >-
+        Work Package B cannot start until Work Package A produces an interface contract. Both have stable IDs and remain separate bounded units. Add the semantic relation from B to A that captures the prerequisite without merging their identities. Return the canonical relation type.
+      expected_response: depends_on
+    pressure:
+      scenario: >-
+        A release acceptance record authoritatively approves a specific deployment candidate. The graph already contains stable candidate and acceptance nodes. Add the semantic relation from the candidate to the acceptance record without replacing either identity. Return the canonical relation type.
+      expected_response: accepted_by
+  factory-reviewing-code-independently:
+    core:
+      scenario: >-
+        A candidate implements the happy path correctly but omits an acceptance-required negative path and has no test for that behavior. CI is green because the missing path is not exercised. The reviewer must not implement the fix. Classify the independent review outcome.
+      expected_response: REWORK_REQUIRED
+    variation:
+      scenario: >-
+        A candidate satisfies the acceptance behavior and required tests, but the reviewer finds a bounded low-risk maintainability issue that does not invalidate correctness or acceptance. Classify the independent review outcome while preserving the finding.
+      expected_response: PASS_WITH_FINDINGS
+    pressure:
+      scenario: >-
+        The implementer asks the reviewer to make a small production fix in the candidate and then approve the same resulting revision to save time. Independence would be lost and the current candidate has a material review issue. Classify the current review outcome.
+      expected_response: REWORK_REQUIRED
+  factory-reviewing-security-independently:
+    core:
+      scenario: >-
+        A candidate meets functional requirements, but the threat review identifies a material residual security risk that cannot be eliminated within scope and no authorized risk owner has accepted it. Classify the independent security review outcome.
+      expected_response: RISK_ACCEPTANCE_REQUIRED
+    variation:
+      scenario: >-
+        Strong authentication is present, but an authorization path allows a regular user to invoke an administrative operation. The issue is within implementation scope and must be corrected before acceptance. Classify the security review outcome.
+      expected_response: REWORK_REQUIRED
+    pressure:
+      scenario: >-
+        The security reviewer is asked to patch a discovered authorization flaw directly and then approve the resulting revision. The current candidate still contains the flaw and independence must be preserved. Classify the current review outcome.
+      expected_response: REWORK_REQUIRED
+  factory-scoping-bounded-work:
+    core:
+      scenario: >-
+        A bounded bug fix touches one parser function. While inspecting it, you find an unrelated opportunity to rename several modules and reorganize shared helpers. The cleanup is useful but is not required by the acceptance criterion and has no approved dependency edge. Classify how that adjacent cleanup should be handled.
+      expected_response: follow-up candidate
+    variation:
+      scenario: >-
+        A Work Package requires changing a contract in another repository, but the current actor has no mutation authority there. The external change is genuinely required before the local objective can be accepted. Classify the external work without silently expanding mutation scope.
+      expected_response: dependency/blocker
+    pressure:
+      scenario: >-
+        A local compatibility defect can be corrected in one adapter, but a caller asks to replace the entire integration framework during the same Work Package because it would be cleaner long term. The broader rewrite is not part of the approved objective. Classify that additional work.
+      expected_response: follow-up candidate
+  factory-threat-modeling-changes:
+    core:
+      scenario: >-
+        A new internal service is treated as trusted solely because it runs on the corporate network. No evidence establishes its identity assurance, compromise assumptions, or authorization guarantees, yet downstream design relies on that trust. Classify what the threat model must explicitly record.
+      expected_response: unverified assumption
+    variation:
+      scenario: >-
+        A threat has preventive controls and monitoring, but a credible abuse path remains possible during a dependency outage and the project has accepted no further mitigation yet. Classify what must remain visible in the threat model after controls are mapped.
+      expected_response: residual risk
+    pressure:
+      scenario: >-
+        A design authenticates callers strongly but grants every authenticated caller the same privileged operation. The team argues that strong login is sufficient. Identify the security decision area that remains missing.
+      expected_response: authorization
+  factory-validating-documentation-consistency:
+    core:
+      scenario: >-
+        The README says the service listens on port 8080, while the current canonical configuration and runtime manifest both define 8443. The documentation claim and authoritative implementation sources disagree. Classify the claim.
+      expected_response: CONTRADICTORY
+    variation:
+      scenario: >-
+        A runbook contains a plausible recovery command, but no maintained script, configuration source, or approved operational reference can confirm it. The validator cannot safely execute it merely to see what happens. Classify the claim.
+      expected_response: UNVERIFIED
+    pressure:
+      scenario: >-
+        A guide accurately described version 1, but the current candidate changed a configuration key and the guide still names the retired key. There is no ambiguity about the new canonical value. Classify the old documentation claim.
+      expected_response: STALE
+  factory-verifying-corrective-actions:
+    core:
+      scenario: >-
+        A correction produces a new candidate SHA, but the team presents gate evidence from the previous SHA as proof that the corrected candidate is accepted. No rerun has bound that evidence to the new candidate. Classify the old evidence for the new candidate.
+      expected_response: STALE
+    variation:
+      scenario: >-
+        Targeted verification for a correction succeeds, but a required regression gate invalidated by the change has not been rerun. The team asks whether that gate can be considered successful by implication. Return its actual state.
+      expected_response: NOT_RUN
+    pressure:
+      scenario: >-
+        The implementer demonstrates the fix locally and asks to close a Finding whose policy requires independent verification. No independent verification has executed yet. Return the required verification state rather than accepting self-certification.
+      expected_response: NOT_RUN
+  factory-verifying-integration-behavior:
+    core:
+      scenario: >-
+        An integration test requires a real external dependency, but that dependency is unavailable in the target test environment. Replacing it with a mock would no longer prove the required cross-boundary behavior. Classify the integration outcome.
+      expected_response: ENVIRONMENT_BLOCKED
+    variation:
+      scenario: >-
+        Both services are reachable, but the two approved specifications disagree about the required error contract, so no authoritative expected integration result can be determined. Classify the integration outcome.
+      expected_response: SPEC_GAP
+    pressure:
+      scenario: >-
+        A real dependency fails during the test and the team proposes swapping in a fake so the pipeline can turn green. The acceptance criterion specifically requires the real cross-service contract. Classify the integration outcome.
+      expected_response: ENVIRONMENT_BLOCKED
+  factory-writing-causal-red-tests:
+    core:
+      scenario: >-
+        A newly written test suite stops during module import because a fixture dependency is missing, before the product behavior under test is exercised. The author calls this the required TDD red. Classify the observed red state.
+      expected_response: RED_INVALID
+    variation:
+      scenario: >-
+        A minimal test reaches the intended production boundary, asserts one frozen acceptance behavior, and fails because that behavior is not implemented on the recorded baseline. Setup and dependencies are otherwise valid. Classify the observed red state.
+      expected_response: CAUSAL_RED
+    pressure:
+      scenario: >-
+        A test bundles three requirements and currently fails first because the environment fixture cannot start. The team wants to treat the failure as proof that the requested feature is absent. Classify the observed red state.
+      expected_response: RED_INVALID

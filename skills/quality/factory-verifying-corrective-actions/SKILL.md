@@ -32,4 +32,5 @@ Prove that a corrective change resolves the Finding without regressing affected 
 - Implementer self-certification is not accepted where independence is required.
 - A changed candidate cannot inherit old SHA-bound PASS evidence.
 - Partial targeted success does not imply all affected gates passed.
+- A corrective result bound to an older candidate is `STALE`.
 - `NOT_RUN != PASS`.

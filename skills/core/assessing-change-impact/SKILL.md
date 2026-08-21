@@ -37,6 +37,7 @@ Don't use for: authorizing the affected changes; impact and authority are separa
 1. Identify the changed behavior, contract or structural assumption. **Complete when the change can be described without implementation noise.**
 2. Trace direct consumers/dependencies using project artifacts, `search_files` and permitted repository/system metadata. **Complete when first-order dependants are identified.**
 3. Evaluate impact classes: code, tests, API/contracts, data/schema, configuration, security/trust, docs, CI/build, deployment/runtime and recovery. **Complete when each class is `AFFECTED`, `NOT_AFFECTED` or `UNKNOWN`.**
+   Classification boundary: use `AFFECTED` when the supplied change modifies a contract, trust/configuration/runtime assumption, or creates a material downstream obligation that must be evaluated; use `UNKNOWN` only when the available evidence is insufficient to determine whether the class is affected after tracing. Uncertain magnitude does not turn an identified material dependency into `UNKNOWN`.
 4. Map affected classes to required Work Packages/gates. **Complete when every affected class has an action or justified no-action.**
 5. Flag cross-repository or external impacts as explicit dependencies. **Complete when no hidden external dependency remains.**
 
