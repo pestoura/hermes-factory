@@ -95,9 +95,13 @@ components:
     mechanism: hermes_mcp_bridge_northbound_registration
     source: hermes-integration/mcp-bridge/factory-northbound.yaml
     target: HERMES_MCP_BRIDGE
-    runtime_adapter_status: BLOCKED
-    blocker_code: EXTERNAL_CI_BLOCKED
-    blocker: >-
-      Hermes MCP Bridge PR #111 remains externally blocked: repository CI and
-      release-governance jobs fail before their first workflow step, so no
-      independent repository/runtime admission evidence exists yet.
+    runtime_adapter_status: SUPPORTED
+    note: >-
+      Hermes MCP Bridge PR #111 was verified and merged to main as
+      2bc624f4f91dce4cdb13f904647bf41bffa36941. The GitHub PR merge ref tested
+      by CI and the actual main merge have the identical tree
+      c3219d221af65c1e59964272075ef9fc637a4899. The candidate passed Python
+      3.11/3.12 tests, lint, secret scan, registry evidence, image provenance,
+      isolated Docker acceptance, Trivy and CycloneDX SBOM validation. Factory
+      activation remains disabled by default and live controlled installation
+      and runtime verification remain NOT_RUN.
