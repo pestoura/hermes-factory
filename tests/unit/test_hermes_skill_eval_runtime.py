@@ -14,7 +14,6 @@ from hermes_factory.governance.hermes_skill_eval_runtime import (
 )
 from hermes_factory.skills.evals import SkillEvalState
 
-
 SKILL_ID = "factory-reading-project-truth"
 
 
