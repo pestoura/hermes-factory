@@ -171,10 +171,9 @@ def _skill_case_entry(
     return scenario.strip(), expected
 
 
-def _skill_eval_prompt(skill_id: str, scenario: str) -> str:
+def _skill_eval_prompt(scenario: str) -> str:
     return (
         "Evaluate one bounded Hermes Software Factory Skill scenario. "
-        f"Candidate Skill: {skill_id}. "
         f"Scenario: {scenario} "
         "Apply the candidate Skill method when it is available in the current Hermes context. "
         "Do not invent missing evidence, authority, approvals, runtime state, requirements, or exceptions. "
@@ -235,7 +234,7 @@ def load_skill_behavioral_case_registry(
         }
         for gate, scenario_name in _SKILL_GATE_SCENARIOS.items():
             scenario, expected_response = scenario_cases[scenario_name]
-            prompt = _skill_eval_prompt(skill_id, scenario)
+            prompt = _skill_eval_prompt(scenario)
             if expected_response in prompt:
                 raise SkillEvalRuntimeError(
                     f"Skill {skill_id} {scenario_name} case leaks expected_response in prompt"
