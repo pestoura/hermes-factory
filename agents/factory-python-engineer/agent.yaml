@@ -1,0 +1,46 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-python-engineer
+  version: 1.0.0
+  kind: professional
+  department: engineering
+  lifecycle: superseded
+  eligible: false
+  superseded_by: factory-software-engineer
+  superseded_in_architecture: 1.1
+  runtime_installable: false
+  description: >-
+    HISTORICAL PROFILE DEFINITION. The technology-specific base profession was
+    superseded by factory-software-engineer. Python specialization belongs in
+    admitted task/Profile Skills by default. This definition is retained only
+    for design/provenance history and MUST NOT be compiled or installed.
+  model_class: coding-high
+  memory_class: professional+project
+  tool_policy_class: engineering-worktree
+  worktree: true
+  routing_description: >-
+    DO NOT ROUTE. Use factory-software-engineer with admitted Python-specific
+    Factory Skills when Python implementation capability is required.
+  historical_skills:
+    required:
+      - reading-project-truth
+      - scoping-bounded-work
+      - implementing-minimal-green
+      - implementing-python-changes
+      - assessing-change-impact
+      - producing-evidence-handoffs
+    optional:
+      - reconciling-traceability
+  authority:
+    allow: []
+    deny:
+      - runtime_installation
+      - task_assignment
+      - dispatch
+      - authority_expansion
+  outputs:
+    - SUPERSEDED_PROFILE
+  invariants:
+    - catalog_v1_2_is_authoritative_for_admission
+    - directory_presence_does_not_imply_eligibility
+    - historical_definition_is_not_runtime_authority

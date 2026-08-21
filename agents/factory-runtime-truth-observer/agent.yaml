@@ -1,0 +1,51 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-runtime-truth-observer
+  version: 1.0.0
+  kind: routine
+  department: operations-assurance
+  lifecycle: proposed
+  description: >-
+    Observes fresh runtime state and reports what is actually running without mutating the environment or inferring from repository state.
+  model_class: reasoning-standard
+  memory_class: minimal
+  tool_policy_class: runtime-observe
+  worktree: false
+  routing_description: >-
+    Use when acceptance depends on fresh observation of deployed services, processes, health, configuration effects or runtime behavior.
+  skills:
+    required:
+      - observing-runtime-truth
+      - producing-evidence-handoffs
+    optional:
+      - reading-project-truth
+  authority:
+    allow:
+      - inspect_runtime_readonly
+      - query_health_and_status
+      - capture_runtime_identity
+      - record_observation_evidence
+      - approve_runtime_observation_gate
+    deny:
+      - modify_runtime_configuration
+      - restart_or_deploy_services
+      - repair_observed_failure
+      - infer_runtime_from_repo
+      - secret_material_output
+  independence:
+    incompatible_gates:
+      - deployment_mutation_for_same_candidate
+  outputs:
+    - OBSERVED
+    - NOT_OBSERVED
+    - STALE
+    - CONFLICTING
+    - UNKNOWN
+  escalation:
+    - observation_requires_mutation
+    - runtime_identity_unresolvable
+    - privileged_read_requires_hitl
+  evals:
+    must_pass: [fresh_observation, runtime_identity_capture, repo_runtime_separation]
+    must_find: [stale_observation, wrong_revision, unhealthy_service]
+    must_refuse: [runtime_repair, repo_inference_as_observation]

@@ -1,0 +1,50 @@
+schema: hermes.factory/gate/v1
+gate:
+  id: factory-exact-sha
+  version: 1.0.0
+  lifecycle: proposed
+  implementation_kind: deterministic_validator
+  architecture_baseline: 1.2
+  implementation_authority: NOT_GRANTED
+  purpose: >-
+    Reconcile immutable candidate identity across implementation, tests, reviews,
+    CI, merge and deployment evidence without LLM judgment.
+
+  inputs:
+    required:
+      - candidate_sha
+    optional:
+      - implemented_sha
+      - tested_sha
+      - reviewed_sha
+      - security_reviewed_sha
+      - ci_sha
+      - merge_sha
+      - deployed_revision
+
+  states:
+    - SHA_MATCH
+    - SHA_MISMATCH
+    - EVIDENCE_STALE
+    - EVIDENCE_ABSENT
+    - IDENTITY_UNKNOWN
+
+  invariants:
+    - equality_is_mechanical_not_narrative
+    - not_run_is_not_pass
+    - missing_required_identity_is_not_match
+    - changed_candidate_invalidates_sha_bound_evidence
+    - merge_identity_is_distinct_from_pr_head_identity
+    - deployment_identity_must_not_be_inferred_from_repository_state
+
+  consumers:
+    - factory-code-reviewer
+    - factory-security-reviewer
+    - factory-evidence-auditor
+    - factory-release-manager
+    - factory-governance
+
+  forbidden:
+    - llm_only_verdict
+    - automatic_evidence_transfer_across_changed_sha
+    - treating_missing_identity_as_match

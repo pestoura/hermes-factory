@@ -1,0 +1,39 @@
+schema: hermes.factory/agent-catalog/v1
+catalog:
+  version: 1.1.0
+  lifecycle: superseded
+  superseded_by: agents/catalog-v1.2.yaml
+  authoritative_for_admission_and_compilation: false
+  architecture_review: docs/14-architecture-review-v1.1.md
+  canonical_spec: docs/superpowers/specs/2026-08-18-hermes-software-factory-design-v1.1.md
+  implementation_authority: NOT_GRANTED
+
+  historical_active_candidates:
+    - factory-orchestrator
+    - factory-workforce-architect
+    - factory-requirements-engineer
+    - factory-software-architect
+    - factory-security-architect
+    - factory-product-designer
+    - factory-documentation-engineer
+    - factory-tdd-red
+    - factory-software-engineer
+    - factory-platform-engineer
+    - factory-code-reviewer
+    - factory-security-reviewer
+    - factory-fail-closed-inspector
+    - factory-integration-tester
+    - factory-evidence-auditor
+    - factory-runtime-truth-observer
+    - factory-release-manager
+
+  historical_superseded_profiles:
+    factory-python-engineer:
+      replaced_by: factory-software-engineer
+    factory-exact-sha-auditor:
+      replaced_by: gate:factory-exact-sha
+
+  invariants:
+    - historical_catalog_is_not_runtime_authority
+    - catalog_v1_2_is_authoritative_for_current_admission
+    - directory_presence_does_not_imply_eligibility

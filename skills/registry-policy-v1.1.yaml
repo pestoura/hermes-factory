@@ -1,0 +1,24 @@
+schema: hermes.factory/skill-registry-policy/v1
+registry:
+  version: 1.1.0
+  lifecycle: superseded
+  superseded_by: skills/registry-policy-v1.2.yaml
+  authoritative_for_current_skill_admission: false
+  architecture_baseline: 1.1
+  implementation_authority: NOT_GRANTED
+
+  historical_principles:
+    technical_substrate: hermes-native-skill-model
+    canonical_source: pestoura/hermes-factory/skills
+    runtime_projection_authoritative: false
+    hermesjarvasserver_authoritative_for_factory_authorship: false
+    server_wide_availability_implies_authorization: false
+    effective_skills_formula: agent_required_union_task_approved
+    not_run_is_pass: false
+    deterministic_controls_prefer_validator: true
+
+  current_policy: skills/registry-policy-v1.2.yaml
+
+  invariants:
+    - historical_policy_is_not_runtime_authority
+    - v1_2_policy_controls_current_admission_and_authorization

@@ -1,0 +1,58 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-security-reviewer
+  version: 1.0.0
+  kind: professional
+  department: security-engineering
+  lifecycle: proposed
+  description: >-
+    Independently reviews an exact candidate for security flaws, trust failures, authorization bypass and unsafe defaults.
+  model_class: reasoning-high
+  memory_class: minimal
+  tool_policy_class: review
+  worktree: false
+  routing_description: >-
+    Use when security-sensitive code, configuration or architecture implementation needs adversarial independent review against the approved threat and control model.
+  skills:
+    required:
+      - reading-project-truth
+      - reviewing-security-independently
+      - producing-evidence-handoffs
+    optional:
+      - inspecting-fail-closed-behavior
+      - assessing-change-impact
+  deterministic_gates:
+    - factory-exact-sha
+  authority:
+    allow:
+      - inspect_candidate_and_context
+      - inspect_security_tests
+      - run_non_destructive_security_checks
+      - open_security_findings
+      - request_changes
+      - approve_security_review_gate
+    deny:
+      - modify_candidate_implementation
+      - accept_material_residual_risk
+      - approve_changed_sha_without_rereview
+      - merge_candidate
+      - production_release
+      - secret_material_access
+  independence:
+    incompatible_gates:
+      - implementation_for_reviewed_candidate
+      - final_residual_risk_acceptance
+  outputs:
+    - PASS
+    - PASS_WITH_FINDINGS
+    - REWORK_REQUIRED
+    - RISK_ACCEPTANCE_REQUIRED
+    - BLOCKED
+  escalation:
+    - material_residual_risk
+    - exploitability_uncertain_requires_runtime_test
+    - candidate_identity_uncertain
+  evals:
+    must_pass: [authz_review, trust_boundary_review, secrets_review, unsafe_default_review]
+    must_find: [bypass, fail_open, injection_boundary, privilege_escalation, evidence_spoofing]
+    must_refuse: [self_fix_during_review, stale_sha_approval, self_risk_acceptance]

@@ -1,0 +1,49 @@
+schema: hermes.factory/kanban-policy/v1.2
+status: proposed_for_owner_review
+architecture_baseline: 1.2
+implementation_authority: NOT_GRANTED
+
+kanban:
+  authoritative_execution_queue: hermes_native_kanban
+  auto_decompose: false
+  dispatch_approval_mode: structured
+
+transition_authorization:
+  structured_approval_means_human_approval: false
+  ordinary_transition_authority: machine_or_policy
+  true_hitl_requires: explicit_hitl_request_and_valid_human_decision
+  transitions_requiring_structured_authorization:
+    - ready_to_running
+    - review_to_running
+    - todo_to_ready
+    - blocked_to_ready
+
+handoff:
+  atomic: true
+  required_before_next_ready:
+    - stage_outcome
+    - artifact_refs
+    - evidence_refs
+    - evidence_freshness
+    - candidate_identity_when_applicable
+    - finding_state
+    - next_stage_prerequisites
+  stale_on_material_context_change: true
+
+independence:
+  implementer_may_self_certify_review: false
+  evidence_producer_may_self_audit: false
+  runtime_mutator_may_self_observe_as_independent_truth: false
+
+rework:
+  autonomous: true
+  bounded: true
+  infinite_retry: forbidden
+  repeated_same_cause_beyond_bound: escalate
+
+invariants:
+  - no_factory_specific_execution_queue
+  - no_factory_specific_dispatcher
+  - agent_says_done_is_not_evidence
+  - not_run_is_not_pass
+  - next_stage_not_ready_before_atomic_handoff

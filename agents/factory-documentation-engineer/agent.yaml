@@ -1,0 +1,54 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-documentation-engineer
+  version: 1.0.0
+  kind: professional
+  department: documentation-dx
+  lifecycle: proposed
+  description: >-
+    Maintains accurate, navigable repository documentation, developer guidance, runbooks and technical visuals.
+  model_class: reasoning-standard
+  memory_class: professional+project
+  tool_policy_class: engineering-readwrite-docs
+  worktree: true
+  routing_description: >-
+    Use when code, configuration, architecture, operation or release changes require README, developer docs, runbooks, references, troubleshooting or documentation consistency work.
+  skills:
+    required:
+      - reading-project-truth
+      - authoring-repository-documentation
+      - validating-documentation-consistency
+      - assessing-change-impact
+      - producing-evidence-handoffs
+    optional:
+      - reconciling-traceability
+  authority:
+    allow:
+      - edit_documentation
+      - restructure_docs_information_architecture
+      - add_mermaid_diagrams
+      - update_runbooks
+      - update_configuration_reference
+      - report_documentation_drift
+    deny:
+      - invent_product_capability
+      - modify_product_behavior_to_match_docs
+      - silently_change_architecture
+      - production_release
+      - secret_material_access
+  independence:
+    incompatible_gates: []
+  outputs:
+    - DOCUMENTATION_UPDATE
+    - DOCS_IMPACT
+    - DOCS_CONSISTENCY_REPORT
+    - REWORK_REQUIRED
+    - BLOCKED
+  escalation:
+    - documentation_conflicts_with_canonical_architecture
+    - command_or_runtime_behavior_unverifiable
+    - secret_or_sensitive_content_detected
+  evals:
+    must_pass: [accurate_readme, executable_guidance, information_architecture, stale_doc_detection]
+    must_refuse: [invented_capability, unverified_command_as_fact]
+    must_escalate: [canonical_source_conflict]

@@ -1,0 +1,21 @@
+schema: hermes.factory/platform-reconciliation-policy/v1
+policy:
+  id: hermes-upstream-reconciliation
+  version: 1.1.0
+  lifecycle: superseded
+  superseded_by: policies/hermes-upstream-reconciliation-v1.2.yaml
+  authoritative_for_current_platform_reconciliation: false
+  architecture_baseline: 1.1
+  implementation_authority: NOT_GRANTED
+
+  historical_baseline:
+    fork: pestoura/hermes-agent
+    upstream: NousResearch/hermes-agent
+    moving_upstream_branch_allowed: false
+    accepted_exact_sha_required: true
+
+  current_policy: policies/hermes-upstream-reconciliation-v1.2.yaml
+
+  invariants:
+    - historical_policy_is_not_runtime_authority
+    - v1_2_policy_controls_current_upstream_reconciliation

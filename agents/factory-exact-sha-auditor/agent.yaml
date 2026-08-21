@@ -1,0 +1,45 @@
+schema: hermes.factory/agent/v1
+agent:
+  id: factory-exact-sha-auditor
+  version: 1.0.0
+  kind: routine
+  department: governance-assurance
+  lifecycle: superseded
+  eligible: false
+  superseded_by: gate:factory-exact-sha
+  superseded_in_architecture: 1.1
+  runtime_installable: false
+  description: >-
+    HISTORICAL PROFILE DEFINITION. Exact candidate/SHA identity and evidence
+    freshness classification were moved to the deterministic factory-exact-sha
+    validator. This definition is retained only for design/provenance history
+    and MUST NOT be compiled, installed or dispatched.
+  model_class: fast-verifier
+  memory_class: minimal
+  tool_policy_class: control-read
+  worktree: false
+  routing_description: >-
+    DO NOT ROUTE. Use gate:factory-exact-sha. Evidence Auditor and Release
+    Manager may consume the deterministic result but do not replace it.
+  historical_skills:
+    required:
+      - verifying-exact-sha
+      - producing-evidence-handoffs
+    optional:
+      - reconciling-traceability
+      - reading-project-truth
+  authority:
+    allow: []
+    deny:
+      - runtime_installation
+      - task_assignment
+      - dispatch
+      - llm_only_sha_verdict
+      - evidence_rebinding_without_proof
+  outputs:
+    - SUPERSEDED_PROFILE
+  invariants:
+    - exact_sha_is_deterministic
+    - catalog_v1_2_is_authoritative_for_admission
+    - directory_presence_does_not_imply_eligibility
+    - historical_definition_is_not_runtime_authority
