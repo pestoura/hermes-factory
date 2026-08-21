@@ -49,6 +49,7 @@ from hermes_factory.governance.hermes_skill_eval_runtime import (
 from hermes_factory.traceability.registry import SemanticRegistry
 
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
 _PLAN_SCHEMA = "hermes.factory/eval-execution-plan/v1"
 _HANDOFF_SCHEMA = "hermes.factory/behavioral-eval-handoff/v1"
 _BUNDLE_SCHEMA = "hermes.factory/automated-behavioral-eval-bundle/v1"
@@ -146,9 +147,7 @@ def _plan_from_mapping(value: object) -> EvalExecutionPlan:
             raise AutomatedEvalBundleError(f"behavioral eval item {index} candidate kind is invalid")
         if not isinstance(candidate_id, str) or not candidate_id.strip():
             raise AutomatedEvalBundleError(f"behavioral eval item {index} candidate id is invalid")
-        if not isinstance(candidate_digest, str) or not re.fullmatch(
-            r"[0-9a-fA-F]{64}", candidate_digest
-        ):
+        if not isinstance(candidate_digest, str) or not _DIGEST_RE.fullmatch(candidate_digest):
             raise AutomatedEvalBundleError(
                 f"behavioral eval item {index} candidate digest is invalid"
             )
