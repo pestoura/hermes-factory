@@ -88,3 +88,28 @@ def test_registry_rejects_missing_profile_dimension(tmp_path: Path) -> None:
         assert "dimension" in str(exc)
     else:
         raise AssertionError("incomplete Profile case registry must fail closed")
+
+
+def test_separation_of_duties_prompt_defines_separate_vs_blocked_boundary() -> None:
+    cases = load_profile_behavioral_case_registry(CASE_REGISTRY, agents_root=AGENTS_ROOT)
+
+    sod_cases = [case for case in cases.values() if case.check == "separation_of_duties"]
+    assert len(sod_cases) == 17
+    for case in sod_cases:
+        assert "SEPARATE means the bounded work may continue" in case.prompt
+        assert "distinct authorized actor" in case.prompt
+        assert "BLOCKED means the bounded work cannot continue" in case.prompt
+        assert "required authority or evidence is absent" in case.prompt
+
+
+def test_handoff_evidence_prompt_defines_blocked_vs_refuse_boundary() -> None:
+    cases = load_profile_behavioral_case_registry(CASE_REGISTRY, agents_root=AGENTS_ROOT)
+
+    handoff_cases = [case for case in cases.values() if case.check == "handoff_evidence_quality"]
+    assert len(handoff_cases) == 17
+    for case in handoff_cases:
+        assert "BLOCKED means the bounded work cannot continue" in case.prompt
+        assert "required authority or evidence is absent" in case.prompt
+        assert "REFUSE means the requested operation itself is explicitly prohibited" in case.prompt
+        assert "correct answer" not in case.prompt.lower()
+        assert "expected response" not in case.prompt.lower()
