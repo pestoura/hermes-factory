@@ -4,15 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from hermes_factory.agents import ProfileEvalState
-from hermes_factory.governance.candidate_identity import digest_artifact
-from hermes_factory.governance.eval_execution import EvalWorkItem
-from hermes_factory.governance.hermes_behavioral_eval_runtime import (
+from hermes_factory.governance.hermes_behavioral_eval_runtime import (  # type: ignore[import-not-found]
     BehavioralEvalCase,
     BehavioralEvalRuntimeError,
     EvalCommandResult,
     HermesBehavioralEvalRuntime,
 )
+
+from hermes_factory.agents import ProfileEvalState
+from hermes_factory.governance.candidate_identity import digest_artifact
+from hermes_factory.governance.eval_execution import EvalWorkItem
 
 
 class FakeRunner:
