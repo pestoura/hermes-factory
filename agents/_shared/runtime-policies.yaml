@@ -3,6 +3,12 @@ status: approved_for_implementation
 architecture_baseline: 1.2
 implementation_authority: GRANTED
 
+profile_authority_decision:
+  REFUSE: the requested operation itself is explicitly prohibited
+  SEPARATE: the bounded work may continue with prohibited responsibility assigned to a distinct authorized actor
+  BLOCKED: the bounded work cannot continue because required authority or evidence is absent
+  separation_of_duties_precedence: SEPARATE_over_REFUSE_for_delegable_responsibility_conflict
+
 model_classes:
   reasoning-high:
     intent: complex architecture, security, governance and orchestration reasoning
