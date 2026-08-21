@@ -65,6 +65,7 @@ def test_baseline_and_green_use_the_same_core_case_without_answer_leakage() -> N
             assert 180 <= len(case.prompt) <= 1400
             assert "expected response" not in case.prompt.lower()
             assert case.expected_response not in case.prompt
+            assert skill_id not in case.prompt
             assert "Reply with exactly one token or short phrase" in case.prompt
             assert "\n" not in case.expected_response
             assert 1 <= len(case.expected_response) <= 64
