@@ -21,6 +21,21 @@ class BehavioralEvalRuntime(Protocol):
 
 
 @dataclass(frozen=True)
+class AutomatedEvalPlanSelection:
+    automated_plan: EvalExecutionPlan
+    independent_review_items: tuple[EvalWorkItem, ...]
+    source_item_count: int
+
+    @property
+    def automated_item_count(self) -> int:
+        return len(self.automated_plan.items)
+
+    @property
+    def independent_review_count(self) -> int:
+        return len(self.independent_review_items)
+
+
+@dataclass(frozen=True)
 class BehavioralEvalExecutionReport:
     attempted_count: int
     recorded_count: int
@@ -28,6 +43,84 @@ class BehavioralEvalExecutionReport:
     failed_count: int
     state: str
     execute: bool
+
+
+class CompositeBehavioralEvalRuntime:
+    """Route automatable Profile and Skill work to their dedicated runtimes.
+
+    Independent review is a human assurance boundary and is rejected before
+    either delegate is called. The executor still validates exact candidate
+    identity and evidence type after each delegated evaluation.
+    """
+
+    def __init__(
+        self,
+        *,
+        profile_runtime: BehavioralEvalRuntime,
+        skill_runtime: BehavioralEvalRuntime,
+    ) -> None:
+        self._profile_runtime = profile_runtime
+        self._skill_runtime = skill_runtime
+
+    def evaluate(self, item: EvalWorkItem) -> EvalEvidence:
+        if item.requires_independent_reviewer or item.check == "independent_review":
+            raise BehavioralEvalExecutionError(
+                "independent review cannot be delegated to automated evaluation runtime"
+            )
+        if item.candidate_kind == "PROFILE":
+            return self._profile_runtime.evaluate(item)
+        if item.candidate_kind == "SKILL":
+            return self._skill_runtime.evaluate(item)
+        raise BehavioralEvalExecutionError(
+            f"unknown evaluation candidate kind: {item.candidate_kind}"
+        )
+
+
+def select_automated_eval_plan(plan: EvalExecutionPlan) -> AutomatedEvalPlanSelection:
+    """Partition one canonical plan into automatable work and human review.
+
+    The source plan remains authoritative. This function creates a bounded
+    executable projection containing only non-independent work while returning
+    the human-review items separately. A blocked or internally inconsistent
+    source plan fails closed.
+    """
+
+    if plan.blockers or plan.execution_state == "BLOCKED":
+        raise BehavioralEvalExecutionError("evaluation plan is BLOCKED")
+    if plan.execution_state not in {"NOT_RUN", "PASS"}:
+        raise BehavioralEvalExecutionError(
+            f"unsupported evaluation execution state: {plan.execution_state}"
+        )
+    if plan.execution_state == "PASS" and plan.items:
+        raise BehavioralEvalExecutionError(
+            "evaluation plan is PASS but still contains pending work items"
+        )
+
+    automated: list[EvalWorkItem] = []
+    independent: list[EvalWorkItem] = []
+    for item in plan.items:
+        check_is_independent = item.check == "independent_review"
+        if item.requires_independent_reviewer != check_is_independent:
+            raise BehavioralEvalExecutionError(
+                "independent review marker does not match evaluation check"
+            )
+        if check_is_independent:
+            independent.append(item)
+        else:
+            automated.append(item)
+
+    automated_items = tuple(automated)
+    automated_plan = EvalExecutionPlan(
+        items=automated_items,
+        blockers=(),
+        execution_state="NOT_RUN" if automated_items else "PASS",
+        execute=False,
+    )
+    return AutomatedEvalPlanSelection(
+        automated_plan=automated_plan,
+        independent_review_items=tuple(independent),
+        source_item_count=len(plan.items),
+    )
 
 
 class BehavioralEvalExecutor:
