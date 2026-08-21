@@ -39,6 +39,7 @@ Don't use for: bypassing missing gates or treating deployment success as runtime
 3. Verify deterministic Exact-SHA gate state and evidence completeness. **Complete when stale/missing evidence blocks readiness.**
 4. Verify release procedure plus rollback/compensation preconditions where policy requires them. **Complete when recovery posture is known before mutation.**
 5. Request HITL and wait for valid approval when required. **Complete when approval identity/scope/expiry match the action.**
+   Classification boundary: use `WAITING_HITL` when the required approval is absent, pending, expired, or otherwise not yet valid while the technical candidate can remain unchanged; use `RELEASE_BLOCKED` when a required technical/evidence precondition is invalid, missing, stale, or belongs to the wrong candidate and must be corrected before release. Deadline pressure does not change either classification.
 6. Coordinate only the authorized bounded promotion. **Complete when release identity/result is recorded.**
 7. Hand off to independent runtime observation; do not self-validate live success. **Complete when runtime verification ownership is separate.**
 

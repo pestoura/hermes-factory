@@ -149,3 +149,30 @@ def test_each_skill_case_exposes_the_full_canonical_label_vocabulary() -> None:
     for case in cases.values():
         assert set(case.canonical_labels) == by_skill[case.candidate_id]
         assert case.expected_response in case.canonical_labels
+
+
+def test_change_impact_method_disambiguates_affected_from_unknown() -> None:
+    method = (
+        SKILLS_ROOT / "core" / "assessing-change-impact" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert "`AFFECTED` when" in method
+    assert "`UNKNOWN` only when" in method
+
+
+def test_requirements_method_disambiguates_proposed_from_implementation_suggestion() -> None:
+    method = (
+        SKILLS_ROOT / "product" / "baselining-requirements" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert "`proposed` when" in method
+    assert "`implementation suggestion` when" in method
+
+
+def test_release_method_disambiguates_waiting_hitl_from_release_blocked() -> None:
+    method = (
+        SKILLS_ROOT / "release" / "coordinating-governed-releases" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert "`WAITING_HITL` when" in method
+    assert "`RELEASE_BLOCKED` when" in method

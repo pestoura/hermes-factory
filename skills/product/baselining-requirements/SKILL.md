@@ -35,6 +35,7 @@ Don't use for: making product decisions the owner has not approved.
 
 1. Identify actors, goals and externally observable behavior. **Complete when each requirement has a subject and outcome.**
 2. Separate mandatory behavior, constraint, non-goal and implementation suggestion. **Complete when solution detail is not masquerading as requirement.**
+   Classification boundary: use `proposed` when behavior is not sourced in approved intent and would create new mandatory product intent; use `implementation suggestion` when approved intent exists but a particular technical mechanism or framework is only one possible way to satisfy it. Unsupported behavior is not an implementation suggestion merely because it simplifies implementation.
 3. Define normal, boundary and failure behavior where material. **Complete when important negative paths are not implicit.**
 4. Write acceptance criteria using observable inputs, state and outcomes. **Complete when an independent tester could determine pass/fail.**
 5. Identify non-functional constraints such as security, performance, operability or compatibility only when sourced. **Complete when each constraint has provenance.**
