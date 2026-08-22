@@ -102,7 +102,7 @@ def test_materializes_stage_graph_on_product_board_and_authorizes_only_roots() -
     assert len(adapter.specs) == 12
     assert {spec.board for spec in adapter.specs} == {"jarvas-cli"}
     assert {spec.project_id for spec in adapter.specs} == {"jarvas-cli"}
-    assert {spec.revision for spec in adapter.specs} == {"d" * 64}
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v2"}
     assert {spec.workspace_kind for spec in adapter.specs} == {"worktree"}
 
     a_discover = _spec_by(adapter, "WP-A", "DISCOVER")
@@ -212,3 +212,28 @@ def test_work_package_stages_share_one_candidate_worktree_and_branch() -> None:
     assert b_implement.workspace_path == expected_b
     assert b_discover.branch_name == b_implement.branch_name
     assert a_discover.branch_name != b_discover.branch_name
+
+
+def test_task_contract_confines_local_truth_to_assigned_worktree() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(), project_key="jarvas-cli", board="jarvas-cli",
+        project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+    )
+    body = _spec_by(adapter, "WP-A", "DISCOVER").body
+    assert "assigned worktree is the only local project-truth root" in body
+    assert "parent repository root or sibling .worktrees" in body
+    assert "explicitly declared canonical external source" in body
+
+
+def test_stage_contract_revision_versions_materialization_identity() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(), project_key="jarvas-cli", board="jarvas-cli",
+        project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+    )
+    spec = _spec_by(adapter, "WP-A", "DISCOVER")
+    expected = "d" * 64 + ".stage-contract-v2"
+    assert spec.revision == expected
+    assert spec.idempotency_key.endswith(":" + expected)
+    assert "Project model revision: " + "d" * 64 in spec.body
