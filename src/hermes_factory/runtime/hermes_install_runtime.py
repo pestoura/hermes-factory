@@ -84,7 +84,7 @@ class SubprocessFactoryPackageProbe:
             raise RuntimeError("installed Factory package provenance is invalid") from exc
         url = payload.get("url") if isinstance(payload, dict) else None
         if not isinstance(url, str):
-            raise RuntimeError("installed Factory package source URL is unavailable")
+            raise TypeError("installed Factory package source URL is unavailable")
         parsed = urlparse(url)
         if parsed.scheme != "file":
             raise RuntimeError("installed Factory package source must be a local file URL")
@@ -532,9 +532,10 @@ class HermesJarvasInstallRuntime:
         backup = self._dashboard_backup_path(previous.candidate_sha)
         if backup.is_symlink():
             raise RuntimeError("Dashboard plugin backup path must not be a symlink")
-        if backup.exists():
-            if not backup.is_dir() or digest_artifact(backup) != digest_artifact(target):
-                raise RuntimeError("Dashboard plugin rollback backup conflicts with live target")
+        if backup.exists() and (
+            not backup.is_dir() or digest_artifact(backup) != digest_artifact(target)
+        ):
+            raise RuntimeError("Dashboard plugin rollback backup conflicts with live target")
 
     def _ensure_factory_package_absent(self) -> None:
         result = self._runner.run(

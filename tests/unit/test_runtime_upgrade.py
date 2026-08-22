@@ -207,8 +207,10 @@ def test_dashboard_upgrade_is_backed_up_and_restorable(tmp_path: Path):
 
 def test_subprocess_package_probe_loads_exact_installed_candidate(tmp_path: Path):
     import json as json_module
+
     from hermes_factory.runtime.hermes_install_runtime import (
-        CommandResult, SubprocessFactoryPackageProbe,
+        CommandResult,
+        SubprocessFactoryPackageProbe,
     )
 
     root = tmp_path / ("factory-package-candidate-" + "3" * 40)
