@@ -305,7 +305,7 @@ class ControlledInstallPlanBuilder:
                 ),
                 InstallOperation(
                     component=RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION,
-                    action="REGISTER_NORTHBOUND_CONTROL_INTEGRATION",
+                    action="VERIFY_NORTHBOUND_CONTROL_BINDING",
                     source=str(northbound_binding_source),
                     source_digest=northbound_binding_digest,
                     target="HERMES_MCP_BRIDGE",

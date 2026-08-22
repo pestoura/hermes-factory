@@ -35,3 +35,12 @@ def test_install_component_map_distinguishes_concrete_runtime_support_from_block
 
     assert document["runtime_state"] == "NOT_RUN"
     assert document["execute"] is False
+
+
+def test_northbound_component_declares_verification_not_registration():
+    document = yaml.safe_load(COMPONENT_MAP.read_text(encoding="utf-8"))
+    northbound = document["components"]["NORTHBOUND_CONTROL_INTEGRATION"]
+
+    assert northbound["mechanism"] == "verify_existing_hermes_mcp_bridge_northbound_binding"
+    assert northbound["source"] == "hermes-integration/mcp-bridge/factory-northbound.yaml"
+    assert northbound["target"] == "HERMES_MCP_BRIDGE"

@@ -10,8 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import yaml
+
 from hermes_factory.governance.candidate_identity import digest_artifact
-from hermes_factory.runtime.admission import RuntimeComponent
+from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
+from hermes_factory.runtime.bindings import RuntimeComponentBinding
 from hermes_factory.runtime.install import InstallOperation
 from hermes_factory.runtime.skill_catalog_candidate import (
     SkillCatalogCandidateError,
@@ -58,6 +61,19 @@ _GATEWAY_BINDING_PROBE = (
     "HermesGatewayHITLBinding; assert callable(HermesGatewayHITLBinding)"
 )
 _KANBAN_AUTO_DECOMPOSE_KEY = "kanban.auto_decompose"
+_NORTHBOUND_ENTRYPOINT = "hermes_mcp_bridge.http_runner"
+_NORTHBOUND_TOOLS = (
+    "factory_acceptance",
+    "factory_evidence",
+    "factory_protected_mutation_intent",
+    "factory_status",
+)
+_NORTHBOUND_PROTECTED_ACTIONS = (
+    "ACTIVATE_PROFILE",
+    "ACTIVATE_SKILL",
+    "MERGE_PR",
+    "RELEASE",
+)
 _SUPPORTED_ACTIONS = {
     "STAGE_FACTORY_PACKAGE",
     "STAGE_FACTORY_SKILL_CATALOG",
@@ -66,6 +82,7 @@ _SUPPORTED_ACTIONS = {
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
     "VERIFY_GATEWAY_HITL_BINDING",
+    "VERIFY_NORTHBOUND_CONTROL_BINDING",
     "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY",
 }
 
@@ -254,6 +271,48 @@ class HermesJarvasInstallRuntime:
             raise RuntimeError("Gateway HITL binding inherits Factory package identity")
 
     @staticmethod
+    def _validate_northbound_binding(operation: InstallOperation) -> None:
+        if operation.component is not RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION:
+            raise RuntimeError("northbound control binding operation has wrong component")
+        if operation.target != "HERMES_MCP_BRIDGE":
+            raise RuntimeError("northbound control binding target is invalid")
+        if operation.argv:
+            raise RuntimeError("northbound control binding verification must not contain argv")
+        if operation.source is None or not operation.source.strip():
+            raise RuntimeError("northbound control binding source is required")
+        source = Path(operation.source)
+        if source.is_symlink() or not source.is_file():
+            raise RuntimeError("northbound control binding source must be a regular file")
+        if operation.source_digest is None or digest_artifact(source) != operation.source_digest:
+            raise RuntimeError("northbound control binding source digest mismatch")
+        try:
+            payload = yaml.safe_load(source.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise RuntimeError("northbound control binding could not be loaded") from exc
+        if not isinstance(payload, dict):
+            raise TypeError("northbound control binding must be a mapping")
+        try:
+            binding = RuntimeComponentBinding.from_mapping(payload)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("northbound control binding contract is invalid") from exc
+        if binding.component is not RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION:
+            raise RuntimeError("northbound control binding component is invalid")
+        if binding.admission_state is not AdmissionEvidenceState.PASS:
+            raise RuntimeError("northbound control binding verification_state must be PASS")
+        if payload.get("default_enabled") is not False:
+            raise RuntimeError("northbound control binding default_enabled must be false")
+        if payload.get("internal_factory_ipc") is not False:
+            raise RuntimeError("northbound control binding internal_factory_ipc must be false")
+        if payload.get("mutation_execution") is not False:
+            raise RuntimeError("northbound control binding mutation_execution must be false")
+        if payload.get("production_entrypoint") != _NORTHBOUND_ENTRYPOINT:
+            raise RuntimeError("northbound control binding production_entrypoint is invalid")
+        if tuple(payload.get("tools", ())) != _NORTHBOUND_TOOLS:
+            raise RuntimeError("northbound control binding tools are invalid")
+        if tuple(payload.get("protected_actions", ())) != _NORTHBOUND_PROTECTED_ACTIONS:
+            raise RuntimeError("northbound control binding protected_actions are invalid")
+
+    @staticmethod
     def _validate_kanban_policy(operation: InstallOperation) -> None:
         if operation.component is not RuntimeComponent.KANBAN_HIGH_ASSURANCE_POLICY:
             raise RuntimeError("Kanban high-assurance operation has wrong component")
@@ -305,6 +364,9 @@ class HermesJarvasInstallRuntime:
             return
         if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
             self._validate_gateway_binding(operation)
+            return
+        if operation.action == "VERIFY_NORTHBOUND_CONTROL_BINDING":
+            self._validate_northbound_binding(operation)
             return
         if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
             self._validate_kanban_policy(operation)
@@ -516,6 +578,10 @@ class HermesJarvasInstallRuntime:
             )
             return _receipt({"kind": "GATEWAY_HITL_BINDING_VERIFIED"})
 
+        if operation.action == "VERIFY_NORTHBOUND_CONTROL_BINDING":
+            self._validate_northbound_binding(operation)
+            return _receipt({"kind": "NORTHBOUND_CONTROL_BINDING_VERIFIED"})
+
         if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
             return self._apply_kanban_policy()
 
@@ -627,6 +693,11 @@ class HermesJarvasInstallRuntime:
         if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
             if payload != {"kind": "GATEWAY_HITL_BINDING_VERIFIED"}:
                 raise RuntimeError("Gateway HITL binding receipt does not match operation")
+            return
+
+        if operation.action == "VERIFY_NORTHBOUND_CONTROL_BINDING":
+            if payload != {"kind": "NORTHBOUND_CONTROL_BINDING_VERIFIED"}:
+                raise RuntimeError("northbound control binding receipt does not match operation")
             return
 
         if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
