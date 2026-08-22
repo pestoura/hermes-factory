@@ -2,7 +2,6 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
-
 PLUGIN = Path("hermes-integration/dashboard-plugin/hermes-factory/__init__.py")
 
 

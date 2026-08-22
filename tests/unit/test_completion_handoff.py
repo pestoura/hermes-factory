@@ -198,7 +198,7 @@ def test_other_open_parent_keeps_child_blocked() -> None:
     )
     native.children["t_parent"] = ("t_child",)
     native.parents["t_child"] = ("t_parent", "t_other")
-    coordinator, ledger, authorizer = _coordinator(
+    coordinator, _ledger, authorizer = _coordinator(
         native, observed_candidate="d" * 40
     )
 
