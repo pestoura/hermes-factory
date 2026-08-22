@@ -237,3 +237,16 @@ def test_stage_contract_revision_versions_materialization_identity() -> None:
     assert spec.revision == expected
     assert spec.idempotency_key.endswith(":" + expected)
     assert "Project model revision: " + "d" * 64 in spec.body
+
+
+def test_candidate_branch_isolated_by_stage_contract_revision() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(), project_key="jarvas-cli", board="jarvas-cli",
+        project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+    )
+    a_discover = _spec_by(adapter, "WP-A", "DISCOVER")
+    a_implement = _spec_by(adapter, "WP-A", "IMPLEMENT")
+    assert a_discover.branch_name == a_implement.branch_name
+    assert a_discover.branch_name is not None
+    assert a_discover.branch_name.endswith("-stage-contract-v2")

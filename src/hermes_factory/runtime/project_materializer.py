@@ -294,4 +294,4 @@ def _ordered_work_packages(
 def _candidate_branch(project_key: str, work_package_id: str, revision: str) -> str:
     project = project_key.strip().lower()
     wp = work_package_id.strip().lower()
-    return f"factory/{project}/{wp}-{revision[:12]}"
+    return f"factory/{project}/{wp}-{revision[:12]}-{_STAGE_CONTRACT_REVISION}"
