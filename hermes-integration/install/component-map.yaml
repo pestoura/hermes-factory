@@ -92,7 +92,7 @@ components:
       evidence and are NOT_RUN until controlled runtime verification.
 
   NORTHBOUND_CONTROL_INTEGRATION:
-    mechanism: hermes_mcp_bridge_northbound_registration
+    mechanism: verify_existing_hermes_mcp_bridge_northbound_binding
     source: hermes-integration/mcp-bridge/factory-northbound.yaml
     target: HERMES_MCP_BRIDGE
     runtime_adapter_status: SUPPORTED

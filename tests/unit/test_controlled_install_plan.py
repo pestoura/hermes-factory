@@ -155,6 +155,15 @@ def test_controlled_install_plan_is_ready_only_with_exact_sha_and_all_pass_evide
     )
     assert dashboard_operation.source == str(dashboard)
     assert dashboard_operation.target == "HERMES_HOME/plugins/hermes-factory"
+    northbound_operation = next(
+        operation
+        for operation in plan.operations
+        if operation.component is RuntimeComponent.NORTHBOUND_CONTROL_INTEGRATION
+    )
+    assert northbound_operation.action == "VERIFY_NORTHBOUND_CONTROL_BINDING"
+    assert northbound_operation.source == str(northbound)
+    assert northbound_operation.source_digest == digest_artifact(northbound)
+    assert northbound_operation.target == "HERMES_MCP_BRIDGE"
 
 
 def test_controlled_install_plan_collects_not_run_blocked_and_sha_mismatch_without_execution(tmp_path: Path):
