@@ -286,3 +286,23 @@ def test_trust_verification_failure_untrusts_and_removes_new_projection(tmp_path
         "untrust",
         str(worktree.resolve()),
     )
+
+
+def test_native_list_skills_are_normalized_without_relaxing_validation(tmp_path: Path) -> None:
+    task = FakeTask(
+        assignee="factory-software-engineer",
+        skills=["factory-tdd-implementation"],  # type: ignore[arg-type]
+        workspace_kind="scratch",
+    )
+    native = FakeNativeTaskRuntime(task, tmp_path / "worktree")
+    runner = FakeRunner([])
+    preparer = _preparer(
+        native=native,
+        runner=runner,
+        skill_sources={},
+        expected_digests={},
+    )
+
+    preparer.prepare(board="jarvas-cli", task_id="t_1")
+
+    assert runner.calls == []

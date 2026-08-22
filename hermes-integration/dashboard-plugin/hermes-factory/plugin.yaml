@@ -4,3 +4,4 @@ description: "Hermes Software Factory runtime enforcement and dashboard integrat
 author: "Hermes Software Factory"
 hooks:
   - pre_tool_call
+  - kanban_task_completed
