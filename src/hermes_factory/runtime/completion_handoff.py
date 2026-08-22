@@ -41,7 +41,8 @@ class CandidateIdentityObserver(Protocol):
 
 _TASK_KEY = re.compile(
     r"^factory:(?P<project>[^:]+):(?P<wp>[^:]+):"
-    r"(?P<stage>[A-Z0-9_]+):(?P<revision>[0-9a-f]{64})$"
+    r"(?P<stage>[A-Z0-9_]+):(?P<context>[0-9a-f]{64})"
+    r"(?P<contract>\.stage-contract-v[1-9][0-9]*)?$"
 )
 
 
@@ -70,7 +71,7 @@ class CompletionHandoffCoordinator:
             identity = _parse_task_identity(getattr(task, "idempotency_key", None))
             if identity is None:
                 return ()
-            project_id, work_package_id, stage, revision = identity
+            project_id, work_package_id, stage, context_revision, materialization_revision = identity
             if project_id != board:
                 raise CompletionHandoffError(
                     "Factory task project identity does not match product board"
@@ -92,7 +93,7 @@ class CompletionHandoffCoordinator:
                 for child_id in children
             }
 
-        if payload["context_revision"] != revision:
+        if payload["context_revision"] != context_revision:
             raise CompletionHandoffError("Factory handoff context revision is stale")
 
         observed_candidate: str | None = None
@@ -122,15 +123,19 @@ class CompletionHandoffCoordinator:
                 raise CompletionHandoffError(
                     f"Factory child task {child_id} lacks semantic identity"
                 )
-            child_project, _, _, child_revision = child_identity
-            if child_project != project_id or child_revision != revision:
+            child_project, _, _, child_context, child_materialization = child_identity
+            if (
+                child_project != project_id
+                or child_context != context_revision
+                or child_materialization != materialization_revision
+            ):
                 raise CompletionHandoffError("Factory child task identity is stale or cross-project")
             prerequisites = tuple(
                 parent is not None and getattr(parent, "status", None) == "done"
                 for parent in parent_state[child_id]
             )
             record = HandoffRecord(
-                handoff_id=f"handoff:{task_id}:{child_id}:{revision}",
+                handoff_id=f"handoff:{task_id}:{child_id}:{materialization_revision}",
                 project_id=project_id,
                 work_package_id=work_package_id,
                 stage=stage,
@@ -150,7 +155,7 @@ class CompletionHandoffCoordinator:
             try:
                 state = self._handoff.promote(
                     record,
-                    current_context_revision=revision,
+                    current_context_revision=context_revision,
                     current_candidate_identity=observed_candidate,
                     next_board=board,
                     next_task_id=child_id,
@@ -162,17 +167,20 @@ class CompletionHandoffCoordinator:
         return tuple(states)
 
 
-def _parse_task_identity(value: object) -> tuple[str, str, str, str] | None:
+def _parse_task_identity(value: object) -> tuple[str, str, str, str, str] | None:
     if not isinstance(value, str):
         return None
     match = _TASK_KEY.fullmatch(value.strip())
     if match is None:
         return None
+    context_revision = match.group("context")
+    contract = match.group("contract") or ""
     return (
         match.group("project"),
         match.group("wp"),
         match.group("stage"),
-        match.group("revision"),
+        context_revision,
+        context_revision + contract,
     )
 
 
@@ -199,8 +207,14 @@ def _handoff_payload(metadata: object) -> HandoffPayload:
     context_revision = raw.get("context_revision")
     if not isinstance(stage_outcome, str) or not stage_outcome.strip():
         raise CompletionHandoffError("factory_handoff.stage_outcome is required")
+    stage_outcome = stage_outcome.strip()
+    if stage_outcome not in {"PASS", "BLOCKED", "UNKNOWN", "NOT_RUN"}:
+        raise CompletionHandoffError("factory_handoff.stage_outcome is invalid")
     if not isinstance(finding_state, str) or not finding_state.strip():
         raise CompletionHandoffError("factory_handoff.finding_state is required")
+    finding_state = finding_state.strip()
+    if finding_state not in {"NONE", "RESOLVED", "OPEN"}:
+        raise CompletionHandoffError("factory_handoff.finding_state is invalid")
     if not isinstance(context_revision, str) or not context_revision.strip():
         raise CompletionHandoffError("factory_handoff.context_revision is required")
 
@@ -218,11 +232,11 @@ def _handoff_payload(metadata: object) -> HandoffPayload:
     if len(evidence_refs) != len(evidence_states):
         raise CompletionHandoffError("factory_handoff evidence refs/states length mismatch")
     return {
-        "stage_outcome": stage_outcome.strip(),
+        "stage_outcome": stage_outcome,
         "artifact_refs": _string_tuple(raw.get("artifact_refs"), "artifact_refs"),
         "evidence_refs": evidence_refs,
         "evidence_states": evidence_states,
-        "finding_state": finding_state.strip(),
+        "finding_state": finding_state,
         "context_revision": context_revision.strip(),
         "candidate_identity": candidate.strip() if isinstance(candidate, str) else None,
         "independent_review_state": (

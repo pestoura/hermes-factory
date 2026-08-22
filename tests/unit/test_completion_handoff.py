@@ -239,3 +239,51 @@ def test_candidate_bound_stage_uses_observed_git_identity_not_worker_assertion()
     record, state = ledger.entries[0]
     assert state is HandoffState.STALE
     assert record.candidate_identity == claimed
+
+
+def test_versioned_stage_identity_uses_base_context_revision() -> None:
+    revision = "f" * 64
+    materialization = revision + ".stage-contract-v2"
+    native = FakeNative()
+    native.tasks["t_parent"] = FakeTask(
+        "t_parent", "factory-requirements-engineer", "done",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{materialization}",
+    )
+    native.tasks["t_child"] = FakeTask(
+        "t_child", "factory-requirements-engineer", "blocked",
+        f"factory:jarvas-cli:WP-A:SPECIFY:{materialization}",
+    )
+    native.runs["t_parent"] = FakeRun("completed", metadata=_metadata(revision))
+    native.children["t_parent"] = ("t_child",)
+    native.parents["t_child"] = ("t_parent",)
+    coordinator, ledger, authorizer = _coordinator(native)
+
+    states = coordinator.on_task_completed(task_id="t_parent", board="jarvas-cli")
+    assert states == (HandoffState.HANDED_OFF,)
+    assert authorizer.calls[0]["task_id"] == "t_child"
+    record, _ = ledger.entries[0]
+    assert record.context_revision == revision
+    assert materialization in record.handoff_id
+
+
+def test_invalid_stage_outcome_is_rejected_before_handoff() -> None:
+    revision = "1" * 64
+    native = FakeNative()
+    native.tasks["t_parent"] = FakeTask(
+        "t_parent", "factory-requirements-engineer", "done",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{revision}",
+    )
+    native.tasks["t_child"] = FakeTask(
+        "t_child", "factory-requirements-engineer", "blocked",
+        f"factory:jarvas-cli:WP-A:SPECIFY:{revision}",
+    )
+    metadata = _metadata(revision)
+    metadata["factory_handoff"]["stage_outcome"] = "REQUIREMENTS_BASELINE"
+    native.runs["t_parent"] = FakeRun("completed", metadata=metadata)
+    native.children["t_parent"] = ("t_child",)
+    native.parents["t_child"] = ("t_parent",)
+    coordinator, ledger, authorizer = _coordinator(native)
+    with pytest.raises(CompletionHandoffError, match="stage_outcome"):
+        coordinator.on_task_completed(task_id="t_parent", board="jarvas-cli")
+    assert ledger.entries == []
+    assert authorizer.calls == []
