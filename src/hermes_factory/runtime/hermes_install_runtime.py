@@ -9,6 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import unquote, urlparse
 
 import yaml
 
@@ -16,6 +17,11 @@ from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
 from hermes_factory.runtime.bindings import RuntimeComponentBinding
 from hermes_factory.runtime.install import InstallOperation
+from hermes_factory.runtime.package_candidate import (
+    FactoryPackageCandidate,
+    PackageCandidateError,
+    load_package_candidate,
+)
 from hermes_factory.runtime.skill_catalog_candidate import (
     SkillCatalogCandidateError,
     load_skill_catalog_candidate,
@@ -33,6 +39,10 @@ class CommandRunner(Protocol):
     def run(self, argv: tuple[str, ...]) -> CommandResult: ...
 
 
+class FactoryPackageProbe(Protocol):
+    def current(self) -> FactoryPackageCandidate | None: ...
+
+
 class SubprocessCommandRunner:
     def run(self, argv: tuple[str, ...]) -> CommandResult:
         completed = subprocess.run(
@@ -48,6 +58,50 @@ class SubprocessCommandRunner:
         )
 
 
+class SubprocessFactoryPackageProbe:
+    def __init__(self, runner: CommandRunner, python_executable: str) -> None:
+        self._runner = runner
+        self._python_executable = python_executable
+
+    def current(self) -> FactoryPackageCandidate | None:
+        present = self._runner.run(
+            (self._python_executable, "-m", "pip", "show", _FACTORY_DISTRIBUTION)
+        )
+        if present.returncode == 1:
+            return None
+        if present.returncode != 0:
+            raise RuntimeError(
+                f"Factory package probe failed with exit code {present.returncode}"
+            )
+        direct = self._runner.run(
+            (self._python_executable, "-c", _FACTORY_DIRECT_URL_PROBE)
+        )
+        if direct.returncode != 0:
+            raise RuntimeError("installed Factory package provenance is unavailable")
+        try:
+            payload = json.loads(direct.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("installed Factory package provenance is invalid") from exc
+        url = payload.get("url") if isinstance(payload, dict) else None
+        if not isinstance(url, str):
+            raise RuntimeError("installed Factory package source URL is unavailable")
+        parsed = urlparse(url)
+        if parsed.scheme != "file":
+            raise RuntimeError("installed Factory package source must be a local file URL")
+        wheel = Path(unquote(parsed.path))
+        match = _FACTORY_CANDIDATE_PATH.search(url)
+        if match is None:
+            raise RuntimeError("installed Factory package exact candidate SHA is unavailable")
+        try:
+            return load_package_candidate(
+                manifest_path=wheel.parent / "factory-package.json",
+                wheel_path=wheel,
+                expected_candidate_sha=match.group(1),
+            )
+        except PackageCandidateError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+
 _PROFILE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _JOB_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _CREATED_JOB = re.compile(r"^Created job:\s*(\S+)\s*$", re.MULTILINE)
@@ -55,6 +109,15 @@ _SKILL_CATALOG_TARGET = re.compile(
     r"^HERMES_HOME/factory/skill-catalog/([0-9a-fA-F]{40})$"
 )
 _FACTORY_DISTRIBUTION = "hermes-factory"
+_FACTORY_CANDIDATE_PATH = re.compile(
+    r"(?:^|/)factory-package-candidate-([0-9a-fA-F]{40})(?:/|$)"
+)
+_FACTORY_DIRECT_URL_PROBE = (
+    "import importlib.metadata as m; "
+    "d=m.distribution(\"hermes-factory\"); "
+    "v=d.read_text(\"direct_url.json\"); "
+    "assert v; print(v, end=\"\")"
+)
 _GATEWAY_BINDING_MODULE = "hermes_factory.adapters.hermes_gateway"
 _GATEWAY_BINDING_PROBE = (
     "from hermes_factory.adapters.hermes_gateway import "
@@ -115,12 +178,50 @@ class HermesJarvasInstallRuntime:
         command_runner: CommandRunner | None = None,
         hermes_home: Path | None = None,
         python_executable: str | None = None,
+        factory_package_probe: FactoryPackageProbe | None = None,
     ) -> None:
         self._runner = command_runner or SubprocessCommandRunner()
         self._hermes_home = Path(hermes_home) if hermes_home is not None else None
         self._python_executable = python_executable or sys.executable
+        self._factory_package_probe = factory_package_probe
+        self._preflight_factory_package: FactoryPackageCandidate | None = None
         if not self._python_executable.strip():
             raise ValueError("Python executable is required for Factory package installation")
+
+    @staticmethod
+    def _validate_rollback_candidate(candidate: FactoryPackageCandidate) -> None:
+        wheel = Path(candidate.wheel_path)
+        if wheel.is_symlink() or not wheel.is_file():
+            raise RuntimeError("Factory rollback package wheel is unavailable")
+        if digest_artifact(wheel) != candidate.artifact_digest:
+            raise RuntimeError("Factory rollback package digest drift")
+
+    def _default_factory_package_probe(self) -> FactoryPackageCandidate | None:
+        return SubprocessFactoryPackageProbe(
+            self._runner, self._python_executable
+        ).current()
+
+    def _current_factory_package(self) -> FactoryPackageCandidate | None:
+        candidate = (
+            self._factory_package_probe.current()
+            if self._factory_package_probe is not None
+            else self._default_factory_package_probe()
+        )
+        if candidate is not None:
+            self._validate_rollback_candidate(candidate)
+        return candidate
+
+    @staticmethod
+    def _same_factory_candidate(
+        left: FactoryPackageCandidate | None,
+        right: FactoryPackageCandidate | None,
+    ) -> bool:
+        if left is None or right is None:
+            return left is right
+        return (
+            left.candidate_sha == right.candidate_sha
+            and left.artifact_digest == right.artifact_digest
+        )
 
     @staticmethod
     def _factory_package_source(operation: InstallOperation) -> Path:
@@ -376,6 +477,65 @@ class HermesJarvasInstallRuntime:
         if operation.argv:
             raise RuntimeError("empty cron plan operation must not contain a command")
 
+    def _profile_reuse_state(
+        self, operation: InstallOperation
+    ) -> tuple[str, Path, Path] | None:
+        profile_id = self._profile_id(operation)
+        source = Path(operation.source or "")
+        if operation.source_digest is not None:
+            observed_source = digest_artifact(source)
+            if observed_source != operation.source_digest:
+                raise RuntimeError("Profile distribution source digest drift")
+        if self._hermes_home is None:
+            return None
+        target = self._hermes_home / "profiles" / profile_id
+        if not target.exists():
+            return None
+        if target.is_symlink() or not target.is_dir():
+            raise RuntimeError("installed Profile target must be a regular directory")
+        for entry in source.rglob("*"):
+            if entry.is_symlink():
+                raise RuntimeError("Profile distribution source contains a symlink")
+            relative = entry.relative_to(source)
+            installed = target / relative
+            if entry.is_dir():
+                if installed.is_symlink() or not installed.is_dir():
+                    raise RuntimeError("Profile managed distribution drift")
+            elif entry.is_file():
+                if installed.is_symlink() or not installed.is_file():
+                    raise RuntimeError("Profile managed distribution drift")
+                if digest_artifact(entry) != digest_artifact(installed):
+                    raise RuntimeError("Profile managed distribution drift")
+            else:
+                raise RuntimeError("Profile distribution contains unsupported entry")
+        return profile_id, source, target
+
+    def _dashboard_target_exists(self, operation: InstallOperation) -> bool:
+        _, target, _ = self._dashboard_paths(operation, target_must_be_absent=False)
+        return target.exists() or target.is_symlink()
+
+    def _dashboard_backup_path(self, candidate_sha: str) -> Path:
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Dashboard plugin upgrade")
+        return self._hermes_home / "factory" / "dashboard-plugin-catalog" / candidate_sha
+
+    def _validate_dashboard_upgrade(self, operation: InstallOperation) -> None:
+        source, target, _ = self._dashboard_paths(operation, target_must_be_absent=False)
+        if target.is_symlink() or not target.is_dir():
+            raise RuntimeError("Dashboard plugin upgrade target must be a regular directory")
+        previous = self._preflight_factory_package
+        if previous is None:
+            raise RuntimeError("Dashboard plugin upgrade requires previous Factory package identity")
+        self._validate_rollback_candidate(previous)
+        if operation.source_digest is not None and digest_artifact(source) != operation.source_digest:
+            raise RuntimeError("Dashboard plugin source digest drift")
+        backup = self._dashboard_backup_path(previous.candidate_sha)
+        if backup.is_symlink():
+            raise RuntimeError("Dashboard plugin backup path must not be a symlink")
+        if backup.exists():
+            if not backup.is_dir() or digest_artifact(backup) != digest_artifact(target):
+                raise RuntimeError("Dashboard plugin rollback backup conflicts with live target")
+
     def _ensure_factory_package_absent(self) -> None:
         result = self._runner.run(
             (self._python_executable, "-m", "pip", "show", _FACTORY_DISTRIBUTION)
@@ -388,13 +548,40 @@ class HermesJarvasInstallRuntime:
             )
 
     def preflight(self, operations: tuple[InstallOperation, ...]) -> None:
-        # First validate every operation structurally. Only after the complete
-        # plan is known to be supported may read-only environment probes run.
+        # Validate the complete operation set before any mutation. Upgrade mode
+        # is opt-in through an exact-candidate package probe; legacy first-install
+        # behavior remains unchanged when no probe is supplied.
+        allow_dashboard_upgrade = self._factory_package_probe is not None
         for operation in operations:
-            self._validate_operation(operation)
+            self._validate_operation(
+                operation, allow_dashboard_target_exists=allow_dashboard_upgrade
+            )
+
+        if self._factory_package_probe is not None:
+            needs_package_identity = any(
+                operation.action == "STAGE_FACTORY_PACKAGE"
+                or (
+                    operation.action == "REGISTER_DASHBOARD_PLUGIN"
+                    and self._dashboard_target_exists(operation)
+                )
+                for operation in operations
+            )
+            if needs_package_identity:
+                self._preflight_factory_package = self._current_factory_package()
+
         for operation in operations:
             if operation.action == "STAGE_FACTORY_PACKAGE":
-                self._ensure_factory_package_absent()
+                if self._factory_package_probe is None:
+                    self._ensure_factory_package_absent()
+                elif self._preflight_factory_package is not None:
+                    self._validate_rollback_candidate(self._preflight_factory_package)
+            elif operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
+                self._profile_reuse_state(operation)
+            elif (
+                operation.action == "REGISTER_DASHBOARD_PLUGIN"
+                and self._dashboard_target_exists(operation)
+            ):
+                self._validate_dashboard_upgrade(operation)
 
     def _run_checked(self, argv: tuple[str, ...], label: str) -> CommandResult:
         result = self._runner.run(argv)
@@ -427,26 +614,57 @@ class HermesJarvasInstallRuntime:
 
     def _apply_factory_package(self, operation: InstallOperation) -> str:
         source = self._factory_package_source(operation)
-        # Repeat the read-only absence probe immediately before mutation to
-        # close the preflight/apply race window.
-        self._ensure_factory_package_absent()
+        if self._factory_package_probe is None:
+            # Legacy first install remains fail-closed when a package exists.
+            self._ensure_factory_package_absent()
+            self._run_checked(
+                (
+                    self._python_executable, "-m", "pip", "install",
+                    "--no-deps", "--no-input", str(source),
+                ),
+                "Factory package install",
+            )
+            return _receipt(
+                {
+                    "distribution": _FACTORY_DISTRIBUTION,
+                    "kind": "FACTORY_PACKAGE_INSTALL",
+                    "source": str(source),
+                }
+            )
+
+        previous = self._preflight_factory_package
+        current = self._current_factory_package()
+        if not self._same_factory_candidate(previous, current):
+            raise RuntimeError("Factory package identity changed after preflight")
+        if current is None:
+            raise RuntimeError("Factory package upgrade requires an installed rollback candidate")
+        if current.artifact_digest == operation.source_digest:
+            return _receipt(
+                {
+                    "candidate_sha": current.candidate_sha,
+                    "kind": "FACTORY_PACKAGE_REUSE",
+                    "source": str(current.wheel_path),
+                }
+            )
+
         self._run_checked(
             (
-                self._python_executable,
-                "-m",
-                "pip",
-                "install",
-                "--no-deps",
-                "--no-input",
-                str(source),
+                self._python_executable, "-m", "pip", "install", "--force-reinstall",
+                "--no-deps", "--no-input", str(source),
             ),
-            "Factory package install",
+            "Factory package upgrade",
         )
+        observed = self._current_factory_package()
+        if observed is None or observed.artifact_digest != operation.source_digest:
+            raise RuntimeError("Factory package upgrade exact candidate verification failed")
         return _receipt(
             {
                 "distribution": _FACTORY_DISTRIBUTION,
-                "kind": "FACTORY_PACKAGE_INSTALL",
+                "kind": "FACTORY_PACKAGE_UPGRADE",
                 "source": str(source),
+                "rollback_candidate_sha": current.candidate_sha,
+                "rollback_source": str(current.wheel_path),
+                "rollback_digest": current.artifact_digest,
             }
         )
 
@@ -491,25 +709,57 @@ class HermesJarvasInstallRuntime:
 
     def _apply_dashboard(self, operation: InstallOperation) -> str:
         source, target, plugins_root = self._dashboard_paths(
-            operation,
-            target_must_be_absent=True,
+            operation, target_must_be_absent=False
         )
         plugins_root_created = not plugins_root.exists()
+        if not target.exists():
+            try:
+                if plugins_root_created:
+                    plugins_root.mkdir(parents=False)
+                shutil.copytree(source, target)
+            except OSError:
+                if target.exists() and not target.is_symlink():
+                    shutil.rmtree(target)
+                if plugins_root_created:
+                    with suppress(OSError):
+                        plugins_root.rmdir()
+                raise
+            return _receipt(
+                {
+                    "kind": "DASHBOARD_PLUGIN_INSTALL",
+                    "plugins_root_created": "true" if plugins_root_created else "false",
+                    "target": str(target),
+                }
+            )
+
+        self._validate_dashboard_upgrade(operation)
+        previous = self._preflight_factory_package
+        if previous is None:
+            raise RuntimeError("Dashboard plugin upgrade lacks previous candidate identity")
+        backup = self._dashboard_backup_path(previous.candidate_sha)
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        if not backup.exists():
+            shutil.copytree(target, backup)
+        staged = plugins_root / ".hermes-factory-upgrade"
+        if staged.exists() or staged.is_symlink():
+            raise RuntimeError("Dashboard plugin staged upgrade path already exists")
         try:
-            if plugins_root_created:
-                plugins_root.mkdir(parents=False)
-            shutil.copytree(source, target)
-        except OSError:
-            if target.exists() and not target.is_symlink():
-                shutil.rmtree(target)
-            if plugins_root_created:
-                with suppress(OSError):
-                    plugins_root.rmdir()
+            shutil.copytree(source, staged)
+            if operation.source_digest is not None and digest_artifact(staged) != operation.source_digest:
+                raise RuntimeError("Dashboard plugin staged digest mismatch")
+            shutil.rmtree(target)
+            staged.rename(target)
+        except Exception:
+            if staged.exists() and not staged.is_symlink():
+                shutil.rmtree(staged)
+            if not target.exists() and backup.is_dir():
+                shutil.copytree(backup, target)
             raise
         return _receipt(
             {
-                "kind": "DASHBOARD_PLUGIN_INSTALL",
-                "plugins_root_created": "true" if plugins_root_created else "false",
+                "backup": str(backup),
+                "kind": "DASHBOARD_PLUGIN_UPGRADE",
+                "previous_candidate_sha": previous.candidate_sha,
                 "target": str(target),
             }
         )
@@ -544,12 +794,25 @@ class HermesJarvasInstallRuntime:
         )
 
     def apply(self, operation: InstallOperation) -> str:
-        self._validate_operation(operation)
+        self._validate_operation(
+            operation,
+            allow_dashboard_target_exists=self._factory_package_probe is not None,
+        )
         if operation.action == "STAGE_FACTORY_PACKAGE":
             return self._apply_factory_package(operation)
         if operation.action == "STAGE_FACTORY_SKILL_CATALOG":
             return self._apply_skill_catalog(operation)
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
+            reuse = self._profile_reuse_state(operation)
+            if reuse is not None:
+                profile_id, _, _ = reuse
+                return _receipt(
+                    {
+                        "kind": "PROFILE_REUSE",
+                        "profile_id": profile_id,
+                        "source_digest": operation.source_digest or "",
+                    }
+                )
             profile_id = self._profile_id(operation)
             self._run_checked(operation.argv, "native Profile install")
             return _receipt({"kind": "PROFILE_INSTALL", "profile_id": profile_id})
@@ -597,6 +860,46 @@ class HermesJarvasInstallRuntime:
 
         if operation.action == "STAGE_FACTORY_PACKAGE":
             source = self._factory_package_source(operation)
+            kind = payload.get("kind")
+            if kind == "FACTORY_PACKAGE_REUSE":
+                if not isinstance(payload.get("candidate_sha"), str):
+                    raise RuntimeError("Factory package reuse receipt is invalid")
+                return
+            if kind == "FACTORY_PACKAGE_UPGRADE":
+                rollback_source = payload.get("rollback_source")
+                rollback_digest = payload.get("rollback_digest")
+                rollback_sha = payload.get("rollback_candidate_sha")
+                if (
+                    payload.get("distribution") != _FACTORY_DISTRIBUTION
+                    or payload.get("source") != str(source)
+                    or not isinstance(rollback_source, str)
+                    or not isinstance(rollback_digest, str)
+                    or not isinstance(rollback_sha, str)
+                ):
+                    raise RuntimeError("Factory package upgrade receipt is invalid")
+                rollback_wheel = Path(rollback_source)
+                if (
+                    rollback_wheel.is_symlink()
+                    or not rollback_wheel.is_file()
+                    or digest_artifact(rollback_wheel) != rollback_digest
+                ):
+                    raise RuntimeError("Factory rollback package identity drift")
+                self._run_checked(
+                    (
+                        self._python_executable, "-m", "pip", "install",
+                        "--force-reinstall", "--no-deps", "--no-input",
+                        str(rollback_wheel),
+                    ),
+                    "Factory package upgrade rollback",
+                )
+                observed = self._current_factory_package()
+                if (
+                    observed is None
+                    or observed.candidate_sha != rollback_sha
+                    or observed.artifact_digest != rollback_digest
+                ):
+                    raise RuntimeError("Factory package rollback exact candidate verification failed")
+                return
             if payload != {
                 "distribution": _FACTORY_DISTRIBUTION,
                 "kind": "FACTORY_PACKAGE_INSTALL",
@@ -605,11 +908,7 @@ class HermesJarvasInstallRuntime:
                 raise RuntimeError("Factory package rollback receipt does not match operation")
             self._run_checked(
                 (
-                    self._python_executable,
-                    "-m",
-                    "pip",
-                    "uninstall",
-                    "-y",
+                    self._python_executable, "-m", "pip", "uninstall", "-y",
                     _FACTORY_DISTRIBUTION,
                 ),
                 "Factory package rollback",
@@ -645,6 +944,14 @@ class HermesJarvasInstallRuntime:
 
         if operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
             profile_id = self._profile_id(operation)
+            if payload.get("kind") == "PROFILE_REUSE":
+                if payload != {
+                    "kind": "PROFILE_REUSE",
+                    "profile_id": profile_id,
+                    "source_digest": operation.source_digest or "",
+                }:
+                    raise RuntimeError("Profile reuse rollback receipt does not match operation")
+                return
             if payload != {"kind": "PROFILE_INSTALL", "profile_id": profile_id}:
                 raise RuntimeError("Profile rollback receipt does not match operation")
             self._run_checked(
@@ -671,9 +978,28 @@ class HermesJarvasInstallRuntime:
 
         if operation.action == "REGISTER_DASHBOARD_PLUGIN":
             _, target, plugins_root = self._dashboard_paths(
-                operation,
-                target_must_be_absent=False,
+                operation, target_must_be_absent=False
             )
+            if payload.get("kind") == "DASHBOARD_PLUGIN_UPGRADE":
+                backup_raw = payload.get("backup")
+                previous_sha = payload.get("previous_candidate_sha")
+                if (
+                    payload.get("target") != str(target)
+                    or not isinstance(backup_raw, str)
+                    or not isinstance(previous_sha, str)
+                ):
+                    raise RuntimeError("Dashboard upgrade rollback receipt is invalid")
+                backup = Path(backup_raw)
+                if backup != self._dashboard_backup_path(previous_sha):
+                    raise RuntimeError("Dashboard rollback backup identity mismatch")
+                if backup.is_symlink() or not backup.is_dir():
+                    raise RuntimeError("Dashboard rollback backup is unavailable")
+                if target.is_symlink():
+                    raise RuntimeError("Dashboard rollback target became a symlink")
+                if target.exists():
+                    shutil.rmtree(target)
+                shutil.copytree(backup, target)
+                return
             plugins_root_created = payload.get("plugins_root_created")
             if (
                 payload.get("kind") != "DASHBOARD_PLUGIN_INSTALL"
