@@ -85,6 +85,7 @@ _CANDIDATE_BOUND_STAGES = frozenset(
     }
 )
 _REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
+_STAGE_CONTRACT_REVISION = "stage-contract-v2"
 
 
 class ProjectMaterializer:
@@ -212,7 +213,7 @@ class ProjectMaterializer:
             project_key=project_key,
             work_package_id=wp.work_package_id,
             stage=stage,
-            revision=model.digest,
+            revision=f"{model.digest}.{_STAGE_CONTRACT_REVISION}",
             title=f"{wp.work_package_id}/{stage}: {wp.title}",
             body=_task_body(model, wp, stage),
             assignee=policy.profile,
@@ -246,6 +247,9 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             f"Requirement: {wp.requirement_id}",
             f"Project model revision: {model.digest}",
             "Execute only this approved stage and preserve canonical project truth.",
+            "The assigned worktree is the only local project-truth root for this stage.",
+            "Do not search or read the parent repository root or sibling .worktrees.",
+            "Use any path outside the assigned worktree only when it is an explicitly declared canonical external source.",
             "Do not invent or expand product scope. Optional improvements are DEFERRED_PROPOSAL, not HITL.",
             "Escalate only a real canonical conflict, authority boundary, security risk, or destructive operation.",
             "At completion, provide structured metadata.factory_handoff matching this contract:",
