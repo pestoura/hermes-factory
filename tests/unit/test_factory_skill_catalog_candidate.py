@@ -61,6 +61,8 @@ def test_build_and_load_exact_head_private_skill_catalog_candidate(tmp_path: Pat
     assert built.manifest_path == output / "factory-skill-catalog.json"
     assert set(built.skill_sources) == {"factory-example"}
     assert set(built.skill_digests) == {"factory-example"}
+    assert built.registry_document == _registry_document()
+    assert built.registry_digest.startswith("sha256:")
     assert built.artifact_digest.startswith("sha256:")
 
     loaded = load_skill_catalog_candidate(
@@ -71,6 +73,8 @@ def test_build_and_load_exact_head_private_skill_catalog_candidate(tmp_path: Pat
     assert loaded.candidate_sha == built.candidate_sha
     assert loaded.catalog_digest == built.catalog_digest
     assert loaded.skill_digests == built.skill_digests
+    assert loaded.registry_document == _registry_document()
+    assert loaded.registry_digest == built.registry_digest
     assert loaded.artifact_digest == built.artifact_digest
 
 
@@ -126,6 +130,30 @@ def test_skill_catalog_loader_rejects_symlinked_skill_content(tmp_path: Path) ->
     original.symlink_to(outside)
 
     with pytest.raises(SkillCatalogCandidateError, match="symlink"):
+        load_skill_catalog_candidate(
+            candidate_root=output,
+            expected_candidate_sha=_FACTORY_SHA,
+        )
+
+
+def test_skill_catalog_loader_rejects_registry_policy_digest_tamper(tmp_path: Path) -> None:
+    import json
+
+    output = tmp_path / "candidate"
+    build_skill_catalog_candidate(
+        source_root=_source_root(tmp_path),
+        registry_document=_registry_document(),
+        candidate_sha=_FACTORY_SHA,
+        output_root=output,
+    )
+    manifest = output / "factory-skill-catalog.json"
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["skill_registry"]["registry"]["consumers"]["factory-example-agent"] = {
+        "required": ["factory-example"]
+    }
+    manifest.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(SkillCatalogCandidateError, match="registry digest"):
         load_skill_catalog_candidate(
             candidate_root=output,
             expected_candidate_sha=_FACTORY_SHA,

@@ -16,7 +16,7 @@ from hermes_factory.skills.system import SkillRegistry
 
 class NativeTask(Protocol):
     assignee: str
-    skills: tuple[str, ...]
+    skills: list[str] | tuple[str, ...]
     workspace_kind: str
 
 
@@ -69,7 +69,7 @@ class HermesTaskSkillPreparer:
             raise RuntimeError(f"native Hermes task {task_id} does not exist")
         if not isinstance(task.assignee, str) or not task.assignee.strip():
             raise RuntimeError("native Hermes task assignee is required")
-        if not isinstance(task.skills, tuple) or not all(
+        if not isinstance(task.skills, (tuple, list)) or not all(
             isinstance(skill, str) and skill.strip() for skill in task.skills
         ):
             raise RuntimeError("native Hermes task Skills must be explicit strings")
@@ -85,7 +85,7 @@ class HermesTaskSkillPreparer:
         )
         effective = self._registry.effective_skills(
             task.assignee,
-            task_approved=task.skills,
+            task_approved=tuple(task.skills),
             admitted=self._admitted,
         )
         actual = tuple(sorted(set(task.skills)))

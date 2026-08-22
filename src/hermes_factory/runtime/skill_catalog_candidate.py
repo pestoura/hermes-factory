@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -35,6 +36,8 @@ class FactorySkillCatalogCandidate:
     artifact_digest: str
     catalog_digest: str
     skill_digests: dict[str, str]
+    registry_document: dict[str, Any]
+    registry_digest: str
 
     @property
     def skill_sources(self) -> dict[str, Path]:
@@ -64,11 +67,18 @@ def _digest(path: Path) -> str:
         raise SkillCatalogCandidateError(str(exc)) from exc
 
 
+def _digest_json(value: object) -> str:
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
 def _manifest_payload(
     *,
     candidate_sha: str,
     catalog_digest: str,
     skill_digests: dict[str, str],
+    registry_document: dict[str, Any],
+    registry_digest: str,
 ) -> dict[str, object]:
     return {
         "schema": _SCHEMA,
@@ -77,6 +87,8 @@ def _manifest_payload(
         "catalog_digest": catalog_digest,
         "skill_count": len(skill_digests),
         "skills": {skill_id: skill_digests[skill_id] for skill_id in sorted(skill_digests)},
+        "skill_registry": registry_document,
+        "registry_digest": registry_digest,
     }
 
 
@@ -118,6 +130,7 @@ def build_skill_catalog_candidate(
         raise SkillCatalogCandidateError(str(exc)) from exc
 
     catalog_digest = _digest(catalog_path)
+    registry_digest = _digest_json(registry_document)
     manifest_path = output_root / _MANIFEST
     manifest_path.write_text(
         json.dumps(
@@ -125,6 +138,8 @@ def build_skill_catalog_candidate(
                 candidate_sha=exact_sha,
                 catalog_digest=catalog_digest,
                 skill_digests=skill_digests,
+                registry_document=registry_document,
+                registry_digest=registry_digest,
             ),
             indent=2,
             sort_keys=True,
@@ -141,6 +156,8 @@ def build_skill_catalog_candidate(
         artifact_digest=artifact_digest,
         catalog_digest=catalog_digest,
         skill_digests=skill_digests,
+        registry_document=registry_document,
+        registry_digest=registry_digest,
     )
 
 
@@ -198,6 +215,23 @@ def load_skill_catalog_candidate(
     if payload.get("skill_count") != len(skill_digests):
         raise SkillCatalogCandidateError("Skill catalog candidate skill_count mismatch")
 
+    registry_document = payload.get("skill_registry")
+    if not isinstance(registry_document, dict):
+        raise SkillCatalogCandidateError("Skill catalog candidate skill registry is invalid")
+    try:
+        SkillRegistry.from_document(registry_document)
+    except SkillAdmissionError as exc:
+        raise SkillCatalogCandidateError(str(exc)) from exc
+    raw_registry_digest = payload.get("registry_digest")
+    if not isinstance(raw_registry_digest, str) or not _DIGEST.fullmatch(raw_registry_digest):
+        raise SkillCatalogCandidateError("Skill catalog candidate registry digest is invalid")
+    observed_registry_digest = _digest_json(registry_document)
+    if observed_registry_digest != raw_registry_digest:
+        raise SkillCatalogCandidateError(
+            "Skill catalog registry digest mismatch: "
+            f"expected {raw_registry_digest}, observed {observed_registry_digest}"
+        )
+
     catalog_path = _require_regular_directory(
         candidate_root / _CATALOG_DIR, "Skill catalog"
     )
@@ -232,4 +266,6 @@ def load_skill_catalog_candidate(
         artifact_digest=_digest(candidate_root),
         catalog_digest=observed_catalog_digest,
         skill_digests=skill_digests,
+        registry_document=registry_document,
+        registry_digest=observed_registry_digest,
     )

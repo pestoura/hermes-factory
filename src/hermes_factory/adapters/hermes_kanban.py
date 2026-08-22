@@ -47,6 +47,8 @@ class KanbanTaskProjection:
     parent_task_ids: tuple[str, ...] = ()
     priority: int = 0
     workspace_kind: str = "scratch"
+    workspace_path: str | None = None
+    branch_name: str | None = None
     project_id: str | None = None
 
     @property
@@ -168,6 +170,8 @@ class HermesKanbanAdapter:
                 body=spec.body,
                 assignee=spec.assignee,
                 workspace_kind=spec.workspace_kind,
+                workspace_path=spec.workspace_path,
+                branch_name=spec.branch_name,
                 priority=spec.priority,
                 parents=spec.parent_task_ids,
                 idempotency_key=spec.idempotency_key,

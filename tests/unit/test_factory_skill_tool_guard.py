@@ -113,3 +113,18 @@ def test_unrelated_tool_is_not_intercepted_even_for_factory_task() -> None:
         )
         is None
     )
+
+
+def test_factory_skill_guard_accepts_native_list_representation() -> None:
+    task = FakeTask(
+        assignee="factory-software-engineer",
+        skills=["factory-tdd-implementation"],  # type: ignore[arg-type]
+    )
+
+    assert guard_factory_skill_tool_call(
+        tool_name="skill_view",
+        args={"name": "factory-tdd-implementation"},
+        task_id="t_1",
+        profile_name="factory-software-engineer",
+        task=task,
+    ) is None

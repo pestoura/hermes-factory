@@ -54,7 +54,7 @@ def guard_factory_skill_tool_call(
         return _block(f"Factory task {canonical_task_id} Profile identity is unavailable")
     if not isinstance(task.assignee, str) or task.assignee != profile_name:
         return _block(f"Factory task {canonical_task_id} Profile identity does not match assignee")
-    if not isinstance(task.skills, tuple) or not all(
+    if not isinstance(task.skills, (list, tuple)) or not all(
         isinstance(skill, str) and skill.startswith("factory-") for skill in task.skills
     ):
         return _block(f"Factory task {canonical_task_id} Skill authorization is invalid")
