@@ -5,12 +5,12 @@ import re
 import shutil
 import subprocess
 import sys
-
-import yaml
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+import yaml
 
 from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
@@ -290,7 +290,7 @@ class HermesJarvasInstallRuntime:
         except (OSError, UnicodeError, yaml.YAMLError) as exc:
             raise RuntimeError("northbound control binding could not be loaded") from exc
         if not isinstance(payload, dict):
-            raise RuntimeError("northbound control binding must be a mapping")
+            raise TypeError("northbound control binding must be a mapping")
         try:
             binding = RuntimeComponentBinding.from_mapping(payload)
         except (TypeError, ValueError) as exc:
