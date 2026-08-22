@@ -233,3 +233,49 @@ def test_subprocess_package_probe_loads_exact_installed_candidate(tmp_path: Path
     assert observed is not None
     assert observed.candidate_sha == candidate.candidate_sha
     assert observed.artifact_digest == candidate.artifact_digest
+
+
+def test_profile_manifest_runtime_metadata_is_semantically_reused(tmp_path: Path):
+    from hermes_factory.runtime.hermes_install_runtime import HermesJarvasInstallRuntime
+
+    home = tmp_path / "home"
+    source = tmp_path / "profile"
+    installed = home / "profiles" / "factory-orchestrator"
+    source.mkdir(parents=True)
+    installed.mkdir(parents=True)
+    source_manifest = """name: factory-orchestrator
+version: '1.2.0'
+hermes_requires: '>=0.20.0'
+author: Hermes Software Factory
+distribution_owned:
+- SOUL.md
+- skills/
+- cron/
+- distribution.yaml
+"""
+    installed_manifest = """name: factory-orchestrator
+version: '1.2.0'
+hermes_requires: '>=0.20.0'
+author: Hermes Software Factory
+distribution_owned:
+  - SOUL.md
+  - skills
+  - cron
+  - distribution.yaml
+source: /runtime/install/source
+installed_at: '2026-08-22T00:27:45+00:00'
+"""
+    (source / "distribution.yaml").write_text(source_manifest)
+    (installed / "distribution.yaml").write_text(installed_manifest)
+    (source / "SOUL.md").write_text("same\n")
+    (installed / "SOUL.md").write_text("same\n")
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=FakeRunner([]), hermes_home=home,
+    )
+    operation = _profile_operation(source)
+
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    assert json.loads(receipt)["kind"] == "PROFILE_REUSE"
+    runtime.rollback(operation, receipt)
+    assert (installed / "distribution.yaml").read_text() == installed_manifest

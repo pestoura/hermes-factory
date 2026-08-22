@@ -477,6 +477,33 @@ class HermesJarvasInstallRuntime:
         if operation.argv:
             raise RuntimeError("empty cron plan operation must not contain a command")
 
+    @staticmethod
+    def _normalized_profile_distribution_manifest(
+        path: Path, *, installed: bool
+    ) -> dict[str, object]:
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError("Profile distribution manifest must be a regular file")
+        try:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise RuntimeError("Profile distribution manifest is invalid") from exc
+        if not isinstance(payload, dict):
+            raise TypeError("Profile distribution manifest must contain a mapping")
+        normalized = dict(payload)
+        if installed:
+            normalized.pop("source", None)
+            normalized.pop("installed_at", None)
+        elif "source" in normalized or "installed_at" in normalized:
+            raise RuntimeError("source Profile manifest contains runtime-owned metadata")
+        owned = normalized.get("distribution_owned")
+        if owned is not None:
+            if not isinstance(owned, list) or any(not isinstance(item, str) for item in owned):
+                raise RuntimeError("Profile distribution ownership manifest is invalid")
+            normalized["distribution_owned"] = sorted(
+                item.rstrip("/") for item in owned
+            )
+        return normalized
+
     def _profile_reuse_state(
         self, operation: InstallOperation
     ) -> tuple[str, Path, Path] | None:
@@ -504,7 +531,16 @@ class HermesJarvasInstallRuntime:
             elif entry.is_file():
                 if installed.is_symlink() or not installed.is_file():
                     raise RuntimeError("Profile managed distribution drift")
-                if digest_artifact(entry) != digest_artifact(installed):
+                if relative == Path("distribution.yaml"):
+                    source_manifest = self._normalized_profile_distribution_manifest(
+                        entry, installed=False
+                    )
+                    installed_manifest = self._normalized_profile_distribution_manifest(
+                        installed, installed=True
+                    )
+                    if source_manifest != installed_manifest:
+                        raise RuntimeError("Profile managed distribution drift")
+                elif digest_artifact(entry) != digest_artifact(installed):
                     raise RuntimeError("Profile managed distribution drift")
             else:
                 raise RuntimeError("Profile distribution contains unsupported entry")
