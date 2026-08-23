@@ -226,6 +226,11 @@ class ControlledInstallPlanBuilder:
 
         operations: list[InstallOperation] = [
             InstallOperation(
+                component=RuntimeComponent.GATEWAY_HITL_ADAPTER,
+                action="QUIESCE_GATEWAY_FACTORY_RUNTIME",
+                target="HERMES_GATEWAY",
+            ),
+            InstallOperation(
                 component=RuntimeComponent.FACTORY_PACKAGE,
                 action="STAGE_FACTORY_PACKAGE",
                 source=str(factory_package_source),
@@ -309,6 +314,11 @@ class ControlledInstallPlanBuilder:
                     source=str(northbound_binding_source),
                     source_digest=northbound_binding_digest,
                     target="HERMES_MCP_BRIDGE",
+                ),
+                InstallOperation(
+                    component=RuntimeComponent.GATEWAY_HITL_ADAPTER,
+                    action="ACTIVATE_GATEWAY_FACTORY_RUNTIME",
+                    target="HERMES_GATEWAY",
                 ),
             ]
         )

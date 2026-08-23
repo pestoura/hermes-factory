@@ -97,9 +97,60 @@ def test_install_plan_projects_gateway_as_binding_verification_not_registration(
     operation = next(
         item
         for item in plan.operations
-        if item.component is RuntimeComponent.GATEWAY_HITL_ADAPTER
+        if item.action == "VERIFY_GATEWAY_HITL_BINDING"
     )
     assert operation.action == "VERIFY_GATEWAY_HITL_BINDING"
     assert operation.source == "hermes_factory.adapters.hermes_gateway"
     assert operation.target == "HERMES_GATEWAY"
     assert operation.argv == ()
+
+
+def test_install_plan_quiesces_and_reactivates_gateway_around_upgrade(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "factory.whl"
+    package.write_bytes(b"candidate")
+    manifest = tmp_path / "factory-package.json"
+    build_package_candidate_manifest(
+        wheel_path=package, candidate_sha=_FACTORY_SHA, output_path=manifest
+    )
+    candidate = load_package_candidate(
+        manifest_path=manifest, wheel_path=package, expected_candidate_sha=_FACTORY_SHA
+    )
+    skill_candidate = _skill_candidate(tmp_path)
+    profile = tmp_path / "factory-orchestrator"
+    profile.mkdir()
+    (profile / "distribution.yaml").write_text("name: factory-orchestrator\n")
+    dashboard = tmp_path / "dashboard-plugin"
+    (dashboard / "dashboard").mkdir(parents=True)
+    (dashboard / "dashboard" / "manifest.json").write_text("{}\n")
+    northbound = tmp_path / "northbound.yaml"
+    northbound.write_text("component: NORTHBOUND_CONTROL_INTEGRATION\n")
+    states = {component: AdmissionEvidenceState.PASS for component in RuntimeComponent}
+    plan = ControlledInstallPlanBuilder().build(
+        accepted_hermes_sha="a" * 40,
+        observed_hermes_sha="a" * 40,
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
+        profile_artifacts={"factory-orchestrator": profile},
+        expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
+        profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
+        skill_eval_states={"factory-reading-project-truth": AdmissionEvidenceState.PASS},
+        component_states=states,
+        cron_plan=NativeCronPlanBuilder().build({}),
+        dashboard_plugin_source=dashboard,
+        gateway_adapter_module="hermes_factory.adapters.hermes_gateway",
+        northbound_binding_source=northbound,
+    )
+    gateway_actions = [
+        op.action for op in plan.operations
+        if op.component is RuntimeComponent.GATEWAY_HITL_ADAPTER
+    ]
+    assert gateway_actions == [
+        "QUIESCE_GATEWAY_FACTORY_RUNTIME",
+        "VERIFY_GATEWAY_HITL_BINDING",
+        "ACTIVATE_GATEWAY_FACTORY_RUNTIME",
+    ]
+    assert plan.operations[0].action == "QUIESCE_GATEWAY_FACTORY_RUNTIME"
+    assert plan.operations[-1].action == "ACTIVATE_GATEWAY_FACTORY_RUNTIME"

@@ -4,10 +4,15 @@ import json
 import os
 from typing import Any
 
+from hermes_factory.runtime.completion_handoff import (
+    CompletionHandoffError,
+    validate_factory_completion_metadata,
+)
 from hermes_factory.runtime.installed_completion import build_installed_completion_coordinator
 from hermes_factory.runtime.skill_tool_guard import guard_factory_skill_tool_call
 
 _SKILL_TOOLS = frozenset({"skills_list", "skill_view"})
+_FACTORY_COMPLETE_TOOL = "kanban_complete"
 
 
 def _block(message: str) -> dict[str, str]:
@@ -38,7 +43,7 @@ def _on_pre_tool_call(
     task_id: str | None = None,
     **_: Any,
 ) -> dict[str, str] | None:
-    if tool_name not in _SKILL_TOOLS:
+    if tool_name not in _SKILL_TOOLS and tool_name != _FACTORY_COMPLETE_TOOL:
         return None
 
     profile = _active_profile_name()
@@ -49,19 +54,42 @@ def _on_pre_tool_call(
             task = _load_native_task(native_task_id)
         except Exception:
             if isinstance(profile, str) and profile.startswith("factory-"):
-                return _block("Factory Skill authorization lookup failed closed")
+                return _block("Factory task authorization lookup failed closed")
             return None
 
     task_assignee = getattr(task, "assignee", None) if task is not None else None
-    factory_context = (
-        isinstance(profile, str)
-        and profile.startswith("factory-")
-        or isinstance(task_assignee, str)
-        and task_assignee.startswith("factory-")
+    task_key = getattr(task, "idempotency_key", None) if task is not None else None
+    factory_profile = (
+        isinstance(profile, str) and profile.startswith("factory-")
+        or isinstance(task_assignee, str) and task_assignee.startswith("factory-")
     )
-    if not factory_context:
+    factory_task = isinstance(task_key, str) and task_key.startswith("factory:")
+
+    if tool_name == _FACTORY_COMPLETE_TOOL:
+        if not native_task_id:
+            return (
+                _block("Factory completion requires native Kanban task context")
+                if factory_profile
+                else None
+            )
+        if not factory_task:
+            return None
+        if not isinstance(args, dict):
+            return _block("Factory completion requires structured tool arguments")
+        requested_task = args.get("task_id")
+        if isinstance(requested_task, str) and requested_task and requested_task != native_task_id:
+            return _block("Factory completion task_id does not match native task context")
+        try:
+            validate_factory_completion_metadata(
+                idempotency_key=task_key,
+                metadata=args.get("metadata"),
+            )
+        except CompletionHandoffError as exc:
+            return _block(f"Factory completion validation failed: {exc}")
         return None
 
+    if not factory_profile:
+        return None
     if not native_task_id:
         return _block("Factory Skill tool call requires native Kanban task context")
     if profile is None and isinstance(task_assignee, str):

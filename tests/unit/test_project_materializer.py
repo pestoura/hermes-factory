@@ -102,7 +102,7 @@ def test_materializes_stage_graph_on_product_board_and_authorizes_only_roots() -
     assert len(adapter.specs) == 12
     assert {spec.board for spec in adapter.specs} == {"jarvas-cli"}
     assert {spec.project_id for spec in adapter.specs} == {"jarvas-cli"}
-    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v3"}
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v4"}
     assert {spec.workspace_kind for spec in adapter.specs} == {"worktree"}
 
     a_discover = _spec_by(adapter, "WP-A", "DISCOVER")
@@ -233,7 +233,7 @@ def test_stage_contract_revision_versions_materialization_identity() -> None:
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     spec = _spec_by(adapter, "WP-A", "DISCOVER")
-    expected = "d" * 64 + ".stage-contract-v3"
+    expected = "d" * 64 + ".stage-contract-v4"
     assert spec.revision == expected
     assert spec.idempotency_key.endswith(":" + expected)
     assert "Project model revision: " + "d" * 64 in spec.body
@@ -249,19 +249,21 @@ def test_candidate_branch_isolated_by_stage_contract_revision() -> None:
     a_implement = _spec_by(adapter, "WP-A", "IMPLEMENT")
     assert a_discover.branch_name == a_implement.branch_name
     assert a_discover.branch_name is not None
-    assert a_discover.branch_name.endswith("-stage-contract-v3")
+    assert a_discover.branch_name.endswith("-stage-contract-v4")
 
 
-def test_stage_contract_v3_requires_normalized_handoff_states() -> None:
+def test_stage_contract_v4_requires_handoff_ready_completion() -> None:
     adapter = FakeKanbanAdapter()
     ProjectMaterializer(adapter).materialize(
         _model(), project_key="jarvas-cli", board="jarvas-cli",
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     spec = _spec_by(adapter, "WP-A", "DISCOVER")
-    assert spec.revision.endswith(".stage-contract-v3")
+    assert spec.revision.endswith(".stage-contract-v4")
     assert spec.branch_name is not None
-    assert spec.branch_name.endswith("-stage-contract-v3")
+    assert spec.branch_name.endswith("-stage-contract-v4")
     assert "stage_outcome must be exactly PASS, BLOCKED, UNKNOWN, or NOT_RUN" in spec.body
     assert "exactly one state for each evidence_refs entry" in spec.body
     assert "OPEN only for a real blocker that must prevent handoff" in spec.body
+    assert "kanban_complete is permitted only for a handoff-ready PASS" in spec.body
+    assert "use kanban_block with exact blocker evidence" in spec.body
