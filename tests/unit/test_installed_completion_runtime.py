@@ -131,3 +131,51 @@ def test_completion_builder_loads_catalog_from_shared_root(monkeypatch, tmp_path
         "candidate_root": root / "factory" / "skill-catalog" / sha,
         "expected_candidate_sha": sha,
     }
+
+
+class FakeCandidateObserver:
+    def __init__(self, observed: str | None = None, error: Exception | None = None) -> None:
+        self.observed = observed
+        self.error = error
+        self.calls = []
+
+    def observe(self, *, board: str, task: object) -> str | None:
+        self.calls.append((board, task))
+        if self.error is not None:
+            raise self.error
+        return self.observed
+
+
+def test_precompletion_repository_validation_observes_clean_head() -> None:
+    sha = "d" * 40
+    task = FakeTask("t_1", "/repo/.worktrees/t_1")
+    observer = FakeCandidateObserver(sha)
+
+    observed = installed_completion.validate_factory_repository_precompletion(
+        board="jarvas-cli", task=task, candidate_identity=None, observer=observer,
+    )
+
+    assert observed == sha
+    assert observer.calls == [("jarvas-cli", task)]
+
+
+def test_precompletion_repository_validation_rejects_candidate_mismatch() -> None:
+    task = FakeTask("t_1", "/repo/.worktrees/t_1")
+    observer = FakeCandidateObserver("e" * 40)
+
+    with pytest.raises(InstalledRuntimeBindingError, match="does not match"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity="f" * 40, observer=observer,
+        )
+
+
+def test_precompletion_repository_validation_propagates_dirty_worktree() -> None:
+    task = FakeTask("t_1", "/repo/.worktrees/t_1")
+    observer = FakeCandidateObserver(
+        error=InstalledRuntimeBindingError("candidate worktree is dirty")
+    )
+
+    with pytest.raises(InstalledRuntimeBindingError, match="dirty"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity=None, observer=observer,
+        )

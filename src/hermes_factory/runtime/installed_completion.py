@@ -7,7 +7,10 @@ from importlib import import_module, metadata
 from pathlib import Path
 from typing import Protocol, cast
 
-from hermes_factory.runtime.completion_handoff import CompletionHandoffCoordinator
+from hermes_factory.runtime.completion_handoff import (
+    CandidateIdentityObserver,
+    CompletionHandoffCoordinator,
+)
 from hermes_factory.runtime.hermes_install_runtime import CommandRunner
 from hermes_factory.runtime.task_skills import NativeTask
 
@@ -114,6 +117,33 @@ class GitCandidateIdentityObserver:
         if not _GIT_SHA.fullmatch(sha):
             raise InstalledRuntimeBindingError("candidate HEAD is not an exact Git SHA")
         return sha.lower()
+
+
+def validate_factory_repository_precompletion(
+    *,
+    board: str,
+    task: object,
+    candidate_identity: str | None,
+    observer: CandidateIdentityObserver | None = None,
+) -> str:
+    """Fail closed on dirty/stale repository state before durable completion."""
+    if observer is None:
+        from hermes_factory.runtime.hermes_install_runtime import SubprocessCommandRunner
+
+        observer = GitCandidateIdentityObserver(SubprocessCommandRunner())
+    observed = observer.observe(board=board, task=task)
+    if not isinstance(observed, str) or not _GIT_SHA.fullmatch(observed.strip()):
+        raise InstalledRuntimeBindingError(
+            "candidate HEAD observation is not an exact Git SHA"
+        )
+    observed_sha = observed.strip().lower()
+    if candidate_identity is not None:
+        expected = candidate_identity.strip().lower()
+        if expected != observed_sha:
+            raise InstalledRuntimeBindingError(
+                "candidate identity does not match clean worktree HEAD"
+            )
+    return observed_sha
 
 
 class HermesNativeKanbanRuntime:

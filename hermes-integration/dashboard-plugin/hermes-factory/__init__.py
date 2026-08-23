@@ -8,7 +8,11 @@ from hermes_factory.runtime.completion_handoff import (
     CompletionHandoffError,
     validate_factory_completion_metadata,
 )
-from hermes_factory.runtime.installed_completion import build_installed_completion_coordinator
+from hermes_factory.runtime.installed_completion import (
+    InstalledRuntimeBindingError,
+    build_installed_completion_coordinator,
+    validate_factory_repository_precompletion,
+)
 from hermes_factory.runtime.skill_tool_guard import guard_factory_skill_tool_call
 
 _SKILL_TOOLS = frozenset({"skills_list", "skill_view"})
@@ -80,11 +84,16 @@ def _on_pre_tool_call(
         if isinstance(requested_task, str) and requested_task and requested_task != native_task_id:
             return _block("Factory completion task_id does not match native task context")
         try:
-            validate_factory_completion_metadata(
+            payload = validate_factory_completion_metadata(
                 idempotency_key=task_key,
                 metadata=args.get("metadata"),
             )
-        except CompletionHandoffError as exc:
+            validate_factory_repository_precompletion(
+                board=(os.getenv("HERMES_KANBAN_BOARD") or "").strip(),
+                task=task,
+                candidate_identity=payload["candidate_identity"],
+            )
+        except (CompletionHandoffError, InstalledRuntimeBindingError) as exc:
             return _block(f"Factory completion validation failed: {exc}")
         return None
 
