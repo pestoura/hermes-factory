@@ -5,7 +5,9 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from contextlib import suppress
+from time import sleep
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -169,6 +171,10 @@ def _load_receipt(receipt: str) -> dict[str, object]:
     return payload
 
 
+_GATEWAY_STABILIZATION_ATTEMPTS = 40
+_GATEWAY_STABILIZATION_INTERVAL_SECONDS = 0.25
+
+
 class HermesJarvasInstallRuntime:
     """Concrete, fail-closed adapter for proven native Hermes install actions.
 
@@ -184,6 +190,7 @@ class HermesJarvasInstallRuntime:
         hermes_home: Path | None = None,
         python_executable: str | None = None,
         factory_package_probe: FactoryPackageProbe | None = None,
+        sleep_fn: Callable[[float], None] | None = None,
     ) -> None:
         self._runner = command_runner or SubprocessCommandRunner()
         self._hermes_home = Path(hermes_home) if hermes_home is not None else None
@@ -195,6 +202,7 @@ class HermesJarvasInstallRuntime:
             else "hermes"
         )
         self._factory_package_probe = factory_package_probe
+        self._sleep = sleep_fn or sleep
         self._preflight_factory_package: FactoryPackageCandidate | None = None
         self._gateway_was_running: bool | None = None
         if not self._python_executable.strip():
@@ -1044,7 +1052,7 @@ class HermesJarvasInstallRuntime:
             raise RuntimeError(f"{label} failed with exit code {result.returncode}")
         return result
 
-    def _gateway_running(self) -> bool:
+    def _gateway_state(self) -> bool | None:
         result = self._runner.run((self._hermes_executable, "gateway", "status"))
         text = f"{result.stdout}\n{result.stderr}".lower()
         if "not running" in text or "inactive (dead)" in text or "inactive: inactive" in text:
@@ -1053,14 +1061,35 @@ class HermesJarvasInstallRuntime:
             if result.returncode != 0:
                 raise RuntimeError("Gateway status contradicts command exit code")
             return True
+        if any(
+            marker in text
+            for marker in (
+                "activating",
+                "deactivating",
+                "stopping",
+                "starting",
+            )
+        ):
+            return None
         raise RuntimeError(
             f"Gateway runtime status is ambiguous (exit code {result.returncode})"
         )
 
+    def _gateway_running(self) -> bool:
+        state = self._gateway_state()
+        if state is None:
+            raise RuntimeError("Gateway runtime status is transitional")
+        return state
+
     def _gateway_transition(self, action: str, *, running: bool, label: str) -> None:
         self._run_checked((self._hermes_executable, "gateway", action), label)
-        if self._gateway_running() is not running:
-            raise RuntimeError(f"{label} verification failed")
+        for attempt in range(_GATEWAY_STABILIZATION_ATTEMPTS):
+            state = self._gateway_state()
+            if state is running:
+                return
+            if attempt + 1 < _GATEWAY_STABILIZATION_ATTEMPTS:
+                self._sleep(_GATEWAY_STABILIZATION_INTERVAL_SECONDS)
+        raise RuntimeError(f"{label} verification failed")
 
     def _apply_gateway_quiesce(self) -> str:
         was_running = self._gateway_running()

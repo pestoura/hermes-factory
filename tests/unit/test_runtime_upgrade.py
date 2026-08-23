@@ -368,6 +368,36 @@ def test_gateway_is_quiesced_then_reactivated_for_runtime_upgrade() -> None:
     ]
 
 
+def test_gateway_transition_waits_for_systemd_to_stabilize() -> None:
+    from hermes_factory.runtime.hermes_install_runtime import (
+        CommandResult,
+        HermesJarvasInstallRuntime,
+    )
+
+    runner = FakeRunner([
+        CommandResult(0, "User gateway service is running\n", ""),
+        CommandResult(0, "stop requested\n", ""),
+        CommandResult(0, "Active: deactivating (stop-sigterm)\n", ""),
+        CommandResult(1, "Gateway is not running\n", ""),
+        CommandResult(0, "start requested\n", ""),
+        CommandResult(0, "Active: activating (start)\n", ""),
+        CommandResult(0, "User gateway service is running\n", ""),
+    ])
+    sleeps: list[float] = []
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=runner,
+        python_executable="python-hermes",
+        sleep_fn=sleeps.append,
+    )
+    quiesce = _gateway_runtime_operation("QUIESCE_GATEWAY_FACTORY_RUNTIME")
+    activate = _gateway_runtime_operation("ACTIVATE_GATEWAY_FACTORY_RUNTIME")
+
+    runtime.preflight((quiesce, activate))
+    assert json.loads(runtime.apply(quiesce))["was_running"] == "true"
+    assert json.loads(runtime.apply(activate))["started"] == "true"
+    assert sleeps == [0.25, 0.25]
+
+
 def test_gateway_quiesce_rollback_reloads_previous_runtime() -> None:
     from hermes_factory.runtime.hermes_install_runtime import (
         CommandResult,
