@@ -178,6 +178,39 @@ def test_valid_completion_promotes_child_through_handoff_service() -> None:
     assert record.candidate_identity_required is False
 
 
+def test_non_candidate_stage_with_asserted_candidate_observes_and_promotes() -> None:
+    revision = "7" * 64
+    candidate = "a" * 40
+    native = FakeNative()
+    native.tasks["t_parent"] = FakeTask(
+        "t_parent", "factory-requirements-engineer", "done",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v7",
+    )
+    native.tasks["t_child"] = FakeTask(
+        "t_child", "factory-requirements-engineer", "blocked",
+        f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v7",
+    )
+    native.runs["t_parent"] = FakeRun(
+        "completed", metadata=_metadata(revision, candidate=candidate)
+    )
+    native.children["t_parent"] = ("t_child",)
+    native.parents["t_child"] = ("t_parent",)
+    coordinator, ledger, authorizer = _coordinator(
+        native, observed_candidate=candidate
+    )
+
+    states = coordinator.on_task_completed(
+        task_id="t_parent", board="jarvas-cli"
+    )
+
+    assert states == (HandoffState.HANDED_OFF,)
+    assert authorizer.calls[0]["task_id"] == "t_child"
+    record, ready_state = ledger.entries[0]
+    assert ready_state is HandoffState.HANDOFF_READY
+    assert record.candidate_identity == candidate
+    assert record.candidate_identity_required is False
+
+
 def test_other_open_parent_keeps_child_blocked() -> None:
     revision = "c" * 64
     native = FakeNative()

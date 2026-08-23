@@ -85,7 +85,7 @@ _CANDIDATE_BOUND_STAGES = frozenset(
     }
 )
 _REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
-_STAGE_CONTRACT_REVISION = "stage-contract-v7"
+_STAGE_CONTRACT_REVISION = "stage-contract-v8"
 
 
 class ProjectMaterializer:
@@ -264,6 +264,7 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "If pre-existing unrelated changes make a clean stage checkpoint impossible, block the task rather than absorbing them.",
             "If this stage produces no repository changes, do not create an empty commit; preserve the clean existing HEAD.",
             "When candidate_identity is required, candidate_identity must equal the clean worktree HEAD after the stage checkpoint commit.",
+            "If candidate_identity is supplied when optional, it must still equal the clean worktree HEAD and will be independently observed.",
             f"candidate_identity_required={stage in _CANDIDATE_BOUND_STAGES}",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",
