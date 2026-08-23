@@ -7,9 +7,9 @@ import subprocess
 import sys
 from collections.abc import Callable
 from contextlib import suppress
-from time import sleep
 from dataclasses import dataclass
 from pathlib import Path
+from time import sleep
 from typing import Protocol
 from urllib.parse import unquote, urlparse
 
