@@ -224,3 +224,114 @@ def test_runtime_dashboard_preflight_refuses_existing_plugin_target(tmp_path: Pa
 
     with pytest.raises(RuntimeError, match="already exists"):
         runtime.preflight((operation,))
+
+
+
+def _factory_plugin_source(tmp_path: Path) -> Path:
+    source = tmp_path / "dashboard-plugin" / "hermes-factory"
+    (source / "dashboard").mkdir(parents=True)
+    (source / "plugin.yaml").write_text(
+        "name: hermes-factory\nhooks:\n  - pre_tool_call\n  - kanban_task_completed\n",
+        encoding="utf-8",
+    )
+    (source / "dashboard" / "manifest.json").write_text(
+        '{"name":"hermes-factory","entry":"dist/index.js"}\n', encoding="utf-8"
+    )
+    return source
+
+
+def test_runtime_projects_factory_plugin_into_profile_scope_and_rolls_back(tmp_path: Path):
+    _, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    profile_home = hermes_home / "profiles" / "factory-orchestrator"
+    profile_home.mkdir(parents=True)
+    source = _factory_plugin_source(tmp_path)
+    operation = InstallOperation(
+        component=RuntimeComponent.DASHBOARD_PLUGIN,
+        action="REGISTER_FACTORY_PLUGIN_PROFILE",
+        source=str(source),
+        target="HERMES_HOME/profiles/factory-orchestrator/plugins/hermes-factory",
+    )
+    runner = FakeRunner([])
+    runtime = runtime_type(command_runner=runner, hermes_home=hermes_home)
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    target = profile_home / "plugins" / "hermes-factory"
+    assert (target / "plugin.yaml").is_file()
+    assert json.loads(receipt)["kind"] == "FACTORY_PLUGIN_PROFILE_INSTALL"
+    runtime.rollback(operation, receipt)
+    assert not target.exists()
+    assert runner.calls == []
+
+
+def test_runtime_activates_factory_plugin_scope_with_native_cli_and_restores_previous_config(tmp_path: Path):
+    result_type, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    (hermes_home / "config.yaml").write_text(
+        "plugins:\n  enabled: [other]\n  disabled: [hermes-factory, blocked]\n"
+        "  entries:\n    hermes-factory:\n      allow_tool_override: true\n",
+        encoding="utf-8",
+    )
+    operation = InstallOperation(
+        component=RuntimeComponent.DASHBOARD_PLUGIN,
+        action="ACTIVATE_FACTORY_PLUGIN_SCOPE",
+        argv=("hermes", "plugins", "enable", "hermes-factory", "--no-allow-tool-override"),
+        target="HERMES_HOME",
+    )
+    runner = FakeRunner([
+        result_type(0, "enabled\n", ""),
+        result_type(0, '["hermes-factory","other"]\n', ""),
+        result_type(0, 'false\n', ""),
+        result_type(0, "restored enabled\n", ""),
+        result_type(0, "restored disabled\n", ""),
+        result_type(0, "restored entry\n", ""),
+    ])
+    runtime = runtime_type(command_runner=runner, hermes_home=hermes_home)
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    payload = json.loads(receipt)
+    assert payload["kind"] == "FACTORY_PLUGIN_SCOPE_ACTIVATE"
+    assert payload["scope"] == "HERMES_HOME"
+    runtime.rollback(operation, receipt)
+    assert runner.calls == [
+        operation.argv,
+        ("hermes", "config", "get", "plugins.enabled", "--json"),
+        ("hermes", "config", "get", "plugins.entries.hermes-factory.allow_tool_override", "--json"),
+        ("hermes", "config", "set", "plugins.enabled", '["other"]'),
+        ("hermes", "config", "set", "plugins.disabled", '["hermes-factory","blocked"]'),
+        ("hermes", "config", "set", "plugins.entries.hermes-factory", '{"allow_tool_override":true}'),
+    ]
+
+
+def test_runtime_verifies_factory_plugin_callbacks_in_profile_scope(tmp_path: Path):
+    result_type, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    profile_home = hermes_home / "profiles" / "factory-orchestrator"
+    profile_home.mkdir(parents=True)
+    operation = InstallOperation(
+        component=RuntimeComponent.DASHBOARD_PLUGIN,
+        action="VERIFY_FACTORY_PLUGIN_SCOPE",
+        target="HERMES_HOME/profiles/factory-orchestrator",
+    )
+    runner = FakeRunner([result_type(0, "", "")])
+    runtime = runtime_type(
+        command_runner=runner,
+        hermes_home=hermes_home,
+        python_executable="/opt/hermes/venv/bin/python",
+    )
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    assert json.loads(receipt) == {
+        "kind": "FACTORY_PLUGIN_SCOPE_VERIFIED",
+        "scope": "HERMES_HOME/profiles/factory-orchestrator",
+    }
+    argv = runner.calls[0]
+    assert argv[:3] == (
+        "env",
+        f"HERMES_HOME={profile_home}",
+        "/opt/hermes/venv/bin/python",
+    )
+    assert argv[3] == "-c"
+    assert 'has_hook("pre_tool_call")' in argv[4]
+    assert 'has_hook("kanban_task_completed")' in argv[4]

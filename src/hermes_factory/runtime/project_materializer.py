@@ -85,7 +85,7 @@ _CANDIDATE_BOUND_STAGES = frozenset(
     }
 )
 _REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
-_STAGE_CONTRACT_REVISION = "stage-contract-v4"
+_STAGE_CONTRACT_REVISION = "stage-contract-v5"
 
 
 class ProjectMaterializer:

@@ -251,3 +251,64 @@ def test_controlled_install_plan_rejects_missing_install_surfaces_and_secret_lik
             gateway_adapter_module="hermes_factory.adapters.hermes_gateway",
             northbound_binding_source=northbound,
         )
+
+
+
+def test_controlled_install_plan_projects_factory_plugin_into_root_and_profile_scopes(tmp_path: Path):
+    builder_type, _ = _contract()
+    package, skill_candidate, profile, dashboard, northbound = _artifacts(tmp_path)
+    candidate = _package_candidate(package)
+    plan = builder_type().build(
+        accepted_hermes_sha="a" * 40,
+        observed_hermes_sha="a" * 40,
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
+        profile_artifacts={"factory-orchestrator": profile},
+        expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
+        profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
+        skill_eval_states={"factory-reading-project-truth": AdmissionEvidenceState.PASS},
+        component_states=_passing_components(),
+        cron_plan=NativeCronPlanBuilder().build({}),
+        dashboard_plugin_source=dashboard,
+        gateway_adapter_module="hermes_factory.adapters.hermes_gateway",
+        northbound_binding_source=northbound,
+    )
+    actions = [op.action for op in plan.operations]
+    assert actions[0] == "QUIESCE_GATEWAY_FACTORY_RUNTIME"
+    root_copy = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "REGISTER_DASHBOARD_PLUGIN"
+    )
+    profile_copy = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "REGISTER_FACTORY_PLUGIN_PROFILE"
+        and op.target == "HERMES_HOME/profiles/factory-orchestrator/plugins/hermes-factory"
+    )
+    root_enable = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE" and op.target == "HERMES_HOME"
+    )
+    profile_enable = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE"
+        and op.target == "HERMES_HOME/profiles/factory-orchestrator"
+    )
+    root_verify = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "VERIFY_FACTORY_PLUGIN_SCOPE" and op.target == "HERMES_HOME"
+    )
+    profile_verify = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "VERIFY_FACTORY_PLUGIN_SCOPE"
+        and op.target == "HERMES_HOME/profiles/factory-orchestrator"
+    )
+    gateway_activate = actions.index("ACTIVATE_GATEWAY_FACTORY_RUNTIME")
+    assert root_copy < profile_copy < root_enable < profile_enable < root_verify < profile_verify < gateway_activate
+    assert plan.operations[root_enable].argv == (
+        "hermes", "plugins", "enable", "hermes-factory", "--no-allow-tool-override"
+    )
+    assert plan.operations[profile_enable].argv == (
+        "hermes", "-p", "factory-orchestrator", "plugins", "enable",
+        "hermes-factory", "--no-allow-tool-override"
+    )
