@@ -97,10 +97,10 @@ class CompletionHandoffCoordinator:
             raise CompletionHandoffError("Factory handoff context revision is stale")
 
         observed_candidate: str | None = None
-        if stage in _CANDIDATE_BOUND_STAGES:
+        if stage in _CANDIDATE_BOUND_STAGES or payload["candidate_identity"] is not None:
             if self._candidate_observer is None:
                 raise CompletionHandoffError(
-                    "candidate identity observer is required for candidate-bound stage"
+                    "candidate identity observer is required for asserted or candidate-bound identity"
                 )
             observed_candidate = self._candidate_observer.observe(
                 board=board, task=task
