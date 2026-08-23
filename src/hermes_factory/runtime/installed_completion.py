@@ -4,6 +4,7 @@ import json
 import re
 from contextlib import AbstractContextManager
 from importlib import import_module, metadata
+from pathlib import Path
 from typing import Protocol, cast
 
 from hermes_factory.runtime.completion_handoff import CompletionHandoffCoordinator
@@ -19,6 +20,29 @@ _CANDIDATE_PATH = re.compile(
     r"(?:^|/)factory-package-candidate-([0-9a-fA-F]{40})(?:/|$)"
 )
 _GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
+
+
+def resolve_shared_hermes_home(*, hermes_home: str | None = None) -> Path:
+    """Resolve the Hermes root that owns shared Factory catalog and ledger state.
+
+    Worker Profiles run with HERMES_HOME=<root>/profiles/<profile>, but the
+    Factory skill catalog and semantic registry are shared runtime authorities
+    staged under the parent Hermes root. An explicit hermes_home argument is
+    treated as an operator-supplied shared root; HERMES_FACTORY_HOME provides
+    the same explicit override for runtime processes.
+    """
+    import os
+    explicit = hermes_home or os.environ.get("HERMES_FACTORY_HOME")
+    if explicit:
+        return Path(explicit).expanduser()
+
+    active = os.environ.get("HERMES_HOME")
+    if active:
+        active_home = Path(active).expanduser()
+        if active_home.parent.name == "profiles":
+            return active_home.parent.parent
+        return active_home
+    return Path.home() / ".hermes"
 
 
 class DistributionLike(Protocol):
@@ -148,11 +172,7 @@ def build_installed_completion_coordinator(
     from hermes_factory.skills.system import SkillRegistry
     from hermes_factory.traceability.registry import SemanticRegistry
 
-    home = Path(
-        hermes_home
-        or os.environ.get("HERMES_HOME")
-        or (Path.home() / ".hermes")
-    ).expanduser()
+    home = resolve_shared_hermes_home(hermes_home=hermes_home)
     candidate_sha = active_factory_candidate_sha()
     candidate = load_skill_catalog_candidate(
         candidate_root=home / "factory" / "skill-catalog" / candidate_sha,
