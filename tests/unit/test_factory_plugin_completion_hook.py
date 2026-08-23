@@ -128,6 +128,9 @@ def test_factory_complete_with_open_findings_is_blocked_before_tool(monkeypatch)
 
 def test_factory_complete_with_ready_handoff_is_allowed(monkeypatch) -> None:
     plugin = _load_plugin()
+    monkeypatch.setattr(
+        plugin, "validate_factory_repository_precompletion", lambda **kwargs: "a" * 40
+    )
     revision = "5" * 64
     monkeypatch.setenv("HERMES_KANBAN_TASK", "t_1")
     monkeypatch.setattr(
@@ -146,3 +149,36 @@ def test_factory_complete_with_ready_handoff_is_allowed(monkeypatch) -> None:
     )
 
     assert result is None
+
+
+def test_factory_complete_with_dirty_repository_is_blocked_before_tool(monkeypatch) -> None:
+    plugin = _load_plugin()
+    revision = "6" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_1")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    task = SimpleNamespace(
+        assignee="factory-tdd-red",
+        workspace_path="/repo/.worktrees/t_1",
+        idempotency_key=(
+            f"factory:jarvas-cli:WP-A:TDD_RED:{revision}.stage-contract-v7"
+        ),
+    )
+    monkeypatch.setattr(plugin, "_load_native_task", lambda task_id, board=None: task)
+
+    def reject_repository(**kwargs):
+        raise plugin.InstalledRuntimeBindingError("candidate worktree is dirty")
+
+    monkeypatch.setattr(
+        plugin, "validate_factory_repository_precompletion", reject_repository, raising=False
+    )
+    metadata = _factory_metadata(revision)
+    metadata["factory_handoff"]["candidate_identity"] = "a" * 40
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_complete",
+        args={"task_id": "t_1", "metadata": metadata},
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "worktree is dirty" in result["message"]

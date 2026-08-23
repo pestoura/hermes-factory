@@ -85,7 +85,7 @@ _CANDIDATE_BOUND_STAGES = frozenset(
     }
 )
 _REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
-_STAGE_CONTRACT_REVISION = "stage-contract-v6"
+_STAGE_CONTRACT_REVISION = "stage-contract-v7"
 
 
 class ProjectMaterializer:
@@ -259,6 +259,11 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "Use finding_state=OPEN only for a real blocker that must prevent handoff; ordinary details assigned to the next approved stage are not OPEN findings.",
             "kanban_complete is permitted only for a handoff-ready PASS with finding_state NONE or RESOLVED and every evidence_state PASS.",
             "If a real blocker remains, do not complete the stage; use kanban_block with exact blocker evidence instead.",
+            "Before kanban_complete, commit stage-produced repository artifacts on the assigned branch using a bounded stage-specific commit; do not amend or rewrite prior commits.",
+            "The worktree must be clean before kanban_complete; do not stage or commit unrelated pre-existing changes.",
+            "If pre-existing unrelated changes make a clean stage checkpoint impossible, block the task rather than absorbing them.",
+            "If this stage produces no repository changes, do not create an empty commit; preserve the clean existing HEAD.",
+            "When candidate_identity is required, candidate_identity must equal the clean worktree HEAD after the stage checkpoint commit.",
             f"candidate_identity_required={stage in _CANDIDATE_BOUND_STAGES}",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",
