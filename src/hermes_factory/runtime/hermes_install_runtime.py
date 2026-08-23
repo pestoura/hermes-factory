@@ -939,6 +939,13 @@ class HermesJarvasInstallRuntime:
                     )
                     if source_manifest != installed_manifest:
                         raise RuntimeError("Profile managed distribution drift")
+                elif relative == Path("config.yaml"):
+                    # Native Hermes Profile updates preserve config.yaml unless
+                    # --force-config is requested. Factory never requests that
+                    # destructive override, so runtime-owned config mutations
+                    # (schema version, plugin activation, user overrides) are
+                    # intentionally compatible with Profile reuse.
+                    continue
                 elif digest_artifact(entry) != digest_artifact(installed):
                     raise RuntimeError("Profile managed distribution drift")
             else:
