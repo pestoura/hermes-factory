@@ -342,3 +342,47 @@ def test_parent_candidate_identity_reads_structured_parent_handoff(monkeypatch) 
     assert installed_completion._parent_candidate_identity(
         board="jarvas-cli", task=task
     ) == candidate
+
+
+def test_parent_candidate_identity_prefers_single_rework_parent(monkeypatch) -> None:
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    original = "1" * 40
+    corrected = "2" * 40
+    revision = "3" * 64
+
+    class FakeKB:
+        @staticmethod
+        @contextmanager
+        def connect_closing(*, board: str):
+            yield object()
+
+        @staticmethod
+        def parent_ids(conn, task_id: str):
+            return ["t_original", "t_rework"]
+
+        @staticmethod
+        def get_task(conn, task_id: str):
+            keys = {
+                "t_original": f"factory:jarvas-cli:WP-A:TDD_RED:{revision}.stage-contract-v10",
+                "t_rework": (
+                    "factory:jarvas-cli:WP-A~rework-tdd_red-r7-deadbeef1234:"
+                    f"TDD_RED:{revision}.stage-contract-v10"
+                ),
+            }
+            return SimpleNamespace(idempotency_key=keys[task_id])
+
+        @staticmethod
+        def latest_run(conn, task_id: str):
+            candidate = original if task_id == "t_original" else corrected
+            return SimpleNamespace(
+                metadata={"factory_handoff": {"candidate_identity": candidate}}
+            )
+
+    monkeypatch.setattr(installed_completion, "import_module", lambda _: FakeKB)
+    task = SimpleNamespace(id="t_consumer")
+
+    assert installed_completion._parent_candidate_identity(
+        board="jarvas-cli", task=task
+    ) == corrected
