@@ -14,6 +14,10 @@ from hermes_factory.runtime.completion_handoff import (
 from hermes_factory.runtime.hermes_install_runtime import CommandRunner
 from hermes_factory.runtime.project_materializer import stage_mutation_policy
 from hermes_factory.runtime.task_skills import NativeTask
+from hermes_factory.runtime.upstream_rework import (
+    UpstreamReworkCoordinator,
+    is_upstream_rework_task_key,
+)
 
 
 class InstalledRuntimeBindingError(RuntimeError):
@@ -67,6 +71,7 @@ class NativeKanbanModule(Protocol):
     def latest_run(self, conn: object, task_id: str) -> object | None: ...
     def child_ids(self, conn: object, task_id: str) -> list[str]: ...
     def parent_ids(self, conn: object, task_id: str) -> list[str]: ...
+    def link_tasks(self, conn: object, parent_id: str, child_id: str) -> None: ...
     def resolve_workspace(self, task: object, *, board: str) -> object: ...
 
 
@@ -208,9 +213,23 @@ def _parent_candidate_identity(*, board: str, task: object) -> str | None:
     kb = cast(NativeKanbanModule, import_module("hermes_cli.kanban_db"))
     with kb.connect_closing(board=board) as conn:
         parents = tuple(kb.parent_ids(conn, task_id.strip()))
-        if len(parents) != 1:
-            return None
-        run = kb.latest_run(conn, parents[0])
+        if len(parents) == 1:
+            baseline_parent = parents[0]
+        else:
+            rework_parents = tuple(
+                parent_id
+                for parent_id in parents
+                if (
+                    (parent := kb.get_task(conn, parent_id)) is not None
+                    and is_upstream_rework_task_key(
+                        getattr(parent, "idempotency_key", None)
+                    )
+                )
+            )
+            if len(rework_parents) != 1:
+                return None
+            baseline_parent = rework_parents[0]
+        run = kb.latest_run(conn, baseline_parent)
     if run is None:
         return None
     raw = getattr(run, "metadata", None)
@@ -334,6 +353,9 @@ class HermesNativeKanbanRuntime:
     def parent_ids(self, conn: object, task_id: str) -> list[str]:
         return self._kb.parent_ids(conn, task_id)
 
+    def link_tasks(self, conn: object, parent_id: str, child_id: str) -> None:
+        self._kb.link_tasks(conn, parent_id, child_id)
+
     def resolve_workspace(self, task: NativeTask, *, board: str) -> str:
         return str(self._kb.resolve_workspace(task, board=board))
 
@@ -393,5 +415,47 @@ def build_installed_completion_coordinator(
     return CompletionHandoffCoordinator(
         native=native,
         handoff_service=handoff,
+        candidate_observer=GitCandidateIdentityObserver(runner),
+    )
+
+
+def build_installed_upstream_rework_coordinator(
+    *,
+    hermes_home: str | None = None,
+) -> UpstreamReworkCoordinator:
+    from hermes_factory.adapters.hermes_kanban import HermesKanbanAdapter
+    from hermes_factory.runtime.hermes_install_runtime import SubprocessCommandRunner
+    from hermes_factory.runtime.skill_catalog_candidate import load_skill_catalog_candidate
+    from hermes_factory.runtime.task_skills import HermesTaskSkillPreparer
+    from hermes_factory.skills.system import SkillRegistry
+
+    kb = cast(NativeKanbanModule, import_module("hermes_cli.kanban_db"))
+    native = HermesNativeKanbanRuntime(kb)
+    home = resolve_shared_hermes_home(hermes_home=hermes_home)
+    candidate_sha = active_factory_candidate_sha()
+    candidate = load_skill_catalog_candidate(
+        candidate_root=home / "factory" / "skill-catalog" / candidate_sha,
+        expected_candidate_sha=candidate_sha,
+    )
+    skill_registry = SkillRegistry.from_document(candidate.registry_document)
+    admitted = frozenset(candidate.skill_digests)
+    runner = SubprocessCommandRunner()
+    preparer = HermesTaskSkillPreparer(
+        native=native,
+        skill_registry=skill_registry,
+        admitted_skill_ids=admitted,
+        skill_sources=candidate.skill_sources,
+        expected_skill_digests=candidate.skill_digests,
+        command_runner=runner,
+    )
+    adapter = HermesKanbanAdapter(
+        native,
+        skill_registry=skill_registry,
+        admitted_skill_ids=admitted,
+        task_skill_preparer=preparer,
+    )
+    return UpstreamReworkCoordinator(
+        native=native,
+        adapter=adapter,
         candidate_observer=GitCandidateIdentityObserver(runner),
     )

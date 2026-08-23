@@ -182,3 +182,242 @@ def test_factory_complete_with_dirty_repository_is_blocked_before_tool(monkeypat
     assert result is not None
     assert result["action"] == "block"
     assert "worktree is dirty" in result["message"]
+
+
+class FakeReworkCoordinator:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.calls = []
+
+    def schedule(self, **kwargs):
+        self.calls.append(("schedule", kwargs))
+        if self.fail:
+            raise RuntimeError("producer_stage must identify exactly one direct parent stage")
+        return "t_rework"
+
+    def activate_pending(self, **kwargs):
+        self.calls.append(("activate", kwargs))
+        if self.fail:
+            raise RuntimeError("pending rework activation failed")
+        return "t_rework"
+
+
+def _rework_reason() -> str:
+    return (
+        '[factory:upstream-rework/v1] '
+        '{"producer_stage":"TDD_RED","finding":"contradictory RED tests",'
+        '"evidence_refs":["tests/test_cli_core.py"]}'
+    )
+
+
+def test_factory_dependency_block_schedules_upstream_rework_before_native_block(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator()
+    revision = "a" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_impl")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-software-engineer",
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:IMPLEMENT:{revision}.stage-contract-v10"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_block",
+        args={"task_id": "t_impl", "kind": "dependency", "reason": _rework_reason()},
+    )
+
+    assert result is None
+    assert len(coordinator.calls) == 1
+    assert coordinator.calls[0][0] == "schedule"
+    assert coordinator.calls[0][1]["board"] == "jarvas-cli"
+    assert coordinator.calls[0][1]["consumer_task_id"] == "t_impl"
+    assert coordinator.calls[0][1]["request"].producer_stage == "TDD_RED"
+
+
+def test_factory_upstream_rework_requires_dependency_block_kind(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator()
+    revision = "b" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_impl")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-software-engineer",
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:IMPLEMENT:{revision}.stage-contract-v10"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_block",
+        args={"task_id": "t_impl", "kind": "capability", "reason": _rework_reason()},
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "kind=dependency" in result["message"]
+    assert coordinator.calls == []
+
+
+def test_factory_upstream_rework_schedule_failure_keeps_worker_in_flight(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator(fail=True)
+    revision = "c" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_impl")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-software-engineer",
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:IMPLEMENT:{revision}.stage-contract-v10"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_block",
+        args={"task_id": "t_impl", "kind": "dependency", "reason": _rework_reason()},
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "upstream rework validation failed" in result["message"]
+
+
+def test_rework_completion_relies_on_native_dependency_recompute(monkeypatch) -> None:
+    plugin = _load_plugin()
+    built = []
+    revision = "d" * 64
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            idempotency_key=(
+                "factory:jarvas-cli:WP-A~rework-tdd_red-r7-deadbeef1234:"
+                f"TDD_RED:{revision}.stage-contract-v10"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        plugin,
+        "build_installed_completion_coordinator",
+        lambda: built.append(True),
+    )
+
+    plugin._on_kanban_task_completed(task_id="t_rework", board="jarvas-cli")
+
+    assert built == []
+
+
+def test_factory_post_block_activates_prepared_rework(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_impl")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+
+    plugin._on_post_tool_call(
+        tool_name="kanban_block",
+        args={"task_id": "t_impl", "kind": "dependency", "reason": _rework_reason()},
+        result='{"task_id":"t_impl","run_id":7}',
+    )
+
+    assert coordinator.calls[0][0] == "activate"
+    assert coordinator.calls[0][1]["board"] == "jarvas-cli"
+    assert coordinator.calls[0][1]["consumer_task_id"] == "t_impl"
+    assert coordinator.calls[0][1]["request"].producer_stage == "TDD_RED"
+
+
+def test_factory_upstream_rework_rejects_mismatched_task_context(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator()
+    revision = "e" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_impl")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-software-engineer",
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:IMPLEMENT:{revision}.stage-contract-v10"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_block",
+        args={"task_id": "t_other", "kind": "dependency", "reason": _rework_reason()},
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "task_id" in result["message"]
+    assert coordinator.calls == []
+
+
+def test_factory_upstream_rework_rejects_mismatched_board_context(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator()
+    revision = "f" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_impl")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-software-engineer",
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:IMPLEMENT:{revision}.stage-contract-v10"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_block",
+        args={
+            "task_id": "t_impl",
+            "board": "other-board",
+            "kind": "dependency",
+            "reason": _rework_reason(),
+        },
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "board" in result["message"]
+    assert coordinator.calls == []

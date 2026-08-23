@@ -107,7 +107,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v9"
+_STAGE_CONTRACT_REVISION = "stage-contract-v10"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -297,6 +297,9 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "Use finding_state=OPEN only for a real blocker that must prevent handoff; ordinary details assigned to the next approved stage are not OPEN findings.",
             "kanban_complete is permitted only for a handoff-ready PASS with finding_state NONE or RESOLVED and every evidence_state PASS.",
             "If a real blocker remains, do not complete the stage; use kanban_block with exact blocker evidence instead.",
+            "If the blocker is a defect in the direct parent stage artifact, first restore the worktree to the last accepted candidate by removing only uncommitted changes created by this current stage.",
+            "Then call kanban_block with kind=dependency and reason exactly: [factory:upstream-rework/v1] {\"producer_stage\":\"PARENT_STAGE\",\"finding\":\"bounded defect\",\"evidence_refs\":[\"repo/path\"]}.",
+            "Do not use the upstream-rework protocol for external input, credentials, transient providers, or defects outside the direct parent stage.",
             "Before kanban_complete, commit stage-produced repository artifacts on the assigned branch using a bounded stage-specific commit; do not amend or rewrite prior commits.",
             "The worktree must be clean before kanban_complete; do not stage or commit unrelated pre-existing changes.",
             "If pre-existing unrelated changes make a clean stage checkpoint impossible, block the task rather than absorbing them.",
