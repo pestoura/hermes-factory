@@ -2,9 +2,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import hermes_factory.runtime.installed_completion as installed_completion
-
 import pytest
+
+from hermes_factory.runtime import installed_completion
 
 from hermes_factory.runtime.hermes_install_runtime import CommandResult
 from hermes_factory.runtime.installed_completion import (
