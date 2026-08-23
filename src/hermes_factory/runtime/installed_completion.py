@@ -4,7 +4,7 @@ import json
 import re
 from contextlib import AbstractContextManager
 from importlib import import_module, metadata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Protocol, cast
 
 from hermes_factory.runtime.completion_handoff import (
@@ -12,6 +12,7 @@ from hermes_factory.runtime.completion_handoff import (
     CompletionHandoffCoordinator,
 )
 from hermes_factory.runtime.hermes_install_runtime import CommandRunner
+from hermes_factory.runtime.project_materializer import stage_mutation_policy
 from hermes_factory.runtime.task_skills import NativeTask
 
 
@@ -23,6 +24,10 @@ _CANDIDATE_PATH = re.compile(
     r"(?:^|/)factory-package-candidate-([0-9a-fA-F]{40})(?:/|$)"
 )
 _GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
+_FACTORY_STAGE_KEY = re.compile(
+    r"^factory:[^:]+:[^:]+:(?P<stage>[A-Z0-9_]+):[0-9a-f]{64}"
+    r"(?:\.stage-contract-v[1-9][0-9]*)?$"
+)
 
 
 def resolve_shared_hermes_home(*, hermes_home: str | None = None) -> Path:
@@ -93,6 +98,138 @@ def active_factory_candidate_sha(
     return match.group(1).lower()
 
 
+_DOC_SUFFIXES = frozenset({".md", ".rst", ".adoc", ".txt", ".puml", ".plantuml", ".mmd", ".drawio"})
+_DOC_ROOTS = frozenset({"docs", "doc", "documentation"})
+_TEST_PARTS = frozenset({"test", "tests", "__tests__", "spec"})
+
+
+class StageMutationObserver(Protocol):
+    def observe(
+        self, *, task: object, base_candidate_identity: str | None
+    ) -> tuple[str, ...]: ...
+
+
+def _repository_path_kind(path: str) -> str:
+    normalized = path.replace("\\", "/").strip("/")
+    pure = PurePosixPath(normalized)
+    parts = tuple(part.lower() for part in pure.parts)
+    if not parts:
+        return "production"
+    if parts[0] in _DOC_ROOTS or pure.suffix.lower() in _DOC_SUFFIXES:
+        return "docs"
+    name = pure.name.lower()
+    stem = pure.stem.lower()
+    if (
+        any(part in _TEST_PARTS for part in parts[:-1])
+        or stem.startswith("test_")
+        or stem.endswith("_test")
+        or ".test." in name
+        or ".spec." in name
+    ):
+        return "test"
+    return "production"
+
+
+def validate_factory_stage_mutation_paths(
+    *, stage: str, changed_paths: tuple[str, ...]
+) -> None:
+    policy = stage_mutation_policy(stage)
+    kinds = {path: _repository_path_kind(path) for path in changed_paths}
+    if policy in {"engineering_docs_only", "evidence_docs_only"}:
+        violations = tuple(path for path, kind in kinds.items() if kind != "docs")
+        if violations:
+            raise InstalledRuntimeBindingError(
+                f"{stage} repository mutation policy prohibits production/test changes: "
+                + ", ".join(violations[:10])
+            )
+        return
+    if policy == "tests_and_docs_only":
+        violations = tuple(path for path, kind in kinds.items() if kind == "production")
+        if violations:
+            raise InstalledRuntimeBindingError(
+                f"{stage} repository mutation policy prohibits production source changes: "
+                + ", ".join(violations[:10])
+            )
+        return
+    if policy == "implementation_no_tests":
+        violations = tuple(path for path, kind in kinds.items() if kind == "test")
+        if violations:
+            raise InstalledRuntimeBindingError(
+                f"{stage} repository mutation policy prohibits test changes: "
+                + ", ".join(violations[:10])
+            )
+        return
+    raise InstalledRuntimeBindingError(f"unsupported repository mutation policy for {stage}")
+
+
+class GitStageMutationObserver:
+    def __init__(self, runner: CommandRunner) -> None:
+        self._runner = runner
+
+    def observe(
+        self, *, task: object, base_candidate_identity: str | None
+    ) -> tuple[str, ...]:
+        path = getattr(task, "workspace_path", None)
+        if not isinstance(path, str) or not path.strip():
+            raise InstalledRuntimeBindingError("stage mutation worktree path is unavailable")
+        workspace = path.strip()
+        argv: tuple[str, ...]
+        if base_candidate_identity is not None:
+            base = base_candidate_identity.strip().lower()
+            if not _GIT_SHA.fullmatch(base):
+                raise InstalledRuntimeBindingError("parent candidate identity is not an exact Git SHA")
+            argv = (
+                "git", "-C", workspace, "diff", "--name-only",
+                "--diff-filter=ACMRD", f"{base}..HEAD", "--",
+            )
+        else:
+            argv = (
+                "git", "-C", workspace, "diff-tree", "--no-commit-id",
+                "--name-only", "-r", "HEAD", "--",
+            )
+        result = self._runner.run(argv)
+        if result.returncode != 0:
+            raise InstalledRuntimeBindingError("stage repository delta is unavailable")
+        return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def _factory_stage_from_task(task: object) -> str | None:
+    key = getattr(task, "idempotency_key", None)
+    if not isinstance(key, str):
+        return None
+    match = _FACTORY_STAGE_KEY.fullmatch(key.strip())
+    return match.group("stage") if match is not None else None
+
+
+def _parent_candidate_identity(*, board: str, task: object) -> str | None:
+    task_id = getattr(task, "id", None)
+    if not isinstance(task_id, str) or not task_id.strip():
+        return None
+    kb = cast(NativeKanbanModule, import_module("hermes_cli.kanban_db"))
+    with kb.connect_closing(board=board) as conn:
+        parents = tuple(kb.parent_ids(conn, task_id.strip()))
+        if len(parents) != 1:
+            return None
+        run = kb.latest_run(conn, parents[0])
+    if run is None:
+        return None
+    raw = getattr(run, "metadata", None)
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(raw, dict):
+        return None
+    handoff = raw.get("factory_handoff")
+    if not isinstance(handoff, dict):
+        return None
+    candidate = handoff.get("candidate_identity")
+    if not isinstance(candidate, str) or not _GIT_SHA.fullmatch(candidate.strip()):
+        return None
+    return candidate.strip().lower()
+
+
 class GitCandidateIdentityObserver:
     def __init__(self, runner: CommandRunner) -> None:
         self._runner = runner
@@ -125,6 +262,9 @@ def validate_factory_repository_precompletion(
     task: object,
     candidate_identity: str | None,
     observer: CandidateIdentityObserver | None = None,
+    stage: str | None = None,
+    base_candidate_identity: str | None = None,
+    mutation_observer: StageMutationObserver | None = None,
 ) -> str:
     """Fail closed on dirty/stale repository state before durable completion."""
     if observer is None:
@@ -143,6 +283,21 @@ def validate_factory_repository_precompletion(
             raise InstalledRuntimeBindingError(
                 "candidate identity does not match clean worktree HEAD"
             )
+    resolved_stage = stage or _factory_stage_from_task(task)
+    resolved_base = base_candidate_identity
+    if stage is None and resolved_stage is not None and resolved_base is None:
+        resolved_base = _parent_candidate_identity(board=board, task=task)
+    if resolved_stage is not None:
+        if mutation_observer is None:
+            from hermes_factory.runtime.hermes_install_runtime import SubprocessCommandRunner
+
+            mutation_observer = GitStageMutationObserver(SubprocessCommandRunner())
+        changed_paths = mutation_observer.observe(
+            task=task, base_candidate_identity=resolved_base
+        )
+        validate_factory_stage_mutation_paths(
+            stage=resolved_stage, changed_paths=changed_paths
+        )
     return observed_sha
 
 

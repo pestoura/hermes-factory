@@ -46,6 +46,15 @@ _TASK_KEY = re.compile(
 )
 
 
+def _candidate_identity_required(
+    *, stage: str, materialization_revision: str
+) -> bool:
+    match = re.search(r"\.stage-contract-v(?P<version>[1-9][0-9]*)$", materialization_revision)
+    if match is not None and int(match.group("version")) >= 9:
+        return True
+    return stage in _CANDIDATE_BOUND_STAGES
+
+
 class CompletionHandoffCoordinator:
     def __init__(
         self,
@@ -96,8 +105,11 @@ class CompletionHandoffCoordinator:
         if payload["context_revision"] != context_revision:
             raise CompletionHandoffError("Factory handoff context revision is stale")
 
+        candidate_required = _candidate_identity_required(
+            stage=stage, materialization_revision=materialization_revision
+        )
         observed_candidate: str | None = None
-        if stage in _CANDIDATE_BOUND_STAGES or payload["candidate_identity"] is not None:
+        if candidate_required or payload["candidate_identity"] is not None:
             if self._candidate_observer is None:
                 raise CompletionHandoffError(
                     "candidate identity observer is required for asserted or candidate-bound identity"
@@ -148,7 +160,7 @@ class CompletionHandoffCoordinator:
                 next_stage_prerequisites=prerequisites,
                 context_revision=payload["context_revision"],
                 candidate_identity=payload["candidate_identity"],
-                candidate_identity_required=stage in _CANDIDATE_BOUND_STAGES,
+                candidate_identity_required=candidate_required,
                 independent_review_required=stage in _REVIEW_STAGES,
                 independent_review_state=payload["independent_review_state"],
             )
@@ -192,7 +204,7 @@ def validate_factory_completion_metadata(
     identity = _parse_task_identity(idempotency_key)
     if identity is None:
         raise CompletionHandoffError("Factory completion lacks semantic task identity")
-    _, _, stage, context_revision, _ = identity
+    _, _, stage, context_revision, materialization_revision = identity
     payload = _handoff_payload(metadata)
     if payload["context_revision"] != context_revision:
         raise CompletionHandoffError("Factory completion context revision is stale")
@@ -208,7 +220,12 @@ def validate_factory_completion_metadata(
         raise CompletionHandoffError(
             "Factory kanban_complete requires all evidence_states=PASS"
         )
-    if stage in _CANDIDATE_BOUND_STAGES and not payload["candidate_identity"]:
+    if (
+        _candidate_identity_required(
+            stage=stage, materialization_revision=materialization_revision
+        )
+        and not payload["candidate_identity"]
+    ):
         raise CompletionHandoffError(
             "Factory kanban_complete requires candidate_identity for this stage"
         )

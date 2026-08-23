@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -179,3 +180,165 @@ def test_precompletion_repository_validation_propagates_dirty_worktree() -> None
         installed_completion.validate_factory_repository_precompletion(
             board="jarvas-cli", task=task, candidate_identity=None, observer=observer,
         )
+
+
+class FakeMutationObserver:
+    def __init__(self, paths: tuple[str, ...]) -> None:
+        self.paths = paths
+        self.calls = []
+
+    def observe(self, *, task: object, base_candidate_identity: str | None) -> tuple[str, ...]:
+        self.calls.append((task, base_candidate_identity))
+        return self.paths
+
+
+def test_design_precompletion_rejects_production_source_delta() -> None:
+    task = FakeTask("t_design", "/repo/.worktrees/t_design")
+    candidate = "1" * 40
+    mutation = FakeMutationObserver(("docs/adr/ADR-0001.md", "jarvas_cli/contracts.py"))
+
+    with pytest.raises(InstalledRuntimeBindingError, match="DESIGN.*production"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli",
+            task=task,
+            candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate),
+            stage="DESIGN",
+            base_candidate_identity="0" * 40,
+            mutation_observer=mutation,
+        )
+
+
+def test_tdd_red_allows_tests_but_rejects_production_source() -> None:
+    installed_completion.validate_factory_stage_mutation_paths(
+        stage="TDD_RED",
+        changed_paths=("tests/test_contracts.py", "tests/fixtures/result.json"),
+    )
+    with pytest.raises(InstalledRuntimeBindingError, match="TDD_RED.*production"):
+        installed_completion.validate_factory_stage_mutation_paths(
+            stage="TDD_RED",
+            changed_paths=("tests/test_contracts.py", "jarvas_cli/contracts.py"),
+        )
+
+
+def test_implement_allows_production_but_rejects_red_test_rewrites() -> None:
+    installed_completion.validate_factory_stage_mutation_paths(
+        stage="IMPLEMENT",
+        changed_paths=("jarvas_cli/contracts.py", "pyproject.toml"),
+    )
+    with pytest.raises(InstalledRuntimeBindingError, match="IMPLEMENT.*test"):
+        installed_completion.validate_factory_stage_mutation_paths(
+            stage="IMPLEMENT",
+            changed_paths=("jarvas_cli/contracts.py", "tests/test_contracts.py"),
+        )
+
+
+def test_git_stage_mutation_observer_diffs_from_parent_candidate() -> None:
+    base = "2" * 40
+    runner = FakeRunner([
+        CommandResult(0, "docs/adr/ADR-0001.md\njarvas_cli/contracts.py\n", ""),
+    ])
+    observer = installed_completion.GitStageMutationObserver(runner)
+    task = FakeTask("t_design", "/repo/.worktrees/t_design")
+
+    assert observer.observe(task=task, base_candidate_identity=base) == (
+        "docs/adr/ADR-0001.md",
+        "jarvas_cli/contracts.py",
+    )
+    assert runner.calls == [
+        (
+            "git", "-C", "/repo/.worktrees/t_design", "diff", "--name-only",
+            "--diff-filter=ACMRD", f"{base}..HEAD", "--",
+        )
+    ]
+
+
+@dataclass
+class FakeFactoryTask(FakeTask):
+    idempotency_key: str | None = None
+
+
+def test_precompletion_derives_stage_and_parent_candidate_from_factory_task(monkeypatch) -> None:
+    revision = "3" * 64
+    candidate = "4" * 40
+    parent = "5" * 40
+    task = FakeFactoryTask(
+        "t_design",
+        "/repo/.worktrees/t_design",
+        f"factory:jarvas-cli:WP-A:DESIGN:{revision}.stage-contract-v9",
+    )
+    mutation = FakeMutationObserver(("jarvas_cli/contracts.py",))
+    seen = []
+    monkeypatch.setattr(
+        installed_completion,
+        "_parent_candidate_identity",
+        lambda *, board, task: seen.append((board, task.id)) or parent,
+        raising=False,
+    )
+
+    with pytest.raises(InstalledRuntimeBindingError, match="DESIGN.*production"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli",
+            task=task,
+            candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate),
+            mutation_observer=mutation,
+        )
+
+    assert seen == [("jarvas-cli", "t_design")]
+    assert mutation.calls == [(task, parent)]
+
+
+def test_design_allows_engineering_documentation_delta() -> None:
+    installed_completion.validate_factory_stage_mutation_paths(
+        stage="DESIGN",
+        changed_paths=("docs/adr/ADR-0001.md", "architecture.drawio"),
+    )
+
+
+def test_root_stage_mutation_observer_uses_latest_checkpoint_commit() -> None:
+    runner = FakeRunner([CommandResult(0, "docs/requirements.md\n", "")])
+    observer = installed_completion.GitStageMutationObserver(runner)
+    task = FakeTask("t_discover", "/repo/.worktrees/t_discover")
+
+    assert observer.observe(task=task, base_candidate_identity=None) == (
+        "docs/requirements.md",
+    )
+    assert runner.calls == [
+        (
+            "git", "-C", "/repo/.worktrees/t_discover", "diff-tree",
+            "--no-commit-id", "--name-only", "-r", "HEAD", "--",
+        )
+    ]
+
+
+def test_parent_candidate_identity_reads_structured_parent_handoff(monkeypatch) -> None:
+    candidate = "6" * 40
+
+    class FakeKB:
+        @staticmethod
+        @contextmanager
+        def connect_closing(*, board: str):
+            assert board == "jarvas-cli"
+            yield object()
+
+        @staticmethod
+        def parent_ids(conn, task_id: str):
+            assert task_id == "t_design"
+            return ["t_specify"]
+
+        @staticmethod
+        def latest_run(conn, task_id: str):
+            assert task_id == "t_specify"
+            return type("Run", (), {
+                "metadata": {
+                    "factory_handoff": {"candidate_identity": candidate}
+                }
+            })()
+
+    monkeypatch.setattr(installed_completion, "import_module", lambda _: FakeKB)
+    task = FakeFactoryTask("t_design", "/repo/.worktrees/t_design", None)
+
+    assert installed_completion._parent_candidate_identity(
+        board="jarvas-cli", task=task
+    ) == candidate
