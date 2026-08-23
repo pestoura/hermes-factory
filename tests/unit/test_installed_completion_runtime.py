@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from hermes_factory.runtime import installed_completion
-
 from hermes_factory.runtime.hermes_install_runtime import CommandResult
 from hermes_factory.runtime.installed_completion import (
     GitCandidateIdentityObserver,
