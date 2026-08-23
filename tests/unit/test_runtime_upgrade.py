@@ -150,6 +150,44 @@ def test_existing_identical_profile_distribution_is_reused(tmp_path: Path):
     assert (installed / "state.db").read_text() == "mutable-state"
 
 
+def test_existing_profile_reuse_preserves_native_config_runtime_state(tmp_path: Path):
+    from hermes_factory.runtime.hermes_install_runtime import HermesJarvasInstallRuntime
+
+    home = tmp_path / "home"
+    source = tmp_path / "profile"
+    installed = home / "profiles" / "factory-orchestrator"
+    source.mkdir(parents=True)
+    installed.mkdir(parents=True)
+    manifest = """name: factory-orchestrator
+distribution_owned:
+- config.yaml
+- distribution.yaml
+"""
+    (source / "distribution.yaml").write_text(manifest)
+    (installed / "distribution.yaml").write_text(manifest)
+    (source / "config.yaml").write_text("toolsets: [terminal, kanban]\n")
+    (installed / "config.yaml").write_text(
+        "_config_version: 38\n"
+        "toolsets: [terminal, kanban]\n"
+        "plugins:\n"
+        "  enabled: [hermes-factory]\n"
+        "  disabled: []\n"
+        "  entries:\n"
+        "    hermes-factory:\n"
+        "      allow_tool_override: false\n"
+    )
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=FakeRunner([]), hermes_home=home,
+    )
+    operation = _profile_operation(source)
+
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    assert json.loads(receipt)["kind"] == "PROFILE_REUSE"
+    runtime.rollback(operation, receipt)
+    assert "hermes-factory" in (installed / "config.yaml").read_text()
+
+
 def test_profile_managed_drift_blocks_upgrade_before_mutation(tmp_path: Path):
     from hermes_factory.runtime.hermes_install_runtime import HermesJarvasInstallRuntime
 
