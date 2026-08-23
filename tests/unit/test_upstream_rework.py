@@ -6,10 +6,10 @@ from dataclasses import dataclass
 import pytest
 
 from hermes_factory.runtime.upstream_rework import (
+    UpstreamReworkCoordinator,
     UpstreamReworkError,
     UpstreamReworkRequest,
     parse_upstream_rework_request,
-    UpstreamReworkCoordinator,
 )
 
 REV = "d" * 64
@@ -102,7 +102,7 @@ class FakeCandidateObserver:
         self.calls = []
 
     def observe(self, *, board: str, task: object):
-        self.calls.append((board, getattr(task, "id")))
+        self.calls.append((board, task.id))
         return self.sha
 
 
