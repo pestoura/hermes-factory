@@ -211,6 +211,39 @@ def test_non_candidate_stage_with_asserted_candidate_observes_and_promotes() -> 
     assert record.candidate_identity_required is False
 
 
+def test_v9_discover_handoff_marks_candidate_identity_required() -> None:
+    revision = "b" * 64
+    candidate = "c" * 40
+    native = FakeNative()
+    native.tasks["t_parent"] = FakeTask(
+        "t_parent", "factory-requirements-engineer", "done",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v9",
+    )
+    native.tasks["t_child"] = FakeTask(
+        "t_child", "factory-requirements-engineer", "blocked",
+        f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v9",
+    )
+    native.runs["t_parent"] = FakeRun(
+        "completed", metadata=_metadata(revision, candidate=candidate)
+    )
+    native.children["t_parent"] = ("t_child",)
+    native.parents["t_child"] = ("t_parent",)
+    coordinator, ledger, authorizer = _coordinator(
+        native, observed_candidate=candidate
+    )
+
+    states = coordinator.on_task_completed(
+        task_id="t_parent", board="jarvas-cli"
+    )
+
+    assert states == (HandoffState.HANDED_OFF,)
+    assert authorizer.calls[0]["task_id"] == "t_child"
+    record, ready_state = ledger.entries[0]
+    assert ready_state is HandoffState.HANDOFF_READY
+    assert record.candidate_identity == candidate
+    assert record.candidate_identity_required is True
+
+
 def test_other_open_parent_keeps_child_blocked() -> None:
     revision = "c" * 64
     native = FakeNative()
@@ -356,6 +389,39 @@ def test_precompletion_accepts_ready_pass() -> None:
     assert payload["stage_outcome"] == "PASS"
     assert payload["finding_state"] == "NONE"
     assert payload["context_revision"] == revision
+
+
+def test_v9_requires_candidate_identity_even_for_discover() -> None:
+    from hermes_factory.runtime.completion_handoff import (
+        validate_factory_completion_metadata,
+    )
+
+    revision = "8" * 64
+    metadata = _metadata(revision)
+    key = f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v9"
+
+    with pytest.raises(CompletionHandoffError, match="candidate_identity"):
+        validate_factory_completion_metadata(
+            idempotency_key=key,
+            metadata=metadata,
+        )
+
+
+def test_v8_discover_preserves_optional_candidate_identity_compatibility() -> None:
+    from hermes_factory.runtime.completion_handoff import (
+        validate_factory_completion_metadata,
+    )
+
+    revision = "9" * 64
+    metadata = _metadata(revision)
+    key = f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v8"
+
+    payload = validate_factory_completion_metadata(
+        idempotency_key=key,
+        metadata=metadata,
+    )
+
+    assert payload["candidate_identity"] is None
 
 
 def test_precompletion_candidate_stage_requires_candidate_identity() -> None:

@@ -85,7 +85,45 @@ _CANDIDATE_BOUND_STAGES = frozenset(
     }
 )
 _REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
-_STAGE_CONTRACT_REVISION = "stage-contract-v8"
+_STAGE_MUTATION_POLICIES = {
+    "DISCOVER": "engineering_docs_only",
+    "SPECIFY": "engineering_docs_only",
+    "DESIGN": "engineering_docs_only",
+    "THREAT_MODEL": "engineering_docs_only",
+    "TDD_RED": "tests_and_docs_only",
+    "IMPLEMENT": "implementation_no_tests",
+    "UNIT": "tests_and_docs_only",
+    "INTEGRATION": "tests_and_docs_only",
+    "CODE_REVIEW": "evidence_docs_only",
+    "SECURITY_REVIEW": "evidence_docs_only",
+    "ADVERSARIAL_REVIEW": "evidence_docs_only",
+    "REGRESSION": "tests_and_docs_only",
+    "CI": "evidence_docs_only",
+    "EXACT_SHA": "evidence_docs_only",
+    "MERGE": "evidence_docs_only",
+    "DEPLOY": "evidence_docs_only",
+    "RUNTIME_VERIFY": "evidence_docs_only",
+    "UAT": "evidence_docs_only",
+    "OBSERVE": "evidence_docs_only",
+    "ACCEPT": "evidence_docs_only",
+}
+_STAGE_CONTRACT_REVISION = "stage-contract-v9"
+
+
+def stage_mutation_policy(stage: str) -> str:
+    try:
+        return _STAGE_MUTATION_POLICIES[stage]
+    except KeyError as exc:
+        raise ValueError(f"unknown Factory stage mutation policy: {stage}") from exc
+
+
+def _stage_mutation_instruction(stage: str) -> str:
+    policy = stage_mutation_policy(stage)
+    if policy in {"engineering_docs_only", "evidence_docs_only"}:
+        return "This stage may commit engineering/evidence documentation only; production source changes are prohibited."
+    if policy == "tests_and_docs_only":
+        return "This stage may commit tests/fixtures and engineering documentation only; production source changes are prohibited."
+    return "This stage may commit production implementation and engineering documentation; test changes are prohibited so prior RED evidence is not rewritten."
 
 
 class ProjectMaterializer:
@@ -265,7 +303,9 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "If this stage produces no repository changes, do not create an empty commit; preserve the clean existing HEAD.",
             "When candidate_identity is required, candidate_identity must equal the clean worktree HEAD after the stage checkpoint commit.",
             "If candidate_identity is supplied when optional, it must still equal the clean worktree HEAD and will be independently observed.",
-            f"candidate_identity_required={stage in _CANDIDATE_BOUND_STAGES}",
+            f"repository_mutation_policy={stage_mutation_policy(stage)}",
+            _stage_mutation_instruction(stage),
+            "candidate_identity_required=True",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",
         )
