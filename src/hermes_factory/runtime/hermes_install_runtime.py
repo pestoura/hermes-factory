@@ -144,6 +144,9 @@ _SUPPORTED_ACTIONS = {
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
+    "REGISTER_FACTORY_PLUGIN_PROFILE",
+    "ACTIVATE_FACTORY_PLUGIN_SCOPE",
+    "VERIFY_FACTORY_PLUGIN_SCOPE",
     "QUIESCE_GATEWAY_FACTORY_RUNTIME",
     "VERIFY_GATEWAY_HITL_BINDING",
     "ACTIVATE_GATEWAY_FACTORY_RUNTIME",
@@ -152,7 +155,7 @@ _SUPPORTED_ACTIONS = {
 }
 
 
-def _receipt(payload: dict[str, str]) -> str:
+def _receipt(payload: dict[str, object]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
@@ -367,6 +370,361 @@ class HermesJarvasInstallRuntime:
             raise RuntimeError("Dashboard plugin target already exists")
         return source, target, plugins_root
 
+    def _profile_plugin_paths(
+        self,
+        operation: InstallOperation,
+        *,
+        target_must_be_absent: bool,
+    ) -> tuple[str, Path, Path, Path]:
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Factory Profile plugin registration")
+        if operation.source is None:
+            raise RuntimeError("Factory Profile plugin source is required")
+        source = Path(operation.source)
+        if source.is_symlink() or not source.is_dir():
+            raise RuntimeError("Factory Profile plugin source must be a regular directory")
+        if any(path.is_symlink() for path in source.rglob("*")):
+            raise RuntimeError("Factory Profile plugin source must not contain symlinks")
+        manifest = source / "plugin.yaml"
+        if manifest.is_symlink() or not manifest.is_file():
+            raise RuntimeError("Factory Profile plugin manifest is required")
+        prefix = "HERMES_HOME/profiles/"
+        suffix = "/plugins/hermes-factory"
+        target_text = operation.target or ""
+        if not target_text.startswith(prefix) or not target_text.endswith(suffix):
+            raise RuntimeError("Factory Profile plugin target is invalid")
+        profile_id = target_text[len(prefix):-len(suffix)]
+        if not _PROFILE_ID.fullmatch(profile_id):
+            raise RuntimeError("Factory Profile plugin target Profile id is invalid")
+        profile_home = self._hermes_home / "profiles" / profile_id
+        if profile_home.is_symlink() or not profile_home.is_dir():
+            raise RuntimeError("Factory Profile plugin target Profile is unavailable")
+        plugins_root = profile_home / "plugins"
+        if plugins_root.exists() and (plugins_root.is_symlink() or not plugins_root.is_dir()):
+            raise RuntimeError("Factory Profile plugins root must be a regular directory")
+        target = plugins_root / "hermes-factory"
+        if target_must_be_absent and (target.exists() or target.is_symlink()):
+            raise RuntimeError("Factory Profile plugin target already exists")
+        if operation.source_digest is not None and digest_artifact(source) != operation.source_digest:
+            raise RuntimeError("Factory Profile plugin source digest drift")
+        return profile_id, source, target, plugins_root
+
+    def _factory_plugin_scope(
+        self, operation: InstallOperation
+    ) -> tuple[str, Path, tuple[str, ...]]:
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Factory plugin scope operations")
+        target = operation.target or ""
+        if target == "HERMES_HOME":
+            return target, self._hermes_home, ()
+        prefix = "HERMES_HOME/profiles/"
+        if not target.startswith(prefix):
+            raise RuntimeError("Factory plugin scope target is invalid")
+        profile_id = target[len(prefix):]
+        if not _PROFILE_ID.fullmatch(profile_id):
+            raise RuntimeError("Factory plugin scope Profile id is invalid")
+        profile_home = self._hermes_home / "profiles" / profile_id
+        if profile_home.is_symlink() or not profile_home.is_dir():
+            raise RuntimeError("Factory plugin scope Profile is unavailable")
+        return target, profile_home, ("-p", profile_id)
+
+    def _validate_factory_plugin_activation(self, operation: InstallOperation) -> None:
+        if operation.component is not RuntimeComponent.DASHBOARD_PLUGIN:
+            raise RuntimeError("Factory plugin activation operation has wrong component")
+        target, _, profile_prefix = self._factory_plugin_scope(operation)
+        expected = (
+            "hermes",
+            *profile_prefix,
+            "plugins",
+            "enable",
+            "hermes-factory",
+            "--no-allow-tool-override",
+        )
+        if operation.argv != expected:
+            raise RuntimeError(f"Factory plugin activation command is invalid for {target}")
+        if operation.source is not None or operation.source_digest is not None:
+            raise RuntimeError("Factory plugin activation must not contain source identity")
+
+    def _validate_factory_plugin_verification(self, operation: InstallOperation) -> None:
+        if operation.component is not RuntimeComponent.DASHBOARD_PLUGIN:
+            raise RuntimeError("Factory plugin verification operation has wrong component")
+        self._factory_plugin_scope(operation)
+        if operation.argv:
+            raise RuntimeError("Factory plugin verification must not contain argv")
+        if operation.source is not None or operation.source_digest is not None:
+            raise RuntimeError("Factory plugin verification must not contain source identity")
+
+    @staticmethod
+    def _raw_plugin_snapshot(scope_home: Path) -> dict[str, object]:
+        config_path = scope_home / "config.yaml"
+        if not config_path.exists():
+            plugins: dict[str, object] = {}
+        else:
+            if config_path.is_symlink() or not config_path.is_file():
+                raise RuntimeError("Factory plugin scope config must be a regular file")
+            try:
+                payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise RuntimeError("Factory plugin scope config is invalid") from exc
+            if not isinstance(payload, dict):
+                raise TypeError("Factory plugin scope config must contain a mapping")
+            raw_plugins = payload.get("plugins", {})
+            if raw_plugins is None:
+                raw_plugins = {}
+            if not isinstance(raw_plugins, dict):
+                raise TypeError("Factory plugin scope plugins config must be a mapping")
+            plugins = raw_plugins
+
+        def capture(key: str, expected_type: type) -> dict[str, object]:
+            if key not in plugins:
+                return {"present": False, "value": None}
+            value = plugins[key]
+            if not isinstance(value, expected_type):
+                raise TypeError(f"Factory plugin scope plugins.{key} has invalid type")
+            return {"present": True, "value": value}
+
+        enabled = capture("enabled", list)
+        disabled = capture("disabled", list)
+        for field in (enabled, disabled):
+            value = field["value"]
+            if value is not None:
+                if not isinstance(value, list):
+                    raise TypeError("Factory plugin enabled/disabled config must be a list")
+                if any(not isinstance(item, str) for item in value):
+                    raise TypeError("Factory plugin enabled/disabled entries must be strings")
+        entries = plugins.get("entries", {})
+        if entries is None:
+            entries = {}
+        if not isinstance(entries, dict):
+            raise TypeError("Factory plugin scope plugins.entries must be a mapping")
+        entry_present = "hermes-factory" in entries
+        entry = entries.get("hermes-factory")
+        if entry_present and not isinstance(entry, dict):
+            raise TypeError("Factory plugin scope entry must be a mapping")
+        return {
+            "enabled": enabled,
+            "disabled": disabled,
+            "entry": {"present": entry_present, "value": entry if entry_present else None},
+        }
+
+    @staticmethod
+    def _compact_json(value: object) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+    @staticmethod
+    def _snapshot_field(snapshot: dict[str, object], name: str) -> tuple[bool, object]:
+        field = snapshot.get(name)
+        if not isinstance(field, dict) or field.get("present") not in {True, False}:
+            raise RuntimeError("Factory plugin activation receipt snapshot is invalid")
+        return bool(field["present"]), field.get("value")
+
+    @staticmethod
+    def _raw_plugin_key_present(scope_home: Path, name: str) -> bool:
+        snapshot = HermesJarvasInstallRuntime._raw_plugin_snapshot(scope_home)
+        present, _ = HermesJarvasInstallRuntime._snapshot_field(snapshot, name)
+        return present
+
+    def _scope_config_argv(
+        self, profile_prefix: tuple[str, ...], *args: str
+    ) -> tuple[str, ...]:
+        return ("hermes", *profile_prefix, "config", *args)
+
+    def _restore_factory_plugin_snapshot(
+        self,
+        *,
+        scope_home: Path,
+        profile_prefix: tuple[str, ...],
+        snapshot: dict[str, object],
+        label: str,
+    ) -> None:
+        fields = (
+            ("enabled", "plugins.enabled"),
+            ("disabled", "plugins.disabled"),
+            ("entry", "plugins.entries.hermes-factory"),
+        )
+        for name, key in fields:
+            present, value = self._snapshot_field(snapshot, name)
+            if present:
+                self._run_checked(
+                    self._scope_config_argv(
+                        profile_prefix, "set", key, self._compact_json(value)
+                    ),
+                    label,
+                )
+            elif self._raw_plugin_key_present(scope_home, name):
+                self._run_checked(
+                    self._scope_config_argv(profile_prefix, "unset", key),
+                    label,
+                )
+
+    def _read_scope_json(
+        self, profile_prefix: tuple[str, ...], key: str, *, label: str
+    ) -> object:
+        result = self._run_checked(
+            self._scope_config_argv(profile_prefix, "get", key, "--json"), label
+        )
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"{label} returned invalid JSON") from exc
+
+    def _apply_factory_plugin_activation(self, operation: InstallOperation) -> str:
+        scope, scope_home, profile_prefix = self._factory_plugin_scope(operation)
+        snapshot = self._raw_plugin_snapshot(scope_home)
+        try:
+            self._run_checked(operation.argv, "Factory plugin native activation")
+            enabled = self._read_scope_json(
+                profile_prefix,
+                "plugins.enabled",
+                label="Factory plugin enabled-state verification",
+            )
+            if not isinstance(enabled, list) or "hermes-factory" not in enabled:
+                raise RuntimeError("Factory plugin activation was not persisted")
+            override = self._read_scope_json(
+                profile_prefix,
+                "plugins.entries.hermes-factory.allow_tool_override",
+                label="Factory plugin tool-override verification",
+            )
+            if override is not False:
+                raise RuntimeError("Factory plugin tool override must remain disabled")
+        except Exception:
+            try:
+                self._restore_factory_plugin_snapshot(
+                    scope_home=scope_home,
+                    profile_prefix=profile_prefix,
+                    snapshot=snapshot,
+                    label="Factory plugin activation compensation",
+                )
+            except Exception as compensation_exc:
+                raise RuntimeError(
+                    "Factory plugin activation compensation failed; runtime state is unknown"
+                ) from compensation_exc
+            raise
+        return _receipt(
+            {
+                "kind": "FACTORY_PLUGIN_SCOPE_ACTIVATE",
+                "scope": scope,
+                "snapshot": snapshot,
+            }
+        )
+
+    def _apply_factory_plugin_verification(self, operation: InstallOperation) -> str:
+        scope, scope_home, _ = self._factory_plugin_scope(operation)
+        probe = (
+            'from hermes_cli.plugins import PluginManager; '
+            'm=PluginManager(); m.discover_and_load(force=True); '
+            'assert m.has_hook("pre_tool_call"); '
+            'assert m.has_hook("kanban_task_completed")'
+        )
+        self._run_checked(
+            ("env", f"HERMES_HOME={scope_home}", self._python_executable, "-c", probe),
+            "Factory plugin callback verification",
+        )
+        return _receipt({"kind": "FACTORY_PLUGIN_SCOPE_VERIFIED", "scope": scope})
+
+    def _profile_plugin_backup_path(self, candidate_sha: str, profile_id: str) -> Path:
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Factory Profile plugin upgrade")
+        return (
+            self._hermes_home / "factory" / "profile-plugin-catalog" /
+            candidate_sha / profile_id
+        )
+
+    def _profile_plugin_target_exists(self, operation: InstallOperation) -> bool:
+        _, _, target, _ = self._profile_plugin_paths(
+            operation, target_must_be_absent=False
+        )
+        return target.exists() or target.is_symlink()
+
+    def _validate_profile_plugin_upgrade(self, operation: InstallOperation) -> None:
+        profile_id, source, target, _ = self._profile_plugin_paths(
+            operation, target_must_be_absent=False
+        )
+        if target.is_symlink() or not target.is_dir():
+            raise RuntimeError("Factory Profile plugin upgrade target must be a regular directory")
+        if operation.source_digest is not None and digest_artifact(source) != operation.source_digest:
+            raise RuntimeError("Factory Profile plugin source digest drift")
+        if operation.source_digest is not None and digest_artifact(target) == operation.source_digest:
+            return
+        previous = self._preflight_factory_package
+        if previous is None:
+            raise RuntimeError("Factory Profile plugin upgrade requires previous Factory package identity")
+        backup = self._profile_plugin_backup_path(previous.candidate_sha, profile_id)
+        if backup.is_symlink():
+            raise RuntimeError("Factory Profile plugin backup path must not be a symlink")
+        if backup.exists() and (
+            not backup.is_dir() or digest_artifact(backup) != digest_artifact(target)
+        ):
+            raise RuntimeError("Factory Profile plugin rollback backup conflicts with live target")
+
+    def _apply_profile_plugin(self, operation: InstallOperation) -> str:
+        profile_id, source, target, plugins_root = self._profile_plugin_paths(
+            operation, target_must_be_absent=False
+        )
+        plugins_root_created = not plugins_root.exists()
+        if not target.exists():
+            try:
+                if plugins_root_created:
+                    plugins_root.mkdir(parents=False)
+                shutil.copytree(source, target)
+                if operation.source_digest is not None and digest_artifact(target) != operation.source_digest:
+                    raise RuntimeError("Factory Profile plugin staged digest mismatch")
+            except Exception:
+                if target.exists() and not target.is_symlink():
+                    shutil.rmtree(target)
+                if plugins_root_created:
+                    with suppress(OSError):
+                        plugins_root.rmdir()
+                raise
+            return _receipt(
+                {
+                    "kind": "FACTORY_PLUGIN_PROFILE_INSTALL",
+                    "plugins_root_created": "true" if plugins_root_created else "false",
+                    "profile_id": profile_id,
+                    "target": str(target),
+                }
+            )
+        if operation.source_digest is not None and digest_artifact(target) == operation.source_digest:
+            return _receipt(
+                {
+                    "kind": "FACTORY_PLUGIN_PROFILE_REUSE",
+                    "profile_id": profile_id,
+                    "target": str(target),
+                }
+            )
+        self._validate_profile_plugin_upgrade(operation)
+        previous = self._preflight_factory_package
+        if previous is None:
+            raise RuntimeError("Factory Profile plugin upgrade lacks previous candidate identity")
+        backup = self._profile_plugin_backup_path(previous.candidate_sha, profile_id)
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        if not backup.exists():
+            shutil.copytree(target, backup)
+        staged = plugins_root / ".hermes-factory-upgrade"
+        if staged.exists() or staged.is_symlink():
+            raise RuntimeError("Factory Profile plugin staged upgrade path already exists")
+        try:
+            shutil.copytree(source, staged)
+            if operation.source_digest is not None and digest_artifact(staged) != operation.source_digest:
+                raise RuntimeError("Factory Profile plugin staged digest mismatch")
+            shutil.rmtree(target)
+            staged.rename(target)
+        except Exception:
+            if staged.exists() and not staged.is_symlink():
+                shutil.rmtree(staged)
+            if not target.exists() and backup.is_dir():
+                shutil.copytree(backup, target)
+            raise
+        return _receipt(
+            {
+                "backup": str(backup),
+                "kind": "FACTORY_PLUGIN_PROFILE_UPGRADE",
+                "previous_candidate_sha": previous.candidate_sha,
+                "profile_id": profile_id,
+                "target": str(target),
+            }
+        )
+
     @staticmethod
     def _validate_gateway_runtime_operation(operation: InstallOperation) -> None:
         if operation.component is not RuntimeComponent.GATEWAY_HITL_ADAPTER:
@@ -483,6 +841,20 @@ class HermesJarvasInstallRuntime:
                 operation,
                 target_must_be_absent=not allow_dashboard_target_exists,
             )
+            return
+        if operation.action == "REGISTER_FACTORY_PLUGIN_PROFILE":
+            if operation.component is not RuntimeComponent.DASHBOARD_PLUGIN:
+                raise RuntimeError("Factory Profile plugin operation has wrong component")
+            self._profile_plugin_paths(
+                operation,
+                target_must_be_absent=not allow_dashboard_target_exists,
+            )
+            return
+        if operation.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE":
+            self._validate_factory_plugin_activation(operation)
+            return
+        if operation.action == "VERIFY_FACTORY_PLUGIN_SCOPE":
+            self._validate_factory_plugin_verification(operation)
             return
         if operation.action in {
             "QUIESCE_GATEWAY_FACTORY_RUNTIME",
@@ -628,6 +1000,10 @@ class HermesJarvasInstallRuntime:
                     operation.action == "REGISTER_DASHBOARD_PLUGIN"
                     and self._dashboard_target_exists(operation)
                 )
+                or (
+                    operation.action == "REGISTER_FACTORY_PLUGIN_PROFILE"
+                    and self._profile_plugin_target_exists(operation)
+                )
                 for operation in operations
             )
             if needs_package_identity:
@@ -646,6 +1022,14 @@ class HermesJarvasInstallRuntime:
                 and self._dashboard_target_exists(operation)
             ):
                 self._validate_dashboard_upgrade(operation)
+            elif (
+                operation.action == "REGISTER_FACTORY_PLUGIN_PROFILE"
+                and self._profile_plugin_target_exists(operation)
+            ):
+                self._validate_profile_plugin_upgrade(operation)
+            elif operation.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE":
+                _, scope_home, _ = self._factory_plugin_scope(operation)
+                self._raw_plugin_snapshot(scope_home)
 
     def _run_checked(self, argv: tuple[str, ...], label: str) -> CommandResult:
         result = self._runner.run(argv)
@@ -961,6 +1345,15 @@ class HermesJarvasInstallRuntime:
         if operation.action == "REGISTER_DASHBOARD_PLUGIN":
             return self._apply_dashboard(operation)
 
+        if operation.action == "REGISTER_FACTORY_PLUGIN_PROFILE":
+            return self._apply_profile_plugin(operation)
+
+        if operation.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE":
+            return self._apply_factory_plugin_activation(operation)
+
+        if operation.action == "VERIFY_FACTORY_PLUGIN_SCOPE":
+            return self._apply_factory_plugin_verification(operation)
+
         if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
             self._run_checked(
                 (self._python_executable, "-c", _GATEWAY_BINDING_PROBE),
@@ -1125,6 +1518,80 @@ class HermesJarvasInstallRuntime:
                     "restart", running=True, label="Factory Gateway rollback reload"
                 )
             self._gateway_was_running = None
+            return
+
+        if operation.action == "VERIFY_FACTORY_PLUGIN_SCOPE":
+            scope, _, _ = self._factory_plugin_scope(operation)
+            if payload != {"kind": "FACTORY_PLUGIN_SCOPE_VERIFIED", "scope": scope}:
+                raise RuntimeError("Factory plugin verification rollback receipt is invalid")
+            return
+
+        if operation.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE":
+            scope, scope_home, profile_prefix = self._factory_plugin_scope(operation)
+            snapshot = payload.get("snapshot")
+            if (
+                payload.get("kind") != "FACTORY_PLUGIN_SCOPE_ACTIVATE"
+                or payload.get("scope") != scope
+                or not isinstance(snapshot, dict)
+            ):
+                raise RuntimeError("Factory plugin activation rollback receipt is invalid")
+            self._restore_factory_plugin_snapshot(
+                scope_home=scope_home,
+                profile_prefix=profile_prefix,
+                snapshot=snapshot,
+                label="Factory plugin activation rollback",
+            )
+            return
+
+        if operation.action == "REGISTER_FACTORY_PLUGIN_PROFILE":
+            profile_id, _, target, plugins_root = self._profile_plugin_paths(
+                operation, target_must_be_absent=False
+            )
+            kind = payload.get("kind")
+            if kind == "FACTORY_PLUGIN_PROFILE_REUSE":
+                if payload != {
+                    "kind": kind,
+                    "profile_id": profile_id,
+                    "target": str(target),
+                }:
+                    raise RuntimeError("Factory Profile plugin reuse receipt is invalid")
+                return
+            if kind == "FACTORY_PLUGIN_PROFILE_UPGRADE":
+                backup_raw = payload.get("backup")
+                previous_sha = payload.get("previous_candidate_sha")
+                if (
+                    payload.get("profile_id") != profile_id
+                    or payload.get("target") != str(target)
+                    or not isinstance(backup_raw, str)
+                    or not isinstance(previous_sha, str)
+                ):
+                    raise RuntimeError("Factory Profile plugin upgrade receipt is invalid")
+                backup = Path(backup_raw)
+                if backup != self._profile_plugin_backup_path(previous_sha, profile_id):
+                    raise RuntimeError("Factory Profile plugin rollback backup identity mismatch")
+                if backup.is_symlink() or not backup.is_dir():
+                    raise RuntimeError("Factory Profile plugin rollback backup is unavailable")
+                if target.is_symlink():
+                    raise RuntimeError("Factory Profile plugin rollback target became a symlink")
+                if target.exists():
+                    shutil.rmtree(target)
+                shutil.copytree(backup, target)
+                return
+            plugins_root_created = payload.get("plugins_root_created")
+            if (
+                kind != "FACTORY_PLUGIN_PROFILE_INSTALL"
+                or payload.get("profile_id") != profile_id
+                or payload.get("target") != str(target)
+                or plugins_root_created not in {"true", "false"}
+            ):
+                raise RuntimeError("Factory Profile plugin rollback receipt does not match operation")
+            if target.is_symlink():
+                raise RuntimeError("Factory Profile plugin rollback target became a symlink")
+            if target.exists():
+                shutil.rmtree(target)
+            if plugins_root_created == "true":
+                with suppress(OSError):
+                    plugins_root.rmdir()
             return
 
         if operation.action == "REGISTER_DASHBOARD_PLUGIN":

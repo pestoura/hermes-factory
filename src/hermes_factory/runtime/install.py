@@ -293,15 +293,70 @@ class ControlledInstallPlanBuilder:
                 )
             )
 
-        operations.extend(
-            [
+        operations.append(
+            InstallOperation(
+                component=RuntimeComponent.DASHBOARD_PLUGIN,
+                action="REGISTER_DASHBOARD_PLUGIN",
+                source=str(dashboard_plugin_source),
+                source_digest=dashboard_plugin_digest,
+                target="HERMES_HOME/plugins/hermes-factory",
+            )
+        )
+        for profile_id in profile_ids:
+            operations.append(
                 InstallOperation(
                     component=RuntimeComponent.DASHBOARD_PLUGIN,
-                    action="REGISTER_DASHBOARD_PLUGIN",
+                    action="REGISTER_FACTORY_PLUGIN_PROFILE",
                     source=str(dashboard_plugin_source),
                     source_digest=dashboard_plugin_digest,
-                    target="HERMES_HOME/plugins/hermes-factory",
+                    target=(
+                        f"HERMES_HOME/profiles/{profile_id}/plugins/hermes-factory"
+                    ),
+                )
+            )
+
+        operations.append(
+            InstallOperation(
+                component=RuntimeComponent.DASHBOARD_PLUGIN,
+                action="ACTIVATE_FACTORY_PLUGIN_SCOPE",
+                argv=(
+                    "hermes", "plugins", "enable", "hermes-factory",
+                    "--no-allow-tool-override",
                 ),
+                target="HERMES_HOME",
+            )
+        )
+        for profile_id in profile_ids:
+            operations.append(
+                InstallOperation(
+                    component=RuntimeComponent.DASHBOARD_PLUGIN,
+                    action="ACTIVATE_FACTORY_PLUGIN_SCOPE",
+                    argv=(
+                        "hermes", "-p", profile_id, "plugins", "enable",
+                        "hermes-factory", "--no-allow-tool-override",
+                    ),
+                    target=f"HERMES_HOME/profiles/{profile_id}",
+                )
+            )
+
+        operations.append(
+            InstallOperation(
+                component=RuntimeComponent.DASHBOARD_PLUGIN,
+                action="VERIFY_FACTORY_PLUGIN_SCOPE",
+                target="HERMES_HOME",
+            )
+        )
+        for profile_id in profile_ids:
+            operations.append(
+                InstallOperation(
+                    component=RuntimeComponent.DASHBOARD_PLUGIN,
+                    action="VERIFY_FACTORY_PLUGIN_SCOPE",
+                    target=f"HERMES_HOME/profiles/{profile_id}",
+                )
+            )
+
+        operations.extend(
+            [
                 InstallOperation(
                     component=RuntimeComponent.GATEWAY_HITL_ADAPTER,
                     action="VERIFY_GATEWAY_HITL_BINDING",
