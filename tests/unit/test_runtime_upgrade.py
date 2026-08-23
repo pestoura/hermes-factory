@@ -279,3 +279,83 @@ installed_at: '2026-08-22T00:27:45+00:00'
     assert json.loads(receipt)["kind"] == "PROFILE_REUSE"
     runtime.rollback(operation, receipt)
     assert (installed / "distribution.yaml").read_text() == installed_manifest
+
+
+def _gateway_runtime_operation(action: str) -> InstallOperation:
+    return InstallOperation(
+        component=RuntimeComponent.GATEWAY_HITL_ADAPTER,
+        action=action,
+        target="HERMES_GATEWAY",
+    )
+
+
+def test_gateway_is_quiesced_then_reactivated_for_runtime_upgrade() -> None:
+    from hermes_factory.runtime.hermes_install_runtime import (
+        CommandResult,
+        HermesJarvasInstallRuntime,
+    )
+
+    runner = FakeRunner([
+        CommandResult(0, "User gateway service is running\n", ""),
+        CommandResult(0, "stopped\n", ""),
+        CommandResult(1, "Gateway is not running\n", ""),
+        CommandResult(0, "started\n", ""),
+        CommandResult(0, "User gateway service is running\n", ""),
+    ])
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=runner,
+        python_executable="python-hermes",
+    )
+    quiesce = _gateway_runtime_operation("QUIESCE_GATEWAY_FACTORY_RUNTIME")
+    activate = _gateway_runtime_operation("ACTIVATE_GATEWAY_FACTORY_RUNTIME")
+
+    runtime.preflight((quiesce, activate))
+    q_receipt = json.loads(runtime.apply(quiesce))
+    a_receipt = json.loads(runtime.apply(activate))
+
+    assert q_receipt == {
+        "kind": "GATEWAY_RUNTIME_QUIESCE",
+        "was_running": "true",
+    }
+    assert a_receipt == {
+        "kind": "GATEWAY_RUNTIME_ACTIVATE",
+        "started": "true",
+    }
+    assert runner.calls == [
+        ("hermes", "gateway", "status"),
+        ("hermes", "gateway", "stop"),
+        ("hermes", "gateway", "status"),
+        ("hermes", "gateway", "start"),
+        ("hermes", "gateway", "status"),
+    ]
+
+
+def test_gateway_quiesce_rollback_reloads_previous_runtime() -> None:
+    from hermes_factory.runtime.hermes_install_runtime import (
+        CommandResult,
+        HermesJarvasInstallRuntime,
+    )
+
+    runner = FakeRunner([
+        CommandResult(0, "User gateway service is running\n", ""),
+        CommandResult(0, "stopped\n", ""),
+        CommandResult(1, "Gateway is not running\n", ""),
+        CommandResult(0, "restarted\n", ""),
+        CommandResult(0, "User gateway service is running\n", ""),
+    ])
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=runner,
+        python_executable="python-hermes",
+    )
+    quiesce = _gateway_runtime_operation("QUIESCE_GATEWAY_FACTORY_RUNTIME")
+    runtime.preflight((quiesce,))
+    receipt = runtime.apply(quiesce)
+    runtime.rollback(quiesce, receipt)
+
+    assert runner.calls == [
+        ("hermes", "gateway", "status"),
+        ("hermes", "gateway", "stop"),
+        ("hermes", "gateway", "status"),
+        ("hermes", "gateway", "restart"),
+        ("hermes", "gateway", "status"),
+    ]

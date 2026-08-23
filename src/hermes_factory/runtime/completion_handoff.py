@@ -184,6 +184,44 @@ def _parse_task_identity(value: object) -> tuple[str, str, str, str, str] | None
     )
 
 
+def validate_factory_completion_metadata(
+    *,
+    idempotency_key: object,
+    metadata: object,
+) -> HandoffPayload:
+    identity = _parse_task_identity(idempotency_key)
+    if identity is None:
+        raise CompletionHandoffError("Factory completion lacks semantic task identity")
+    _, _, stage, context_revision, _ = identity
+    payload = _handoff_payload(metadata)
+    if payload["context_revision"] != context_revision:
+        raise CompletionHandoffError("Factory completion context revision is stale")
+    if payload["stage_outcome"] != "PASS":
+        raise CompletionHandoffError(
+            "Factory kanban_complete requires stage_outcome=PASS; block the task instead"
+        )
+    if payload["finding_state"] not in {"NONE", "RESOLVED"}:
+        raise CompletionHandoffError(
+            "Factory kanban_complete requires finding_state NONE or RESOLVED"
+        )
+    if any(state != "PASS" for state in payload["evidence_states"]):
+        raise CompletionHandoffError(
+            "Factory kanban_complete requires all evidence_states=PASS"
+        )
+    if stage in _CANDIDATE_BOUND_STAGES and not payload["candidate_identity"]:
+        raise CompletionHandoffError(
+            "Factory kanban_complete requires candidate_identity for this stage"
+        )
+    if (
+        stage in _REVIEW_STAGES
+        and payload["independent_review_state"] != "PASS"
+    ):
+        raise CompletionHandoffError(
+            "Factory kanban_complete requires independent_review_state=PASS for this stage"
+        )
+    return payload
+
+
 def _string_tuple(value: object, field: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not value:
         raise CompletionHandoffError(f"factory_handoff.{field} must be a non-empty list")

@@ -85,7 +85,7 @@ _CANDIDATE_BOUND_STAGES = frozenset(
     }
 )
 _REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
-_STAGE_CONTRACT_REVISION = "stage-contract-v3"
+_STAGE_CONTRACT_REVISION = "stage-contract-v4"
 
 
 class ProjectMaterializer:
@@ -257,6 +257,8 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "stage_outcome must be exactly PASS, BLOCKED, UNKNOWN, or NOT_RUN; promotion requires PASS.",
             "evidence_states must contain exactly one state for each evidence_refs entry, in the same order.",
             "Use finding_state=OPEN only for a real blocker that must prevent handoff; ordinary details assigned to the next approved stage are not OPEN findings.",
+            "kanban_complete is permitted only for a handoff-ready PASS with finding_state NONE or RESOLVED and every evidence_state PASS.",
+            "If a real blocker remains, do not complete the stage; use kanban_block with exact blocker evidence instead.",
             f"candidate_identity_required={stage in _CANDIDATE_BOUND_STAGES}",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",

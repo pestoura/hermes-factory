@@ -144,7 +144,9 @@ _SUPPORTED_ACTIONS = {
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
+    "QUIESCE_GATEWAY_FACTORY_RUNTIME",
     "VERIFY_GATEWAY_HITL_BINDING",
+    "ACTIVATE_GATEWAY_FACTORY_RUNTIME",
     "VERIFY_NORTHBOUND_CONTROL_BINDING",
     "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY",
 }
@@ -183,8 +185,15 @@ class HermesJarvasInstallRuntime:
         self._runner = command_runner or SubprocessCommandRunner()
         self._hermes_home = Path(hermes_home) if hermes_home is not None else None
         self._python_executable = python_executable or sys.executable
+        python_path = Path(self._python_executable)
+        self._hermes_executable = (
+            str(python_path.with_name("hermes"))
+            if python_path.parent != Path(".")
+            else "hermes"
+        )
         self._factory_package_probe = factory_package_probe
         self._preflight_factory_package: FactoryPackageCandidate | None = None
+        self._gateway_was_running: bool | None = None
         if not self._python_executable.strip():
             raise ValueError("Python executable is required for Factory package installation")
 
@@ -359,6 +368,18 @@ class HermesJarvasInstallRuntime:
         return source, target, plugins_root
 
     @staticmethod
+    def _validate_gateway_runtime_operation(operation: InstallOperation) -> None:
+        if operation.component is not RuntimeComponent.GATEWAY_HITL_ADAPTER:
+            raise RuntimeError("Gateway runtime operation has wrong component")
+        if operation.target != "HERMES_GATEWAY":
+            raise RuntimeError("Gateway runtime target is invalid")
+        if operation.argv:
+            raise RuntimeError("Gateway runtime operation must not contain argv")
+        if operation.source is not None or operation.source_digest is not None:
+            raise RuntimeError("Gateway runtime operation must not contain source identity")
+
+
+    @staticmethod
     def _validate_gateway_binding(operation: InstallOperation) -> None:
         if operation.component is not RuntimeComponent.GATEWAY_HITL_ADAPTER:
             raise RuntimeError("Gateway HITL binding operation has wrong component")
@@ -462,6 +483,12 @@ class HermesJarvasInstallRuntime:
                 operation,
                 target_must_be_absent=not allow_dashboard_target_exists,
             )
+            return
+        if operation.action in {
+            "QUIESCE_GATEWAY_FACTORY_RUNTIME",
+            "ACTIVATE_GATEWAY_FACTORY_RUNTIME",
+        }:
+            self._validate_gateway_runtime_operation(operation)
             return
         if operation.action == "VERIFY_GATEWAY_HITL_BINDING":
             self._validate_gateway_binding(operation)
@@ -625,6 +652,66 @@ class HermesJarvasInstallRuntime:
         if result.returncode != 0:
             raise RuntimeError(f"{label} failed with exit code {result.returncode}")
         return result
+
+    def _gateway_running(self) -> bool:
+        result = self._runner.run((self._hermes_executable, "gateway", "status"))
+        text = f"{result.stdout}\n{result.stderr}".lower()
+        if "not running" in text or "inactive (dead)" in text or "inactive: inactive" in text:
+            return False
+        if "service is running" in text or "active (running)" in text:
+            if result.returncode != 0:
+                raise RuntimeError("Gateway status contradicts command exit code")
+            return True
+        raise RuntimeError(
+            f"Gateway runtime status is ambiguous (exit code {result.returncode})"
+        )
+
+    def _gateway_transition(self, action: str, *, running: bool, label: str) -> None:
+        self._run_checked((self._hermes_executable, "gateway", action), label)
+        if self._gateway_running() is not running:
+            raise RuntimeError(f"{label} verification failed")
+
+    def _apply_gateway_quiesce(self) -> str:
+        was_running = self._gateway_running()
+        self._gateway_was_running = was_running
+        if was_running:
+            try:
+                self._gateway_transition(
+                    "stop", running=False, label="Factory Gateway quiesce"
+                )
+            except Exception:
+                with suppress(Exception):
+                    self._gateway_transition(
+                        "start", running=True, label="Factory Gateway quiesce recovery"
+                    )
+                self._gateway_was_running = None
+                raise
+        return _receipt(
+            {
+                "kind": "GATEWAY_RUNTIME_QUIESCE",
+                "was_running": "true" if was_running else "false",
+            }
+        )
+
+    def _apply_gateway_activate(self) -> str:
+        if self._gateway_was_running is None:
+            raise RuntimeError("Gateway activation requires prior quiesce in this execution")
+        started = self._gateway_was_running
+        if started:
+            try:
+                self._gateway_transition(
+                    "start", running=True, label="Factory Gateway activation"
+                )
+            except Exception:
+                with suppress(Exception):
+                    self._runner.run((self._hermes_executable, "gateway", "stop"))
+                raise
+        return _receipt(
+            {
+                "kind": "GATEWAY_RUNTIME_ACTIVATE",
+                "started": "true" if started else "false",
+            }
+        )
 
     def _read_kanban_auto_decompose(self) -> bool:
         result = self._run_checked(
@@ -868,6 +955,9 @@ class HermesJarvasInstallRuntime:
                 }
             )
 
+        if operation.action == "QUIESCE_GATEWAY_FACTORY_RUNTIME":
+            return self._apply_gateway_quiesce()
+
         if operation.action == "REGISTER_DASHBOARD_PLUGIN":
             return self._apply_dashboard(operation)
 
@@ -881,6 +971,9 @@ class HermesJarvasInstallRuntime:
         if operation.action == "VERIFY_NORTHBOUND_CONTROL_BINDING":
             self._validate_northbound_binding(operation)
             return _receipt({"kind": "NORTHBOUND_CONTROL_BINDING_VERIFIED"})
+
+        if operation.action == "ACTIVATE_GATEWAY_FACTORY_RUNTIME":
+            return self._apply_gateway_activate()
 
         if operation.action == "APPLY_NATIVE_KANBAN_HIGH_ASSURANCE_POLICY":
             return self._apply_kanban_policy()
@@ -1011,6 +1104,27 @@ class HermesJarvasInstallRuntime:
                 ("hermes", "-p", profile_id, "cron", "remove", job_id),
                 "native Profile cron rollback",
             )
+            return
+
+        if operation.action == "ACTIVATE_GATEWAY_FACTORY_RUNTIME":
+            started = payload.get("started")
+            if payload.get("kind") != "GATEWAY_RUNTIME_ACTIVATE" or started not in {"true", "false"}:
+                raise RuntimeError("Gateway activation rollback receipt is invalid")
+            if started == "true":
+                self._gateway_transition(
+                    "stop", running=False, label="Factory Gateway activation rollback"
+                )
+            return
+
+        if operation.action == "QUIESCE_GATEWAY_FACTORY_RUNTIME":
+            was_running = payload.get("was_running")
+            if payload.get("kind") != "GATEWAY_RUNTIME_QUIESCE" or was_running not in {"true", "false"}:
+                raise RuntimeError("Gateway quiesce rollback receipt is invalid")
+            if was_running == "true":
+                self._gateway_transition(
+                    "restart", running=True, label="Factory Gateway rollback reload"
+                )
+            self._gateway_was_running = None
             return
 
         if operation.action == "REGISTER_DASHBOARD_PLUGIN":

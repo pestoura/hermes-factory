@@ -287,3 +287,55 @@ def test_invalid_stage_outcome_is_rejected_before_handoff() -> None:
         coordinator.on_task_completed(task_id="t_parent", board="jarvas-cli")
     assert ledger.entries == []
     assert authorizer.calls == []
+
+
+def test_precompletion_rejects_pass_with_open_findings() -> None:
+    from hermes_factory.runtime.completion_handoff import (
+        validate_factory_completion_metadata,
+    )
+
+    revision = "2" * 64
+    metadata = _metadata(revision)
+    metadata["factory_handoff"]["finding_state"] = "OPEN"
+    key = f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v3"
+
+    with pytest.raises(CompletionHandoffError, match="finding_state"):
+        validate_factory_completion_metadata(
+            idempotency_key=key,
+            metadata=metadata,
+        )
+
+
+def test_precompletion_accepts_ready_pass() -> None:
+    from hermes_factory.runtime.completion_handoff import (
+        validate_factory_completion_metadata,
+    )
+
+    revision = "3" * 64
+    metadata = _metadata(revision)
+    key = f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v3"
+
+    payload = validate_factory_completion_metadata(
+        idempotency_key=key,
+        metadata=metadata,
+    )
+
+    assert payload["stage_outcome"] == "PASS"
+    assert payload["finding_state"] == "NONE"
+    assert payload["context_revision"] == revision
+
+
+def test_precompletion_candidate_stage_requires_candidate_identity() -> None:
+    from hermes_factory.runtime.completion_handoff import (
+        validate_factory_completion_metadata,
+    )
+
+    revision = "6" * 64
+    metadata = _metadata(revision)
+    key = f"factory:jarvas-cli:WP-A:IMPLEMENT:{revision}.stage-contract-v4"
+
+    with pytest.raises(CompletionHandoffError, match="candidate_identity"):
+        validate_factory_completion_metadata(
+            idempotency_key=key,
+            metadata=metadata,
+        )
