@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import yaml
@@ -57,3 +58,24 @@ def test_install_surface_declares_all_phase_p_components_and_never_executes_by_d
     assert components["NORTHBOUND_CONTROL_INTEGRATION"]["source"] == (
         "hermes-integration/mcp-bridge/factory-northbound.yaml"
     )
+
+
+def test_factory_plugin_manifest_declares_every_registered_hook():
+    plugin_root = ROOT / "hermes-integration/dashboard-plugin/hermes-factory"
+    manifest = yaml.safe_load((plugin_root / "plugin.yaml").read_text(encoding="utf-8"))
+    module = ast.parse((plugin_root / "__init__.py").read_text(encoding="utf-8"))
+
+    register_fn = next(
+        node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "register"
+    )
+    registered = []
+    for node in ast.walk(register_fn):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "register_hook" or not node.args:
+            continue
+        hook = node.args[0]
+        if isinstance(hook, ast.Constant) and isinstance(hook.value, str):
+            registered.append(hook.value)
+
+    assert manifest["hooks"] == registered
