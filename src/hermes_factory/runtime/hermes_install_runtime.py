@@ -621,13 +621,29 @@ class HermesJarvasInstallRuntime:
         probe = (
             'from hermes_cli.plugins import PluginManager; '
             'm=PluginManager(); m.discover_and_load(force=True); '
-            'assert m.has_hook("pre_tool_call"); '
-            'assert m.has_hook("kanban_task_completed")'
+            'plugins={p["key"]:p for p in m.list_plugins()}; '
+            'p=plugins.get("hermes-factory"); '
+            'assert p is not None, "hermes-factory plugin was not discovered"; '
+            'assert p.get("enabled") is True, "hermes-factory plugin failed to load: %r" % (p.get("error"),); '
+            'assert m.has_hook("pre_tool_call"), "missing Factory hook: pre_tool_call"; '
+            'assert m.has_hook("post_tool_call"), "missing Factory hook: post_tool_call"; '
+            'assert m.has_hook("kanban_task_completed"), "missing Factory hook: kanban_task_completed"'
         )
-        self._run_checked(
-            ("env", f"HERMES_HOME={scope_home}", self._python_executable, "-c", probe),
-            "Factory plugin callback verification",
+        result = self._runner.run(
+            ("env", f"HERMES_HOME={scope_home}", self._python_executable, "-c", probe)
         )
+        if result.returncode != 0:
+            diagnostic = (result.stderr or result.stdout).strip()
+            if diagnostic:
+                diagnostic = diagnostic[-2000:]
+                raise RuntimeError(
+                    "Factory plugin callback verification failed with exit code "
+                    f"{result.returncode}: {diagnostic}"
+                )
+            raise RuntimeError(
+                "Factory plugin callback verification failed with exit code "
+                f"{result.returncode}"
+            )
         return _receipt({"kind": "FACTORY_PLUGIN_SCOPE_VERIFIED", "scope": scope})
 
     def _profile_plugin_backup_path(self, candidate_sha: str, profile_id: str) -> Path:
