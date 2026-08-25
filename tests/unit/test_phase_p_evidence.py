@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hermes_factory.runtime.admission import RuntimeComponent
-from hermes_factory.runtime.install import ControlledInstallPlan, InstallOperation
-
 
 CANDIDATE = "a" * 40
 HERMES_SHA = "b" * 40
 
 
-def _plan(action: str) -> ControlledInstallPlan:
+def _plan(action: str):
+    from hermes_factory.runtime.admission import RuntimeComponent
+    from hermes_factory.runtime.install import ControlledInstallPlan, InstallOperation
+
     return ControlledInstallPlan(
         accepted_hermes_sha=HERMES_SHA,
         observed_hermes_sha=HERMES_SHA,
