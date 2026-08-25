@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 CANDIDATE = "a" * 40
 HERMES_SHA = "b" * 40
 
@@ -29,18 +31,34 @@ def _plan(action: str):
     )
 
 
-def _store_type():
+def _store_contract():
     module = __import__(
         "hermes_factory.runtime.phase_p_evidence",
-        fromlist=["PhasePEvidenceStore"],
+        fromlist=["PhasePEvidenceError", "PhasePEvidenceStore"],
     )
-    return module.PhasePEvidenceStore
+    return module.PhasePEvidenceError, module.PhasePEvidenceStore
+
+
+def _report(plan, *, plan_digest: str | None = None, evidence_ref: str = "chat://approval"):
+    from hermes_factory.runtime.install_execution import InstallExecutionReport
+
+    return InstallExecutionReport(
+        plan_digest=plan.digest if plan_digest is None else plan_digest,
+        authorization_evidence_ref=evidence_ref,
+        state="PASS",
+        applied_count=len(plan.operations),
+        rolled_back_count=0,
+        failure="",
+        rollback_failures=(),
+        execute=True,
+    )
 
 
 def test_different_phase_p_plans_for_same_candidate_never_overwrite_prior_evidence(
     tmp_path: Path,
 ) -> None:
-    store = _store_type()(tmp_path, candidate_sha=CANDIDATE)
+    _, store_type = _store_contract()
+    store = store_type(tmp_path, candidate_sha=CANDIDATE)
     first = _plan("FIRST")
     second = _plan("SECOND")
 
@@ -56,3 +74,26 @@ def test_different_phase_p_plans_for_same_candidate_never_overwrite_prior_eviden
     assert json.loads((second_dir / "controlled-install-plan.json").read_text())[
         "factory_candidate_sha"
     ] == CANDIDATE
+
+
+def test_terminal_report_is_bound_to_plan_digest_and_write_once(tmp_path: Path) -> None:
+    error_type, store_type = _store_contract()
+    store = store_type(tmp_path, candidate_sha=CANDIDATE)
+    plan = _plan("INSTALL")
+    run_dir = store.persist_plan(plan)
+    report_path = run_dir / "install-execution-report.json"
+
+    with pytest.raises(error_type, match="plan digest"):
+        store.persist_report(plan, _report(plan, plan_digest="0" * 64))
+    assert not report_path.exists()
+
+    report = _report(plan)
+    assert store.persist_report(plan, report) == report_path
+    original = report_path.read_bytes()
+    assert json.loads(original)["plan_digest"] == plan.digest
+    assert store.persist_report(plan, report) == report_path
+    assert report_path.read_bytes() == original
+
+    report_path.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(error_type, match="immutable"):
+        store.persist_report(plan, report)
