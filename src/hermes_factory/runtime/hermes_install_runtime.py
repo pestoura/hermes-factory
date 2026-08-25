@@ -618,7 +618,10 @@ class HermesJarvasInstallRuntime:
 
     def _apply_factory_plugin_verification(self, operation: InstallOperation) -> str:
         scope, scope_home, _ = self._factory_plugin_scope(operation)
+        hermes_runtime_root = Path(self._python_executable).parent.parent.parent
         probe = (
+            'import os; '
+            f'os.chdir({json.dumps(str(hermes_runtime_root))}); '
             'from hermes_cli.plugins import PluginManager; '
             'm=PluginManager(); m.discover_and_load(force=True); '
             'plugins={p["key"]:p for p in m.list_plugins()}; '
