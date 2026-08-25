@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 from pathlib import Path
 
@@ -35,7 +34,10 @@ def _plan(action: str) -> ControlledInstallPlan:
 
 
 def _store_type():
-    module = importlib.import_module("hermes_factory.runtime.phase_p_evidence")
+    module = __import__(
+        "hermes_factory.runtime.phase_p_evidence",
+        fromlist=["PhasePEvidenceStore"],
+    )
     return module.PhasePEvidenceStore
 
 
