@@ -8,6 +8,7 @@ from hermes_factory.runtime.install import ControlledInstallPlan
 from hermes_factory.runtime.install_execution import InstallExecutionReport
 
 _GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
+_TERMINAL_REPORT_STATES = frozenset({"PASS", "ROLLED_BACK", "ROLLBACK_FAILED"})
 
 
 class PhasePEvidenceError(ValueError):
@@ -61,6 +62,10 @@ class PhasePEvidenceStore:
         if report.plan_digest != plan.digest:
             raise PhasePEvidenceError(
                 "Phase P report plan digest does not match immutable plan digest"
+            )
+        if report.state not in _TERMINAL_REPORT_STATES or not report.execute:
+            raise PhasePEvidenceError(
+                "Phase P execution report must represent a terminal executed state"
             )
 
         run_dir = self.persist_plan(plan)
