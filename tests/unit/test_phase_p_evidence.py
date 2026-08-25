@@ -9,14 +9,14 @@ CANDIDATE = "a" * 40
 HERMES_SHA = "b" * 40
 
 
-def _plan(action: str):
+def _plan(action: str, *, candidate_sha: str = CANDIDATE):
     from hermes_factory.runtime.admission import RuntimeComponent
     from hermes_factory.runtime.install import ControlledInstallPlan, InstallOperation
 
     return ControlledInstallPlan(
         accepted_hermes_sha=HERMES_SHA,
         observed_hermes_sha=HERMES_SHA,
-        factory_candidate_sha=CANDIDATE,
+        factory_candidate_sha=candidate_sha,
         operations=(
             InstallOperation(
                 component=RuntimeComponent.FACTORY_PACKAGE,
@@ -124,3 +124,35 @@ def test_only_terminal_executed_reports_can_be_persisted(
     with pytest.raises(error_type, match="terminal"):
         store.persist_report(plan, _report(plan, state=state, execute=execute))
     assert not report_path.exists()
+
+
+def test_candidate_mismatch_fails_before_creating_evidence(tmp_path: Path) -> None:
+    error_type, store_type = _store_contract()
+    store = store_type(tmp_path, candidate_sha=CANDIDATE)
+    plan = _plan("INSTALL", candidate_sha="c" * 40)
+
+    with pytest.raises(error_type, match="candidate"):
+        store.persist_plan(plan)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("filename", "tampered"),
+    (
+        ("controlled-install-plan.json", b"{}\n"),
+        ("plan-digest.txt", b"0" * 64 + b"\n"),
+    ),
+)
+def test_tampered_plan_evidence_fails_closed(
+    tmp_path: Path,
+    filename: str,
+    tampered: bytes,
+) -> None:
+    error_type, store_type = _store_contract()
+    store = store_type(tmp_path, candidate_sha=CANDIDATE)
+    plan = _plan("INSTALL")
+    run_dir = store.persist_plan(plan)
+    (run_dir / filename).write_bytes(tampered)
+
+    with pytest.raises(error_type, match="immutable"):
+        store.persist_plan(plan)
