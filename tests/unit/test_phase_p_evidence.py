@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 CANDIDATE = "a" * 40
 HERMES_SHA = "b" * 40
 
