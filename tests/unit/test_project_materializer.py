@@ -15,6 +15,8 @@ class FakeKanbanAdapter:
         self.specs = []
         self.authorizations = []
         self.boards = []
+        self.retirements = []
+        self.timeline = []
 
     def ensure_board(self, **kwargs):
         self.boards.append(kwargs)
@@ -22,10 +24,17 @@ class FakeKanbanAdapter:
 
     def project_task(self, spec):
         self.specs.append(spec)
+        self.timeline.append(("project", spec.idempotency_key))
         return f"t_{len(self.specs)}"
+
+    def retire_superseded_project_generations(self, **kwargs):
+        self.retirements.append(kwargs)
+        self.timeline.append(("retire", kwargs["keep_revision"]))
+        return ()
 
     def authorize_dispatch(self, **kwargs):
         self.authorizations.append(kwargs)
+        self.timeline.append(("authorize", kwargs["task_id"]))
 
 
 def _wp(
@@ -291,3 +300,41 @@ def test_stage_contract_declares_mutation_policy_by_lifecycle_phase() -> None:
     assert "production source changes are prohibited" in _spec_by(adapter, "WP-A", "TDD_RED").body
     assert "repository_mutation_policy=implementation_no_tests" in _spec_by(adapter, "WP-A", "IMPLEMENT").body
     assert "test changes are prohibited" in _spec_by(adapter, "WP-A", "IMPLEMENT").body
+
+
+def test_materialization_retires_superseded_generations_before_root_dispatch() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(), project_key="jarvas-cli", board="jarvas-cli",
+        project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+    )
+    revision = "d" * 64 + ".stage-contract-v10"
+    assert adapter.retirements == [{
+        "board": "jarvas-cli",
+        "project_key": "jarvas-cli",
+        "keep_revision": revision,
+        "actor": "factory-orchestrator",
+        "source": "factory-project-materialization",
+    }]
+    retire_index = next(i for i, item in enumerate(adapter.timeline) if item[0] == "retire")
+    project_indexes = [i for i, item in enumerate(adapter.timeline) if item[0] == "project"]
+    authorize_indexes = [i for i, item in enumerate(adapter.timeline) if item[0] == "authorize"]
+    assert max(project_indexes) < retire_index < min(authorize_indexes)
+
+
+def test_retirement_failure_keeps_new_generation_blocked_without_root_authorization() -> None:
+    class FailingRetirementAdapter(FakeKanbanAdapter):
+        def retire_superseded_project_generations(self, **kwargs):
+            self.retirements.append(kwargs)
+            self.timeline.append(("retire", kwargs["keep_revision"]))
+            raise RuntimeError("old generation still dispatchable")
+
+    adapter = FailingRetirementAdapter()
+    with pytest.raises(RuntimeError, match="old generation still dispatchable"):
+        ProjectMaterializer(adapter).materialize(
+            _model(), project_key="jarvas-cli", board="jarvas-cli",
+            project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+        )
+    assert len(adapter.specs) == 12
+    assert adapter.authorizations == []
+    assert not any(item[0] == "authorize" for item in adapter.timeline)

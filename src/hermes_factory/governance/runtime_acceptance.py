@@ -22,6 +22,7 @@ RUNTIME_ACCEPTANCE_SCENARIOS = (
     "external_northbound_control_without_internal_ipc",
     "all_17_profile_runtime_projections_validate",
     "all_required_factory_skills_have_explicit_eval_state",
+    "superseded_generation_retirement_preserves_history",
 )
 
 
