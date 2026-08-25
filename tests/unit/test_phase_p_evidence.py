@@ -39,18 +39,25 @@ def _store_contract():
     return module.PhasePEvidenceError, module.PhasePEvidenceStore
 
 
-def _report(plan, *, plan_digest: str | None = None, evidence_ref: str = "chat://approval"):
+def _report(
+    plan,
+    *,
+    plan_digest: str | None = None,
+    evidence_ref: str = "chat://approval",
+    state: str = "PASS",
+    execute: bool = True,
+):
     from hermes_factory.runtime.install_execution import InstallExecutionReport
 
     return InstallExecutionReport(
         plan_digest=plan.digest if plan_digest is None else plan_digest,
         authorization_evidence_ref=evidence_ref,
-        state="PASS",
+        state=state,
         applied_count=len(plan.operations),
         rolled_back_count=0,
         failure="",
         rollback_failures=(),
-        execute=True,
+        execute=execute,
     )
 
 
@@ -97,3 +104,23 @@ def test_terminal_report_is_bound_to_plan_digest_and_write_once(tmp_path: Path) 
     report_path.write_text("{}\n", encoding="utf-8")
     with pytest.raises(error_type, match="immutable"):
         store.persist_report(plan, report)
+
+
+@pytest.mark.parametrize(
+    ("state", "execute"),
+    (("READY", True), ("PASS", False)),
+)
+def test_only_terminal_executed_reports_can_be_persisted(
+    tmp_path: Path,
+    state: str,
+    execute: bool,
+) -> None:
+    error_type, store_type = _store_contract()
+    store = store_type(tmp_path, candidate_sha=CANDIDATE)
+    plan = _plan("INSTALL")
+    run_dir = store.persist_plan(plan)
+    report_path = run_dir / "install-execution-report.json"
+
+    with pytest.raises(error_type, match="terminal"):
+        store.persist_report(plan, _report(plan, state=state, execute=execute))
+    assert not report_path.exists()
