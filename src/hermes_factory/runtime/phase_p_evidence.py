@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from hermes_factory.runtime.install import ControlledInstallPlan
+from hermes_factory.runtime.install_execution import InstallExecutionReport
 
 _GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 
@@ -49,6 +50,31 @@ class PhasePEvidenceStore:
             "Phase P plan digest evidence",
         )
         return run_dir
+
+    def persist_report(
+        self,
+        plan: ControlledInstallPlan,
+        report: InstallExecutionReport,
+    ) -> Path:
+        if plan.factory_candidate_sha.lower() != self._candidate_sha:
+            raise PhasePEvidenceError("Phase P plan candidate does not match evidence candidate")
+        if report.plan_digest != plan.digest:
+            raise PhasePEvidenceError(
+                "Phase P report plan digest does not match immutable plan digest"
+            )
+
+        run_dir = self.persist_plan(plan)
+        report_path = run_dir / "install-execution-report.json"
+        report_payload = (
+            json.dumps(report.to_manifest(), indent=2, sort_keys=True, ensure_ascii=False)
+            + "\n"
+        ).encode("utf-8")
+        self._write_once(
+            report_path,
+            report_payload,
+            "Phase P execution report evidence",
+        )
+        return report_path
 
     @staticmethod
     def _write_once(path: Path, payload: bytes, label: str) -> None:
