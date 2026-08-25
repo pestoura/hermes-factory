@@ -334,6 +334,8 @@ def test_runtime_verifies_factory_plugin_callbacks_in_profile_scope(tmp_path: Pa
     )
     assert argv[3] == "-c"
     compile(argv[4], "<factory-plugin-probe>", "exec")
+    expected_runtime_root = Path("/opt/hermes/venv/bin/python").parent.parent.parent
+    assert f"os.chdir({json.dumps(str(expected_runtime_root))})" in argv[4]
     assert 'has_hook("pre_tool_call")' in argv[4]
     assert 'has_hook("post_tool_call")' in argv[4]
     assert 'has_hook("kanban_task_completed")' in argv[4]
