@@ -333,5 +333,36 @@ def test_runtime_verifies_factory_plugin_callbacks_in_profile_scope(tmp_path: Pa
         "/opt/hermes/venv/bin/python",
     )
     assert argv[3] == "-c"
+    compile(argv[4], "<factory-plugin-probe>", "exec")
     assert 'has_hook("pre_tool_call")' in argv[4]
+    assert 'has_hook("post_tool_call")' in argv[4]
     assert 'has_hook("kanban_task_completed")' in argv[4]
+    assert 'list_plugins()' in argv[4]
+    assert 'hermes-factory' in argv[4]
+
+
+
+def test_runtime_plugin_verification_surfaces_bounded_loader_diagnostic(tmp_path: Path):
+    result_type, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    operation = InstallOperation(
+        component=RuntimeComponent.DASHBOARD_PLUGIN,
+        action="VERIFY_FACTORY_PLUGIN_SCOPE",
+        target="HERMES_HOME",
+    )
+    runner = FakeRunner([
+        result_type(
+            1,
+            "",
+            "Failed to load plugin 'hermes-factory': synthetic loader diagnostic",
+        )
+    ])
+    runtime = runtime_type(
+        command_runner=runner,
+        hermes_home=hermes_home,
+        python_executable="/opt/hermes/venv/bin/python",
+    )
+    runtime.preflight((operation,))
+    with pytest.raises(RuntimeError, match="synthetic loader diagnostic"):
+        runtime.apply(operation)
