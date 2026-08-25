@@ -14,6 +14,10 @@ class KanbanProjectionAdapter(Protocol):
 
     def project_task(self, spec: KanbanTaskProjection) -> str: ...
 
+    def retire_superseded_project_generations(
+        self, **kwargs: str
+    ) -> tuple[str, ...]: ...
+
     def authorize_dispatch(self, **kwargs: str) -> None: ...
 
 
@@ -193,6 +197,14 @@ class ProjectMaterializer:
                     candidate_workspace = str(Path(default_workdir) / ".worktrees" / task_id)
                 if not wp.depends_on and index == 0:
                     root_task_ids.append(task_id)
+
+        self._adapter.retire_superseded_project_generations(
+            board=board,
+            project_key=project_key,
+            keep_revision=f"{model.digest}.{_STAGE_CONTRACT_REVISION}",
+            actor=actor,
+            source="factory-project-materialization",
+        )
 
         for task_id in root_task_ids:
             self._adapter.authorize_dispatch(

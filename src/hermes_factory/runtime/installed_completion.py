@@ -73,6 +73,8 @@ class NativeKanbanModule(Protocol):
     def parent_ids(self, conn: object, task_id: str) -> list[str]: ...
     def link_tasks(self, conn: object, parent_id: str, child_id: str) -> None: ...
     def resolve_workspace(self, task: object, *, board: str) -> object: ...
+    def list_tasks(self, conn: object, *, include_archived: bool = False) -> list[object]: ...
+    def archive_task(self, conn: object, task_id: str) -> bool: ...
 
 
 def active_factory_candidate_sha(
@@ -349,6 +351,12 @@ class HermesNativeKanbanRuntime:
 
     def child_ids(self, conn: object, task_id: str) -> list[str]:
         return self._kb.child_ids(conn, task_id)
+
+    def list_tasks(self, conn: object, *, include_archived: bool = False) -> list[object]:
+        return list(self._kb.list_tasks(conn, include_archived=include_archived))
+
+    def archive_task(self, conn: object, task_id: str) -> bool:
+        return self._kb.archive_task(conn, task_id)
 
     def parent_ids(self, conn: object, task_id: str) -> list[str]:
         return self._kb.parent_ids(conn, task_id)

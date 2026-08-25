@@ -26,6 +26,14 @@ class NativeKanban(Protocol):
 
     def unblock_task(self, conn: object, task_id: str) -> bool: ...
 
+    def list_tasks(
+        self, conn: object, *, include_archived: bool = False
+    ) -> list[object]: ...
+
+    def child_ids(self, conn: object, task_id: str) -> list[str]: ...
+
+    def archive_task(self, conn: object, task_id: str) -> bool: ...
+
 
 class TaskSkillPreparer(Protocol):
     """Prepare task-scoped Factory Skills before native dispatch release."""
@@ -180,6 +188,122 @@ class HermesKanbanAdapter:
                 board=spec.board,
                 project_id=spec.project_id,
             )
+
+    def retire_superseded_project_generations(
+        self,
+        *,
+        board: str,
+        project_key: str,
+        keep_revision: str,
+        actor: str,
+        source: str,
+    ) -> tuple[str, ...]:
+        for name, value in {
+            "board": board,
+            "project_key": project_key,
+            "keep_revision": keep_revision,
+            "actor": actor,
+            "source": source,
+        }.items():
+            if not value.strip():
+                raise ValueError(f"{name} is required")
+
+        prefix = f"factory:{project_key}:"
+        with self._native.connect_closing(board=board) as conn:
+            active_tasks = tuple(
+                self._native.list_tasks(conn, include_archived=False)
+            )
+            active_ids = {
+                str(getattr(task, "id", None))
+                for task in active_tasks
+                if getattr(task, "id", None) is not None
+            }
+            candidates: dict[str, object] = {}
+            for task in active_tasks:
+                task_id = getattr(task, "id", None)
+                key = getattr(task, "idempotency_key", None)
+                if not isinstance(task_id, str) or not isinstance(key, str):
+                    continue
+                if not key.startswith(prefix):
+                    continue
+                parts = key[len(prefix) :].split(":")
+                if len(parts) != 3 or not all(parts):
+                    continue
+                revision = parts[2]
+                if revision != keep_revision:
+                    candidates[task_id] = task
+
+            unsafe = sorted(
+                task_id
+                for task_id, task in candidates.items()
+                if getattr(task, "status", None) in {"ready", "running", "scheduled", "review"}
+            )
+            if unsafe:
+                raise RuntimeError(
+                    "superseded Factory generation has dispatchable tasks: "
+                    + ", ".join(unsafe)
+                )
+
+            child_map: dict[str, set[str]] = {}
+            for task_id in candidates:
+                children = set(self._native.child_ids(conn, task_id))
+                external_active = sorted(
+                    child for child in children
+                    if child in active_ids and child not in candidates
+                )
+                if external_active:
+                    raise RuntimeError(
+                        f"superseded Factory task {task_id} has active external children: "
+                        + ", ".join(external_active)
+                    )
+                child_map[task_id] = children & candidates.keys()
+
+            order: list[str] = []
+            remaining = {
+                task_id: set(children)
+                for task_id, children in child_map.items()
+            }
+            while remaining:
+                leaves = sorted(
+                    (
+                        task_id
+                        for task_id, children in remaining.items()
+                        if not children
+                    ),
+                    key=lambda task_id: (
+                        -int(getattr(candidates[task_id], "created_at", 0) or 0),
+                        task_id,
+                    ),
+                )
+                if not leaves:
+                    raise RuntimeError(
+                        "superseded Factory generation dependency cycle"
+                    )
+                order.extend(leaves)
+                for task_id in leaves:
+                    remaining.pop(task_id)
+                retired_now = set(leaves)
+                for children in remaining.values():
+                    children.difference_update(retired_now)
+
+            body = "[factory:generation-retirement/v1] " + json.dumps(
+                {
+                    "actor": actor,
+                    "keep_revision": keep_revision,
+                    "project_key": project_key,
+                    "source": source,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            for task_id in order:
+                self._native.add_comment(conn, task_id, actor, body)
+                if not self._native.archive_task(conn, task_id):
+                    raise RuntimeError(
+                        f"native Hermes task {task_id} could not be archived"
+                    )
+            return tuple(order)
+
 
     def authorize_dispatch(
         self,
