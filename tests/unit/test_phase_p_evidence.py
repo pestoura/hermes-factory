@@ -4,10 +4,7 @@ import json
 from pathlib import Path
 
 from hermes_factory.runtime.admission import RuntimeComponent
-from hermes_factory.runtime.install import (
-    ControlledInstallPlan,
-    InstallOperation,
-)
+from hermes_factory.runtime.install import ControlledInstallPlan, InstallOperation
 
 
 CANDIDATE = "a" * 40
