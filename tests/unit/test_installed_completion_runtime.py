@@ -386,3 +386,90 @@ def test_parent_candidate_identity_prefers_single_rework_parent(monkeypatch) -> 
     assert installed_completion._parent_candidate_identity(
         board="jarvas-cli", task=task
     ) == corrected
+
+
+def test_v11_discover_rejects_cross_stage_documentation(monkeypatch) -> None:
+    revision = "a" * 64
+    candidate = "1" * 40
+    task = FakeFactoryTask(
+        "t_discover",
+        "/repo/.worktrees/t_discover",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v11",
+    )
+    mutation = FakeMutationObserver((
+        "docs/factory/WP-A/DISCOVER/requirements.md",
+        "docs/factory/WP-A/SPECIFY/specification.md",
+    ))
+    monkeypatch.setattr(
+        installed_completion,
+        "_parent_candidate_identity",
+        lambda **_: "0" * 40,
+    )
+
+    with pytest.raises(InstalledRuntimeBindingError, match="DISCOVER.*artifact namespace"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+        )
+
+def test_v11_specify_requires_own_stage_delta(monkeypatch) -> None:
+    revision = "b" * 64
+    candidate = "2" * 40
+    task = FakeFactoryTask(
+        "t_specify",
+        "/repo/.worktrees/t_specify",
+        f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v11",
+    )
+    mutation = FakeMutationObserver(())
+    monkeypatch.setattr(
+        installed_completion,
+        "_parent_candidate_identity",
+        lambda **_: "3" * 40,
+    )
+
+    with pytest.raises(InstalledRuntimeBindingError, match="SPECIFY.*stage-owned"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+        )
+
+
+def test_v11_owned_engineering_stage_delta_passes(monkeypatch) -> None:
+    revision = "d" * 64
+    candidate = "4" * 40
+    task = FakeFactoryTask(
+        "t_discover",
+        "/repo/.worktrees/t_discover",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v11",
+    )
+    mutation = FakeMutationObserver(("docs/factory/WP-A/DISCOVER/requirements.md",))
+    monkeypatch.setattr(
+        installed_completion,
+        "_parent_candidate_identity",
+        lambda **_: "5" * 40,
+    )
+
+    assert installed_completion.validate_factory_repository_precompletion(
+        board="jarvas-cli", task=task, candidate_identity=candidate,
+        observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+    ) == candidate
+
+def test_v10_docs_behavior_remains_backward_compatible(monkeypatch) -> None:
+    revision = "e" * 64
+    candidate = "6" * 40
+    task = FakeFactoryTask(
+        "t_discover_v10",
+        "/repo/.worktrees/t_discover_v10",
+        f"factory:jarvas-cli:WP-A:DISCOVER:{revision}.stage-contract-v10",
+    )
+    mutation = FakeMutationObserver(("docs/specs/legacy-requirements.md",))
+    monkeypatch.setattr(
+        installed_completion,
+        "_parent_candidate_identity",
+        lambda **_: "7" * 40,
+    )
+
+    assert installed_completion.validate_factory_repository_precompletion(
+        board="jarvas-cli", task=task, candidate_identity=candidate,
+        observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+    ) == candidate

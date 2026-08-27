@@ -9,6 +9,8 @@ from hermes_factory.handoff.service import HandoffRecord, HandoffService
 from hermes_factory.runtime.project_materializer import (
     _CANDIDATE_BOUND_STAGES,
     _REVIEW_STAGES,
+    stage_artifact_root,
+    stage_mutation_policy,
 )
 
 
@@ -55,6 +57,37 @@ def _candidate_identity_required(
     return stage in _CANDIDATE_BOUND_STAGES
 
 
+def _stage_artifact_ownership_required(materialization_revision: str) -> bool:
+    match = re.search(
+        r"\.stage-contract-v(?P<version>[1-9][0-9]*)$",
+        materialization_revision,
+    )
+    return match is not None and int(match.group("version")) >= 11
+
+
+def _validate_stage_artifact_refs(
+    *,
+    work_package_id: str,
+    stage: str,
+    materialization_revision: str,
+    payload: HandoffPayload,
+) -> None:
+    if not _stage_artifact_ownership_required(materialization_revision):
+        return
+    if stage_mutation_policy(stage) != "engineering_docs_only":
+        return
+    root = stage_artifact_root(work_package_id, stage)
+    prefix = root + "/"
+    normalized = tuple(
+        ref.replace("\\", "/").removeprefix("./").strip("/")
+        for ref in payload["artifact_refs"]
+    )
+    if not any(ref.startswith(prefix) for ref in normalized):
+        raise CompletionHandoffError(
+            f"{stage} completion requires a stage-owned artifact under {root}/"
+        )
+
+
 class CompletionHandoffCoordinator:
     def __init__(
         self,
@@ -89,6 +122,12 @@ class CompletionHandoffCoordinator:
             if run is None or getattr(run, "outcome", None) != "completed":
                 raise CompletionHandoffError("Factory task has no durable completed run")
             payload = _handoff_payload(getattr(run, "metadata", None))
+            _validate_stage_artifact_refs(
+                work_package_id=work_package_id,
+                stage=stage,
+                materialization_revision=materialization_revision,
+                payload=payload,
+            )
             children = tuple(self._native.child_ids(conn, task_id))
             child_state = {
                 child_id: self._native.get_task(conn, child_id)
@@ -208,6 +247,12 @@ def validate_factory_completion_metadata(
     payload = _handoff_payload(metadata)
     if payload["context_revision"] != context_revision:
         raise CompletionHandoffError("Factory completion context revision is stale")
+    _validate_stage_artifact_refs(
+        work_package_id=identity[1],
+        stage=stage,
+        materialization_revision=materialization_revision,
+        payload=payload,
+    )
     if payload["stage_outcome"] != "PASS":
         raise CompletionHandoffError(
             "Factory kanban_complete requires stage_outcome=PASS; block the task instead"
