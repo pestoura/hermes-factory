@@ -12,7 +12,10 @@ from hermes_factory.runtime.completion_handoff import (
     CompletionHandoffCoordinator,
 )
 from hermes_factory.runtime.hermes_install_runtime import CommandRunner
-from hermes_factory.runtime.project_materializer import stage_mutation_policy
+from hermes_factory.runtime.project_materializer import (
+    stage_artifact_root,
+    stage_mutation_policy,
+)
 from hermes_factory.runtime.task_skills import NativeTask
 from hermes_factory.runtime.upstream_rework import (
     UpstreamReworkCoordinator,
@@ -29,8 +32,8 @@ _CANDIDATE_PATH = re.compile(
 )
 _GIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _FACTORY_STAGE_KEY = re.compile(
-    r"^factory:[^:]+:[^:]+:(?P<stage>[A-Z0-9_]+):[0-9a-f]{64}"
-    r"(?:\.stage-contract-v[1-9][0-9]*)?$"
+    r"^factory:[^:]+:(?P<wp>[^:]+):(?P<stage>[A-Z0-9_]+):[0-9a-f]{64}"
+    r"(?:\.stage-contract-v(?P<version>[1-9][0-9]*))?$"
 )
 
 
@@ -138,10 +141,36 @@ def _repository_path_kind(path: str) -> str:
 
 
 def validate_factory_stage_mutation_paths(
-    *, stage: str, changed_paths: tuple[str, ...]
+    *,
+    stage: str,
+    changed_paths: tuple[str, ...],
+    work_package_id: str | None = None,
+    semantic_stage_ownership: bool = False,
 ) -> None:
     policy = stage_mutation_policy(stage)
     kinds = {path: _repository_path_kind(path) for path in changed_paths}
+    if semantic_stage_ownership:
+        if work_package_id is None:
+            raise InstalledRuntimeBindingError(
+                f"{stage} semantic stage ownership requires a Work Package identity"
+            )
+        root = stage_artifact_root(work_package_id, stage)
+        prefix = root + "/"
+        docs_paths = tuple(path for path, kind in kinds.items() if kind == "docs")
+        violations = tuple(
+            path
+            for path in docs_paths
+            if not path.replace("\\", "/").strip("/").startswith(prefix)
+        )
+        if violations:
+            raise InstalledRuntimeBindingError(
+                f"{stage} stage artifact namespace violation; expected {root}/: "
+                + ", ".join(violations[:10])
+            )
+        if policy == "engineering_docs_only" and not docs_paths:
+            raise InstalledRuntimeBindingError(
+                f"{stage} completion requires at least one stage-owned engineering artifact"
+            )
     if policy in {"engineering_docs_only", "evidence_docs_only"}:
         violations = tuple(path for path, kind in kinds.items() if kind != "docs")
         if violations:
@@ -200,12 +229,26 @@ class GitStageMutationObserver:
         return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
 
 
-def _factory_stage_from_task(task: object) -> str | None:
+def _factory_stage_identity_from_task(
+    task: object,
+) -> tuple[str, str, int | None] | None:
     key = getattr(task, "idempotency_key", None)
     if not isinstance(key, str):
         return None
     match = _FACTORY_STAGE_KEY.fullmatch(key.strip())
-    return match.group("stage") if match is not None else None
+    if match is None:
+        return None
+    version = match.group("version")
+    return (
+        match.group("wp"),
+        match.group("stage"),
+        int(version) if version is not None else None,
+    )
+
+
+def _factory_stage_from_task(task: object) -> str | None:
+    identity = _factory_stage_identity_from_task(task)
+    return identity[1] if identity is not None else None
 
 
 def _parent_candidate_identity(*, board: str, task: object) -> str | None:
@@ -304,7 +347,12 @@ def validate_factory_repository_precompletion(
             raise InstalledRuntimeBindingError(
                 "candidate identity does not match clean worktree HEAD"
             )
-    resolved_stage = stage or _factory_stage_from_task(task)
+    stage_identity = _factory_stage_identity_from_task(task)
+    resolved_stage = stage or (stage_identity[1] if stage_identity is not None else None)
+    if stage is not None and stage_identity is not None and stage != stage_identity[1]:
+        raise InstalledRuntimeBindingError(
+            "explicit stage does not match Factory task semantic identity"
+        )
     resolved_base = base_candidate_identity
     if stage is None and resolved_stage is not None and resolved_base is None:
         resolved_base = _parent_candidate_identity(board=board, task=task)
@@ -316,8 +364,19 @@ def validate_factory_repository_precompletion(
         changed_paths = mutation_observer.observe(
             task=task, base_candidate_identity=resolved_base
         )
+        semantic_stage_ownership = (
+            stage_identity is not None
+            and stage_identity[2] is not None
+            and stage_identity[2] >= 11
+        )
+        work_package_id: str | None = None
+        if semantic_stage_ownership and stage_identity is not None:
+            work_package_id = stage_identity[0]
         validate_factory_stage_mutation_paths(
-            stage=resolved_stage, changed_paths=changed_paths
+            stage=resolved_stage,
+            changed_paths=changed_paths,
+            work_package_id=work_package_id,
+            semantic_stage_ownership=semantic_stage_ownership,
         )
     return observed_sha
 

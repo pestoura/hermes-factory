@@ -8,6 +8,7 @@ from hermes_factory.handoff.service import HandoffService
 from hermes_factory.runtime.completion_handoff import (
     CompletionHandoffCoordinator,
     CompletionHandoffError,
+    validate_factory_completion_metadata,
 )
 
 
@@ -438,3 +439,36 @@ def test_precompletion_candidate_stage_requires_candidate_identity() -> None:
             idempotency_key=key,
             metadata=metadata,
         )
+
+
+
+def test_v11_engineering_completion_requires_owned_artifact_ref() -> None:
+    revision = "c" * 64
+    candidate = "d" * 40
+    metadata = _metadata(revision, candidate=candidate)
+
+    with pytest.raises(CompletionHandoffError, match="SPECIFY.*stage-owned artifact"):
+        validate_factory_completion_metadata(
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v11"
+            ),
+            metadata=metadata,
+        )
+
+def test_v11_engineering_completion_accepts_owned_artifact_ref() -> None:
+    revision = "f" * 64
+    candidate = "8" * 40
+    metadata = _metadata(revision, candidate=candidate)
+    metadata["factory_handoff"]["artifact_refs"] = [
+        "docs/factory/WP-A/SPECIFY/specification.md"
+    ]
+
+    payload = validate_factory_completion_metadata(
+        idempotency_key=(
+            f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v11"
+        ),
+        metadata=metadata,
+    )
+    assert payload["artifact_refs"] == (
+        "docs/factory/WP-A/SPECIFY/specification.md",
+    )

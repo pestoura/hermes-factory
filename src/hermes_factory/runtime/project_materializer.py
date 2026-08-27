@@ -111,7 +111,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v10"
+_STAGE_CONTRACT_REVISION = "stage-contract-v11"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -119,6 +119,14 @@ def stage_mutation_policy(stage: str) -> str:
         return _STAGE_MUTATION_POLICIES[stage]
     except KeyError as exc:
         raise ValueError(f"unknown Factory stage mutation policy: {stage}") from exc
+
+
+def stage_artifact_root(work_package_id: str, stage: str) -> str:
+    allowed = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    for name, value in (("work_package_id", work_package_id), ("stage", stage)):
+        if not value or any(char not in allowed for char in value):
+            raise ValueError(f"{name} is not safe for a Factory stage artifact path")
+    return f"docs/factory/{work_package_id}/{stage}"
 
 
 def _stage_mutation_instruction(stage: str) -> str:
@@ -320,6 +328,9 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "If candidate_identity is supplied when optional, it must still equal the clean worktree HEAD and will be independently observed.",
             f"repository_mutation_policy={stage_mutation_policy(stage)}",
             _stage_mutation_instruction(stage),
+            f"stage_artifact_root={stage_artifact_root(wp.work_package_id, stage)}",
+            "All stage-produced engineering/evidence documentation must be written only under stage_artifact_root; never pre-create another stage's artifacts.",
+            "Engineering documentation completion requires at least one stage-owned repository artifact.",
             "candidate_identity_required=True",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",
