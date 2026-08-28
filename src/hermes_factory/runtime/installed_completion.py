@@ -251,6 +251,48 @@ def _factory_stage_from_task(task: object) -> str | None:
     return identity[1] if identity is not None else None
 
 
+_PERSISTED_CANDIDATE_IDENTITY = re.compile(
+    r"[\"']?candidate_identity[\"']?\s*[:=]\s*[\"']?(?P<sha>[0-9a-fA-F]{40})[\"']?"
+)
+
+
+def _validate_runtime_only_handoff_artifacts(
+    *, task: object, changed_paths: tuple[str, ...]
+) -> None:
+    workspace_value = getattr(task, "workspace_path", None)
+    if not isinstance(workspace_value, str) or not workspace_value.strip():
+        raise InstalledRuntimeBindingError(
+            "runtime-only handoff validation requires a candidate worktree"
+        )
+    workspace = Path(workspace_value).resolve()
+    for relative in changed_paths:
+        if _repository_path_kind(relative) != "docs":
+            continue
+        normalized = relative.replace("\\", "/").removeprefix("./").strip("/")
+        artifact = (workspace / PurePosixPath(normalized)).resolve()
+        if not artifact.is_relative_to(workspace):
+            raise InstalledRuntimeBindingError(
+                "stage artifact resolves outside the candidate worktree"
+            )
+        if not artifact.exists():
+            continue
+        if not artifact.is_file():
+            raise InstalledRuntimeBindingError(
+                f"stage artifact is not a regular file: {relative}"
+            )
+        try:
+            content = artifact.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise InstalledRuntimeBindingError(
+                f"stage artifact is unreadable for runtime-only handoff validation: {relative}"
+            ) from exc
+        if _PERSISTED_CANDIDATE_IDENTITY.search(content):
+            raise InstalledRuntimeBindingError(
+                "candidate_identity is runtime-only and must not be persisted in "
+                f"stage artifacts: {relative}"
+            )
+
+
 def _parent_candidate_identity(*, board: str, task: object) -> str | None:
     task_id = getattr(task, "id", None)
     if not isinstance(task_id, str) or not task_id.strip():
@@ -378,6 +420,15 @@ def validate_factory_repository_precompletion(
             work_package_id=work_package_id,
             semantic_stage_ownership=semantic_stage_ownership,
         )
+        runtime_only_handoff = (
+            stage_identity is not None
+            and stage_identity[2] is not None
+            and stage_identity[2] >= 12
+        )
+        if runtime_only_handoff:
+            _validate_runtime_only_handoff_artifacts(
+                task=task, changed_paths=changed_paths
+            )
     return observed_sha
 
 
