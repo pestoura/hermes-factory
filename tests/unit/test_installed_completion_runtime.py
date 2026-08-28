@@ -473,3 +473,73 @@ def test_v10_docs_behavior_remains_backward_compatible(monkeypatch) -> None:
         board="jarvas-cli", task=task, candidate_identity=candidate,
         observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
     ) == candidate
+
+def test_v12_rejects_persisted_runtime_candidate_identity(monkeypatch, tmp_path: Path) -> None:
+    revision = "a" * 64
+    candidate = "1" * 40
+    artifact = tmp_path / "docs/factory/WP-A/SPECIFY/specification.md"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text(
+        '{"candidate_identity": "' + candidate + '"}\n', encoding="utf-8"
+    )
+    task = FakeFactoryTask(
+        "t_specify", str(tmp_path),
+        f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v12",
+    )
+    mutation = FakeMutationObserver(("docs/factory/WP-A/SPECIFY/specification.md",))
+    monkeypatch.setattr(
+        installed_completion, "_parent_candidate_identity", lambda **_: "0" * 40,
+    )
+
+    with pytest.raises(
+        InstalledRuntimeBindingError, match="candidate_identity.*runtime-only"
+    ):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+        )
+
+def test_v12_rejects_stage_artifact_path_escape(monkeypatch, tmp_path: Path) -> None:
+    revision = "b" * 64
+    candidate = "2" * 40
+    outside = tmp_path.parent / "outside.md"
+    outside.write_text("candidate_identity: \"" + candidate + "\"\n", encoding="utf-8")
+    task = FakeFactoryTask(
+        "t_specify_escape", str(tmp_path),
+        f"factory:jarvas-cli:WP-A:SPECIFY:{revision}.stage-contract-v12",
+    )
+    mutation = FakeMutationObserver((
+        "docs/factory/WP-A/SPECIFY/../../../../../outside.md",
+    ))
+    monkeypatch.setattr(
+        installed_completion, "_parent_candidate_identity", lambda **_: "0" * 40,
+    )
+
+    with pytest.raises(InstalledRuntimeBindingError, match="outside.*worktree"):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+        )
+
+def test_v12_rejects_unquoted_persisted_candidate_identity(monkeypatch, tmp_path: Path) -> None:
+    revision = "c" * 64
+    candidate = "3" * 40
+    artifact = tmp_path / "docs/factory/WP-A/DESIGN/decision.md"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("candidate_identity: " + candidate + "\n", encoding="utf-8")
+    task = FakeFactoryTask(
+        "t_design", str(tmp_path),
+        f"factory:jarvas-cli:WP-A:DESIGN:{revision}.stage-contract-v12",
+    )
+    mutation = FakeMutationObserver(("docs/factory/WP-A/DESIGN/decision.md",))
+    monkeypatch.setattr(
+        installed_completion, "_parent_candidate_identity", lambda **_: "0" * 40,
+    )
+
+    with pytest.raises(
+        InstalledRuntimeBindingError, match="candidate_identity.*runtime-only"
+    ):
+        installed_completion.validate_factory_repository_precompletion(
+            board="jarvas-cli", task=task, candidate_identity=candidate,
+            observer=FakeCandidateObserver(candidate), mutation_observer=mutation,
+        )

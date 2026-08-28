@@ -111,7 +111,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v11"
+_STAGE_CONTRACT_REVISION = "stage-contract-v12"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -326,6 +326,8 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "If this stage produces no repository changes, do not create an empty commit; preserve the clean existing HEAD.",
             "When candidate_identity is required, candidate_identity must equal the clean worktree HEAD after the stage checkpoint commit.",
             "If candidate_identity is supplied when optional, it must still equal the clean worktree HEAD and will be independently observed.",
+            "factory_handoff metadata is runtime-only; never persist candidate_identity or other runtime handoff metadata inside stage-produced repository artifacts.",
+            "After the final stage commit, observe the clean HEAD and pass that SHA directly to kanban_complete; do not modify the repository again.",
             f"repository_mutation_policy={stage_mutation_policy(stage)}",
             _stage_mutation_instruction(stage),
             f"stage_artifact_root={stage_artifact_root(wp.work_package_id, stage)}",
