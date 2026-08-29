@@ -312,3 +312,54 @@ def test_controlled_install_plan_projects_factory_plugin_into_root_and_profile_s
         "hermes", "-p", "factory-orchestrator", "plugins", "enable",
         "hermes-factory", "--no-allow-tool-override"
     )
+
+
+def test_controlled_install_plan_enforces_profile_inference_identity_after_profile_install(tmp_path: Path) -> None:
+    builder_type, _ = _contract()
+    package, skill_candidate, profile, dashboard, northbound = _artifacts(tmp_path)
+    candidate = _package_candidate(package)
+    plan = builder_type().build(
+        accepted_hermes_sha="a" * 40,
+        observed_hermes_sha="a" * 40,
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
+        profile_artifacts={"factory-orchestrator": profile},
+        expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
+        profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
+        skill_eval_states={"factory-reading-project-truth": AdmissionEvidenceState.PASS},
+        component_states=_passing_components(),
+        cron_plan=NativeCronPlanBuilder().build({}),
+        dashboard_plugin_source=dashboard,
+        gateway_adapter_module="hermes_factory.adapters.hermes_gateway",
+        northbound_binding_source=northbound,
+    )
+
+    install_index = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION"
+    )
+    identity_index = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY"
+    )
+    profile_enable_index = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "ACTIVATE_FACTORY_PLUGIN_SCOPE"
+        and op.target == "HERMES_HOME/profiles/factory-orchestrator"
+    )
+    profile_verify_index = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "VERIFY_FACTORY_PLUGIN_SCOPE"
+        and op.target == "HERMES_HOME/profiles/factory-orchestrator"
+    )
+    gateway_index = next(
+        i for i, op in enumerate(plan.operations)
+        if op.action == "ACTIVATE_GATEWAY_FACTORY_RUNTIME"
+    )
+    identity = plan.operations[identity_index]
+    assert install_index < profile_enable_index < identity_index < profile_verify_index < gateway_index
+    assert identity.component is RuntimeComponent.PROFILE_DISTRIBUTIONS
+    assert identity.target == "HERMES_HOME/profiles/factory-orchestrator"
+    assert identity.argv == ()
+    assert identity.source is None

@@ -9,6 +9,12 @@ profile_authority_decision:
   BLOCKED: the bounded work cannot continue because required authority or evidence is absent
   separation_of_duties_precedence: SEPARATE_over_REFUSE_for_delegable_responsibility_conflict
 
+factory_model_policy:
+  default: tencent/hy3:free
+  provider: nous
+  base_url: https://inference-api.nousresearch.com/v1
+  ambient_fallback: forbidden
+
 model_classes:
   reasoning-high:
     intent: complex architecture, security, governance and orchestration reasoning

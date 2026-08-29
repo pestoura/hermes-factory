@@ -37,7 +37,7 @@ def test_eval_execution_plan_lists_every_not_run_dimension_and_gate(tmp_path) ->
 
     profile_items = [item for item in plan.items if item.candidate_kind == "PROFILE"]
     skill_items = [item for item in plan.items if item.candidate_kind == "SKILL"]
-    assert len(profile_items) == 9
+    assert len(profile_items) == 10
     assert len(skill_items) == 5
     assert {item.candidate_digest for item in profile_items} == {
         inventory.profile_digests["factory-orchestrator"]
@@ -85,7 +85,7 @@ def test_eval_execution_plan_omits_already_passed_checks(tmp_path) -> None:
     checks = {(item.candidate_kind, item.check) for item in plan.items}
     assert ("PROFILE", "tool_policy_projection") not in checks
     assert ("SKILL", "baseline_red") not in checks
-    assert len(plan.items) == 12
+    assert len(plan.items) == 13
 
 
 def test_eval_execution_plan_is_deterministic(tmp_path) -> None:

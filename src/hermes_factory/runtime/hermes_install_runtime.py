@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +15,9 @@ from urllib.parse import unquote, urlparse
 
 import yaml
 
+from hermes_factory.contracts.inference_identity import (
+    CANONICAL_FACTORY_INFERENCE_IDENTITY,
+)
 from hermes_factory.governance.candidate_identity import digest_artifact
 from hermes_factory.runtime.admission import AdmissionEvidenceState, RuntimeComponent
 from hermes_factory.runtime.bindings import RuntimeComponentBinding
@@ -156,6 +159,7 @@ _SUPPORTED_ACTIONS = {
     "STAGE_FACTORY_PACKAGE",
     "STAGE_FACTORY_SKILL_CATALOG",
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
+    "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY",
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
@@ -344,6 +348,141 @@ class HermesJarvasInstallRuntime:
         if operation.target != f"HERMES_HOME/profiles/{profile_id}":
             raise RuntimeError("Profile install target does not match Profile id")
         return profile_id
+
+    def _factory_profile_inference_scope(
+        self, operation: InstallOperation, *, require_exists: bool
+    ) -> tuple[str, Path]:
+        if operation.component is not RuntimeComponent.PROFILE_DISTRIBUTIONS:
+            raise RuntimeError("Factory Profile inference operation has wrong component")
+        if operation.argv:
+            raise RuntimeError("Factory Profile inference operation must not contain argv")
+        if operation.source is not None or operation.source_digest is not None:
+            raise RuntimeError("Factory Profile inference operation has no external source")
+        prefix = "HERMES_HOME/profiles/"
+        target = operation.target or ""
+        if not target.startswith(prefix):
+            raise RuntimeError("Factory Profile inference target is invalid")
+        profile_id = target[len(prefix):]
+        if not _PROFILE_ID.fullmatch(profile_id):
+            raise RuntimeError("Factory Profile inference target Profile id is invalid")
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Factory Profile inference policy")
+        profile_home = self._hermes_home / "profiles" / profile_id
+        if require_exists:
+            if profile_home.is_symlink() or not profile_home.is_dir():
+                raise RuntimeError("Factory Profile inference target Profile is unavailable")
+        elif profile_home.exists() and (profile_home.is_symlink() or not profile_home.is_dir()):
+            raise RuntimeError("Factory Profile inference target Profile must be a regular directory")
+        return profile_id, profile_home
+
+    @staticmethod
+    def _raw_profile_inference_snapshot(profile_home: Path) -> dict[str, dict[str, object]]:
+        config_path = profile_home / "config.yaml"
+        if not config_path.exists():
+            return {
+                key: {"present": False, "value": None}
+                for key in ("default", "provider", "base_url")
+            }
+        if config_path.is_symlink() or not config_path.is_file():
+            raise RuntimeError("Factory Profile config must be a regular file")
+        try:
+            payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise RuntimeError("Factory Profile config is invalid") from exc
+        if not isinstance(payload, dict):
+            raise TypeError("Factory Profile config must contain a mapping")
+        model = payload.get("model")
+        if model is None:
+            model = {}
+        if not isinstance(model, dict):
+            raise TypeError("Factory Profile model config must be a mapping")
+        snapshot: dict[str, dict[str, object]] = {}
+        for key in ("default", "provider", "base_url"):
+            if key not in model:
+                snapshot[key] = {"present": False, "value": None}
+                continue
+            value = model[key]
+            if not isinstance(value, str):
+                raise TypeError(f"Factory Profile model.{key} must be a string")
+            snapshot[key] = {"present": True, "value": value}
+        return snapshot
+
+    def _profile_inference_argv(self, profile_id: str, *args: str) -> tuple[str, ...]:
+        return (self._hermes_executable, "-p", profile_id, "config", *args)
+
+    def _read_profile_inference_value(self, profile_id: str, key: str) -> object:
+        result = self._run_checked(
+            self._profile_inference_argv(profile_id, "get", f"model.{key}", "--json"),
+            f"Factory Profile inference verification model.{key}",
+        )
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Factory Profile inference verification returned invalid JSON") from exc
+
+    def _restore_profile_inference_snapshot(
+        self, profile_id: str, snapshot: Mapping[str, object], *, label: str
+    ) -> None:
+        for key in ("default", "provider", "base_url"):
+            field = snapshot.get(key)
+            if not isinstance(field, dict) or field.get("present") not in {True, False}:
+                raise RuntimeError("Factory Profile inference receipt snapshot is invalid")
+            present = bool(field["present"])
+            value = field.get("value")
+            if present:
+                if not isinstance(value, str):
+                    raise RuntimeError("Factory Profile inference receipt value is invalid")
+                argv = self._profile_inference_argv(profile_id, "set", f"model.{key}", value)
+            else:
+                argv = self._profile_inference_argv(profile_id, "unset", f"model.{key}")
+            self._run_checked(argv, label)
+
+    def _apply_factory_profile_inference_identity(self, operation: InstallOperation) -> str:
+        profile_id, profile_home = self._factory_profile_inference_scope(
+            operation, require_exists=True
+        )
+        snapshot = self._raw_profile_inference_snapshot(profile_home)
+        identity = CANONICAL_FACTORY_INFERENCE_IDENTITY
+        expected = {
+            "default": identity.model,
+            "provider": identity.provider,
+            "base_url": identity.base_url,
+        }
+        try:
+            for key, value in expected.items():
+                field = snapshot[key]
+                if field["present"] is True and field["value"] == value:
+                    continue
+                self._run_checked(
+                    self._profile_inference_argv(profile_id, "set", f"model.{key}", value),
+                    f"Factory Profile inference apply model.{key}",
+                )
+            for key, value in expected.items():
+                observed = self._read_profile_inference_value(profile_id, key)
+                if observed != value:
+                    raise RuntimeError(
+                        f"Factory Profile inference verification failed for model.{key}"
+                    )
+        except Exception:
+            try:
+                self._restore_profile_inference_snapshot(
+                    profile_id, snapshot, label="Factory Profile inference compensation"
+                )
+            except Exception as compensation_exc:
+                raise RuntimeError(
+                    "Factory Profile inference compensation failed; runtime state is unknown"
+                ) from compensation_exc
+            raise
+        return _receipt(
+            {
+                "base_url": identity.base_url,
+                "kind": "FACTORY_PROFILE_INFERENCE_IDENTITY",
+                "model": identity.model,
+                "profile_id": profile_id,
+                "provider": identity.provider,
+                "snapshot": snapshot,
+            }
+        )
 
     @staticmethod
     def _cron_profile_id(operation: InstallOperation) -> str:
@@ -870,6 +1009,9 @@ class HermesJarvasInstallRuntime:
                 raise RuntimeError("Profile install operation has wrong component")
             self._profile_id(operation)
             return
+        if operation.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY":
+            self._factory_profile_inference_scope(operation, require_exists=False)
+            return
         if operation.action == "CREATE_NATIVE_PROFILE_CRON_DUTY":
             if operation.component is not RuntimeComponent.NATIVE_PROFILE_CRON:
                 raise RuntimeError("Profile cron operation has wrong component")
@@ -1065,6 +1207,12 @@ class HermesJarvasInstallRuntime:
                     self._validate_rollback_candidate(self._preflight_factory_package)
             elif operation.action == "INSTALL_NATIVE_PROFILE_DISTRIBUTION":
                 self._profile_reuse_state(operation)
+            elif operation.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY":
+                _, profile_home = self._factory_profile_inference_scope(
+                    operation, require_exists=False
+                )
+                if profile_home.exists():
+                    self._raw_profile_inference_snapshot(profile_home)
             elif (
                 operation.action == "REGISTER_DASHBOARD_PLUGIN"
                 and self._dashboard_target_exists(operation)
@@ -1413,6 +1561,9 @@ class HermesJarvasInstallRuntime:
             self._run_checked(operation.argv, "native Profile install")
             return _receipt({"kind": "PROFILE_INSTALL", "profile_id": profile_id})
 
+        if operation.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY":
+            return self._apply_factory_profile_inference_identity(operation)
+
         if operation.action == "CREATE_NATIVE_PROFILE_CRON_DUTY":
             profile_id = self._cron_profile_id(operation)
             result = self._run_checked(operation.argv, "native Profile cron create")
@@ -1568,6 +1719,27 @@ class HermesJarvasInstallRuntime:
             self._run_checked(
                 ("hermes", "profile", "delete", profile_id, "-y"),
                 "native Profile rollback",
+            )
+            return
+
+        if operation.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY":
+            profile_id, _ = self._factory_profile_inference_scope(
+                operation, require_exists=True
+            )
+            snapshot = payload.get("snapshot")
+            if (
+                payload.get("kind") != "FACTORY_PROFILE_INFERENCE_IDENTITY"
+                or payload.get("profile_id") != profile_id
+                or payload.get("model") != CANONICAL_FACTORY_INFERENCE_IDENTITY.model
+                or payload.get("provider") != CANONICAL_FACTORY_INFERENCE_IDENTITY.provider
+                or payload.get("base_url") != CANONICAL_FACTORY_INFERENCE_IDENTITY.base_url
+                or not isinstance(snapshot, dict)
+            ):
+                raise RuntimeError(
+                    "Factory Profile inference rollback receipt does not match operation"
+                )
+            self._restore_profile_inference_snapshot(
+                profile_id, snapshot, label="Factory Profile inference rollback"
             )
             return
 

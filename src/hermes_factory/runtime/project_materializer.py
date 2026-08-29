@@ -7,6 +7,9 @@ from typing import Protocol
 
 from hermes_factory.adapters.hermes_kanban import KanbanTaskProjection
 from hermes_factory.compiler.project import ProjectModel, WorkPackageModel
+from hermes_factory.contracts.inference_identity import (
+    CANONICAL_FACTORY_INFERENCE_IDENTITY,
+)
 
 
 class KanbanProjectionAdapter(Protocol):
@@ -111,7 +114,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v15"
+_STAGE_CONTRACT_REVISION = "stage-contract-v16"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -283,6 +286,8 @@ class ProjectMaterializer:
             workspace_path=workspace_path,
             branch_name=branch_name,
             project_id=project_id,
+            model_override=CANONICAL_FACTORY_INFERENCE_IDENTITY.model,
+            provider_override=CANONICAL_FACTORY_INFERENCE_IDENTITY.provider,
         )
 
 
@@ -304,6 +309,9 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             f"Work Package: {wp.work_package_id}",
             f"Requirement: {wp.requirement_id}",
             f"Project model revision: {model.digest}",
+            f"Factory inference model: {CANONICAL_FACTORY_INFERENCE_IDENTITY.model}",
+            f"Factory inference provider: {CANONICAL_FACTORY_INFERENCE_IDENTITY.provider}",
+            "Factory inference identity is pinned; ambient provider auto-selection is forbidden.",
             "Execute only this approved stage and preserve canonical project truth.",
             "The assigned worktree is the only canonical local filesystem root for this stage.",
             "Do not search or read the parent repository root or sibling .worktrees.",

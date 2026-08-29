@@ -434,3 +434,33 @@ def test_task_skill_authorization_rejects_unadmitted_required_skill_before_write
 
     assert not any(name == "connect_closing" for name, _ in native.calls)
     assert not any(name == "create_task" for name, _ in native.calls)
+
+
+def test_factory_task_projection_pins_canonical_inference_identity_before_native_write() -> None:
+    native = FakeNativeKanban()
+    adapter = _authorized_adapter(native)
+
+    adapter.project_task(_spec())
+
+    kwargs = next(payload for name, payload in native.calls if name == "create_task")
+    assert kwargs["model_override"] == "tencent/hy3:free"
+    assert kwargs["provider_override"] == "nous"
+
+
+def test_factory_task_projection_rejects_noncanonical_inference_override_before_native_write() -> None:
+    native = FakeNativeKanban()
+    adapter = _authorized_adapter(native)
+    spec = _spec()
+
+    with pytest.raises(ValueError, match="inference identity"):
+        adapter.project_task(
+            KanbanTaskProjection(
+                **{
+                    **spec.__dict__,
+                    "model_override": "nvidia/nemotron-3-ultra-550b-a55b",
+                    "provider_override": "nvidia",
+                }
+            )
+        )
+
+    assert not any(name == "create_task" for name, _ in native.calls)

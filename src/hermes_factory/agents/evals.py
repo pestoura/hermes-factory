@@ -41,6 +41,7 @@ _BASE_DIMENSIONS = (
     "handoff_evidence_quality",
     "escalation_correctness",
     "no_internal_mcp_dependency",
+    "canonical_inference_identity",
     "independent_review",
 )
 _KNOWN_DIMENSIONS = frozenset((*_BASE_DIMENSIONS, "native_cron_projection"))

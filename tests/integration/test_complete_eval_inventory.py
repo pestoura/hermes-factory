@@ -80,5 +80,5 @@ def test_complete_profile_and_skill_catalogue_is_visible_to_eval_readiness(tmp_p
     assert execution_plan.execution_state == "NOT_RUN"
     assert execution_plan.execute is False
     assert execution_plan.blockers == ()
-    assert len(execution_plan.items) == (17 * 9) + (29 * 5)
-    assert len(execution_plan.items) == 298
+    assert len(execution_plan.items) == (17 * 10) + (29 * 5)
+    assert len(execution_plan.items) == 315

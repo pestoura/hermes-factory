@@ -6,6 +6,9 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
+from hermes_factory.contracts.inference_identity import (
+    CANONICAL_FACTORY_INFERENCE_IDENTITY,
+)
 from hermes_factory.skills.system import SkillAdmissionError, SkillRegistry
 
 
@@ -58,6 +61,8 @@ class KanbanTaskProjection:
     workspace_path: str | None = None
     branch_name: str | None = None
     project_id: str | None = None
+    model_override: str = CANONICAL_FACTORY_INFERENCE_IDENTITY.model
+    provider_override: str = CANONICAL_FACTORY_INFERENCE_IDENTITY.provider
 
     @property
     def idempotency_key(self) -> str:
@@ -79,6 +84,12 @@ class KanbanTaskProjection:
         for name, value in required.items():
             if not value.strip():
                 raise ValueError(f"{name} is required")
+        identity = CANONICAL_FACTORY_INFERENCE_IDENTITY
+        if (
+            self.model_override != identity.model
+            or self.provider_override != identity.provider
+        ):
+            raise ValueError("Factory task inference identity must remain canonical")
 
 
 class HermesKanbanAdapter:
@@ -187,6 +198,8 @@ class HermesKanbanAdapter:
                 initial_status="blocked",
                 board=spec.board,
                 project_id=spec.project_id,
+                model_override=spec.model_override,
+                provider_override=spec.provider_override,
             )
 
     def retire_superseded_project_generations(

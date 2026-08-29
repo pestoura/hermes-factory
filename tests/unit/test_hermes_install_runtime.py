@@ -369,3 +369,100 @@ def test_runtime_plugin_verification_surfaces_bounded_loader_diagnostic(tmp_path
     runtime.preflight((operation,))
     with pytest.raises(RuntimeError, match="synthetic loader diagnostic"):
         runtime.apply(operation)
+
+
+def test_runtime_enforces_and_rolls_back_canonical_profile_inference_identity(tmp_path: Path) -> None:
+    result_type, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    profile_home = hermes_home / "profiles" / "factory-orchestrator"
+    profile_home.mkdir(parents=True)
+    (profile_home / "config.yaml").write_text(
+        "toolsets: [terminal, kanban]\n"
+        "plugins:\n"
+        "  enabled: [hermes-factory]\n",
+        encoding="utf-8",
+    )
+    operation = InstallOperation(
+        component=RuntimeComponent.PROFILE_DISTRIBUTIONS,
+        action="ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY",
+        target="HERMES_HOME/profiles/factory-orchestrator",
+    )
+    hermes = "/opt/hermes/venv/bin/hermes"
+    runner = FakeRunner([
+        result_type(0, "set default\n", ""),
+        result_type(0, "set provider\n", ""),
+        result_type(0, "set base url\n", ""),
+        result_type(0, '"tencent/hy3:free"\n', ""),
+        result_type(0, '"nous"\n', ""),
+        result_type(0, '"https://inference-api.nousresearch.com/v1"\n', ""),
+        result_type(0, "unset default\n", ""),
+        result_type(0, "unset provider\n", ""),
+        result_type(0, "unset base url\n", ""),
+    ])
+    runtime = runtime_type(
+        command_runner=runner,
+        hermes_home=hermes_home,
+        python_executable="/opt/hermes/venv/bin/python",
+    )
+
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    payload = json.loads(receipt)
+    assert payload["kind"] == "FACTORY_PROFILE_INFERENCE_IDENTITY"
+    assert payload["profile_id"] == "factory-orchestrator"
+    assert payload["model"] == "tencent/hy3:free"
+    assert payload["provider"] == "nous"
+
+    runtime.rollback(operation, receipt)
+    prefix = (hermes, "-p", "factory-orchestrator", "config")
+    assert runner.calls == [
+        (*prefix, "set", "model.default", "tencent/hy3:free"),
+        (*prefix, "set", "model.provider", "nous"),
+        (*prefix, "set", "model.base_url", "https://inference-api.nousresearch.com/v1"),
+        (*prefix, "get", "model.default", "--json"),
+        (*prefix, "get", "model.provider", "--json"),
+        (*prefix, "get", "model.base_url", "--json"),
+        (*prefix, "unset", "model.default"),
+        (*prefix, "unset", "model.provider"),
+        (*prefix, "unset", "model.base_url"),
+    ]
+
+
+def test_runtime_profile_inference_verification_failure_compensates_before_raising(tmp_path: Path) -> None:
+    result_type, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    profile_home = hermes_home / "profiles" / "factory-orchestrator"
+    profile_home.mkdir(parents=True)
+    (profile_home / "config.yaml").write_text("toolsets: [terminal]\n", encoding="utf-8")
+    operation = InstallOperation(
+        component=RuntimeComponent.PROFILE_DISTRIBUTIONS,
+        action="ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY",
+        target="HERMES_HOME/profiles/factory-orchestrator",
+    )
+    runner = FakeRunner([
+        result_type(0, "", ""),
+        result_type(0, "", ""),
+        result_type(0, "", ""),
+        result_type(0, '"tencent/hy3:free"\n', ""),
+        result_type(0, '"nvidia"\n', ""),
+        result_type(0, "", ""),
+        result_type(0, "", ""),
+        result_type(0, "", ""),
+    ])
+    runtime = runtime_type(
+        command_runner=runner,
+        hermes_home=hermes_home,
+        python_executable="/opt/hermes/venv/bin/python",
+    )
+
+    runtime.preflight((operation,))
+    with pytest.raises(RuntimeError, match="verification failed for model.provider"):
+        runtime.apply(operation)
+
+    hermes = "/opt/hermes/venv/bin/hermes"
+    prefix = (hermes, "-p", "factory-orchestrator", "config")
+    assert runner.calls[-3:] == [
+        (*prefix, "unset", "model.default"),
+        (*prefix, "unset", "model.provider"),
+        (*prefix, "unset", "model.base_url"),
+    ]

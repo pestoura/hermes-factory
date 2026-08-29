@@ -339,6 +339,15 @@ class ControlledInstallPlanBuilder:
                 )
             )
 
+        for profile_id in profile_ids:
+            operations.append(
+                InstallOperation(
+                    component=RuntimeComponent.PROFILE_DISTRIBUTIONS,
+                    action="ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY",
+                    target=f"HERMES_HOME/profiles/{profile_id}",
+                )
+            )
+
         operations.append(
             InstallOperation(
                 component=RuntimeComponent.DASHBOARD_PLUGIN,
