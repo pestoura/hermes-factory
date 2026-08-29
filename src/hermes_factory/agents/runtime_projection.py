@@ -53,6 +53,17 @@ def project_native_profile_config(
             "Factory model policy must pin the deterministic canonical inference identity"
         )
 
+    cli_dispatch_policy = runtime_policies.get("factory_cli_dispatch_policy")
+    expected_cli_dispatch_policy = {
+        "platform": "cli",
+        "disable_default_mcp": True,
+        "known_builtin_declines": ["bfl"],
+    }
+    if cli_dispatch_policy != expected_cli_dispatch_policy:
+        raise RuntimePolicyProjectionError(
+            "Factory CLI dispatch policy must pin the deterministic least-privilege surface"
+        )
+
     tool_policy_class = agent.get("tool_policy_class")
     if not isinstance(tool_policy_class, str):
         raise RuntimePolicyProjectionError(f"unknown tool policy {tool_policy_class!r}")
@@ -133,5 +144,7 @@ def project_native_profile_config(
             "base_url": identity.base_url,
         },
         "toolsets": list(toolsets),
+        "platform_toolsets": {"cli": [*toolsets, "no_mcp"]},
+        "known_builtin_toolsets": {"cli": ["bfl"]},
         "terminal": {"home_mode": home_mode},
     }

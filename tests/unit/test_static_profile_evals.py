@@ -17,6 +17,11 @@ def _runtime_policies() -> dict[str, object]:
             "base_url": "https://inference-api.nousresearch.com/v1",
             "ambient_fallback": "forbidden",
         },
+        "factory_cli_dispatch_policy": {
+            "platform": "cli",
+            "disable_default_mcp": True,
+            "known_builtin_declines": ["bfl"],
+        },
         "model_classes": {
             "coding-high": {"selection": "factory-model-policy"},
         },

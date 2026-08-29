@@ -15,6 +15,11 @@ factory_model_policy:
   base_url: https://inference-api.nousresearch.com/v1
   ambient_fallback: forbidden
 
+factory_cli_dispatch_policy:
+  platform: cli
+  disable_default_mcp: true
+  known_builtin_declines: [bfl]
+
 model_classes:
   reasoning-high:
     intent: complex architecture, security, governance and orchestration reasoning

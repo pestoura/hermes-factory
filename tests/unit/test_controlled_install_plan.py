@@ -363,3 +363,33 @@ def test_controlled_install_plan_enforces_profile_inference_identity_after_profi
     assert identity.target == "HERMES_HOME/profiles/factory-orchestrator"
     assert identity.argv == ()
     assert identity.source is None
+
+
+def test_controlled_install_plan_enforces_profile_cli_toolsets_before_profile_verification(tmp_path: Path) -> None:
+    builder_type, _ = _contract()
+    package, skill_candidate, profile, dashboard, northbound = _artifacts(tmp_path)
+    candidate = _package_candidate(package)
+    plan = builder_type().build(
+        accepted_hermes_sha="a" * 40,
+        observed_hermes_sha="a" * 40,
+        expected_factory_candidate_sha=_FACTORY_SHA,
+        factory_package_candidate=candidate,
+        factory_skill_catalog_candidate=skill_candidate,
+        profile_artifacts={"factory-orchestrator": profile},
+        expected_profile_digests={"factory-orchestrator": digest_artifact(profile)},
+        profile_eval_states={"factory-orchestrator": AdmissionEvidenceState.PASS},
+        skill_eval_states={"factory-reading-project-truth": AdmissionEvidenceState.PASS},
+        component_states=_passing_components(),
+        cron_plan=NativeCronPlanBuilder().build({}),
+        dashboard_plugin_source=dashboard,
+        gateway_adapter_module="hermes_factory.adapters.hermes_gateway",
+        northbound_binding_source=northbound,
+    )
+    inference = next(i for i, op in enumerate(plan.operations) if op.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY")
+    cli_tools = next(i for i, op in enumerate(plan.operations) if op.action == "ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS")
+    verify = next(i for i, op in enumerate(plan.operations) if op.action == "VERIFY_FACTORY_PLUGIN_SCOPE" and op.target == "HERMES_HOME/profiles/factory-orchestrator")
+    op = plan.operations[cli_tools]
+    assert inference < cli_tools < verify
+    assert op.source == str(profile)
+    assert op.source_digest == digest_artifact(profile)
+    assert op.target == "HERMES_HOME/profiles/factory-orchestrator"

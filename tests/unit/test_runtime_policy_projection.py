@@ -22,6 +22,11 @@ def _policies():
             "base_url": "https://inference-api.nousresearch.com/v1",
             "ambient_fallback": "forbidden",
         },
+        "factory_cli_dispatch_policy": {
+            "platform": "cli",
+            "disable_default_mcp": True,
+            "known_builtin_declines": ["bfl"],
+        },
         "model_classes": {
             "reasoning-high": {"selection": "factory-model-policy"},
         },
@@ -63,6 +68,10 @@ def test_runtime_policy_projects_only_native_hermes_config() -> None:
             "base_url": "https://inference-api.nousresearch.com/v1",
         },
         "toolsets": ["terminal", "file", "web", "skills", "todo", "kanban"],
+        "platform_toolsets": {
+            "cli": ["terminal", "file", "web", "skills", "todo", "kanban", "no_mcp"]
+        },
+        "known_builtin_toolsets": {"cli": ["bfl"]},
         "terminal": {"home_mode": "profile"},
     }
     assert "model_class" not in config
@@ -177,3 +186,23 @@ def test_runtime_policy_rejects_missing_or_ambient_factory_inference_identity() 
             {"model_class": "reasoning-high", "tool_policy_class": "review"},
             policies,
         )
+
+
+def test_runtime_policy_projects_dispatcher_cli_toolset_surface_fail_closed() -> None:
+    _, project = _projection_contract()
+    policies = _policies()
+    policies["factory_cli_dispatch_policy"] = {
+        "platform": "cli",
+        "disable_default_mcp": True,
+        "known_builtin_declines": ["bfl"],
+    }
+
+    config = project(
+        {"model_class": "reasoning-high", "tool_policy_class": "review"},
+        policies,
+    )
+
+    assert config["platform_toolsets"] == {
+        "cli": ["terminal", "file", "web", "skills", "todo", "kanban", "no_mcp"]
+    }
+    assert config["known_builtin_toolsets"] == {"cli": ["bfl"]}

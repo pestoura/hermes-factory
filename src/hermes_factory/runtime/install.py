@@ -348,6 +348,17 @@ class ControlledInstallPlanBuilder:
                 )
             )
 
+        for profile_id in profile_ids:
+            operations.append(
+                InstallOperation(
+                    component=RuntimeComponent.PROFILE_DISTRIBUTIONS,
+                    action="ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS",
+                    source=str(profile_artifacts[profile_id]),
+                    source_digest=expected_profile_digests.get(profile_id),
+                    target=f"HERMES_HOME/profiles/{profile_id}",
+                )
+            )
+
         operations.append(
             InstallOperation(
                 component=RuntimeComponent.DASHBOARD_PLUGIN,

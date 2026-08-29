@@ -27,6 +27,11 @@ def _runtime_policies() -> dict:
             "base_url": "https://inference-api.nousresearch.com/v1",
             "ambient_fallback": "forbidden",
         },
+        "factory_cli_dispatch_policy": {
+            "platform": "cli",
+            "disable_default_mcp": True,
+            "known_builtin_declines": ["bfl"],
+        },
         "model_classes": {
             "reasoning-high": {"selection": "factory-model-policy"},
         },
@@ -109,6 +114,10 @@ def test_agent_compiles_to_native_hermes_distribution_without_internal_mcp(tmp_p
             "base_url": "https://inference-api.nousresearch.com/v1",
         },
         "toolsets": ["terminal", "file", "web", "skills", "todo", "kanban"],
+        "platform_toolsets": {
+            "cli": ["terminal", "file", "web", "skills", "todo", "kanban", "no_mcp"]
+        },
+        "known_builtin_toolsets": {"cli": ["bfl"]},
         "terminal": {"home_mode": "profile"},
     }
     assert "model_class" not in config
