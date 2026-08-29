@@ -630,6 +630,7 @@ class HermesJarvasInstallRuntime:
             'assert p.get("enabled") is True, "hermes-factory plugin failed to load: %r" % (p.get("error"),); '
             'assert m.has_hook("pre_tool_call"), "missing Factory hook: pre_tool_call"; '
             'assert m.has_hook("post_tool_call"), "missing Factory hook: post_tool_call"; '
+            'assert m.has_hook("transform_tool_result"), "missing Factory hook: transform_tool_result"; '
             'assert m.has_hook("kanban_task_completed"), "missing Factory hook: kanban_task_completed"'
         )
         result = self._runner.run(

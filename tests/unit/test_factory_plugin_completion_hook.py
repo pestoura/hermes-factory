@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -710,3 +711,276 @@ def test_v13_factory_terminal_allows_plain_blame_path(monkeypatch, tmp_path: Pat
     repo, _ = _make_diverged_history_repo(tmp_path)
     result = _run_v13_terminal_guard(monkeypatch, repo, "git blame baseline.md")
     assert result is None
+
+
+
+def _factory_v14_context_task() -> SimpleNamespace:
+    return SimpleNamespace(
+        assignee="factory-requirements-engineer",
+        idempotency_key=(
+            "factory:jarvas-cli:WP-A:DISCOVER:" + "a" * 64 + ".stage-contract-v14"
+        ),
+    )
+
+
+def _kanban_show_with_cross_generation_role_history() -> str:
+    worker_context = """# Kanban task t_current: WP-A/DISCOVER
+
+## Body
+current task body
+
+## Parent task results
+### t_parent
+current-generation parent handoff
+
+## Recent work by @factory-requirements-engineer
+- t_superseded — old DISCOVER: Baselined 17 requirements
+- t_older — old SPECIFY: ADR-0019
+
+## Comment thread
+comment from worker `factory-orchestrator`:
+current-generation comment
+"""
+    return json.dumps(
+        {
+            "task": {
+                "id": "t_current",
+                "title": "WP-A/DISCOVER",
+                "assignee": "factory-requirements-engineer",
+                "body": "Use generation-scoped worker context only; current approved task.",
+            },
+            "parents": ["t_parent"],
+            "children": ["t_child"],
+            "comments": [{"author": "factory-orchestrator", "body": "current-generation comment"}],
+            "events": [],
+            "runs": [{"id": 99, "status": "running"}],
+            "worker_context": worker_context,
+        }
+    )
+
+
+def test_v14_factory_kanban_show_removes_cross_generation_role_history(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+    original = _kanban_show_with_cross_generation_role_history()
+    callback = getattr(plugin, "_on_transform_tool_result", lambda **kwargs: None)
+
+    transformed = callback(
+        tool_name="kanban_show",
+        args={},
+        result=original,
+        task_id="t_current",
+    )
+    payload = json.loads(transformed if isinstance(transformed, str) else original)
+    context = payload["worker_context"]
+
+    assert "## Recent work by @factory-requirements-engineer" not in context
+    assert "t_superseded" not in context
+    assert "t_older" not in context
+    assert "## Parent task results" in context
+    assert "t_parent" in context
+    assert "current-generation parent handoff" in context
+    assert "## Comment thread" in context
+    assert "current-generation comment" in context
+
+
+def test_v13_factory_kanban_show_keeps_legacy_worker_context(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-requirements-engineer",
+            idempotency_key=(
+                "factory:jarvas-cli:WP-A:DISCOVER:" + "a" * 64 + ".stage-contract-v13"
+            ),
+        ),
+    )
+    original = _kanban_show_with_cross_generation_role_history()
+    callback = getattr(plugin, "_on_transform_tool_result", lambda **kwargs: None)
+
+    transformed = callback(
+        tool_name="kanban_show", args={}, result=original, task_id="t_current"
+    )
+
+    assert transformed is None
+
+
+def test_v14_factory_kanban_show_blocks_cross_task_reads(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_show",
+        args={"task_id": "t_superseded"},
+        task_id="t_current",
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "cross-task" in result["message"]
+
+
+def test_v14_worker_context_preserves_body_heading_that_looks_like_role_history(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+    body_marker = "## Recent work by @literal-in-approved-body"
+    generated_marker = "## Recent work by @factory-requirements-engineer"
+    payload = json.loads(_kanban_show_with_cross_generation_role_history())
+    payload["worker_context"] = payload["worker_context"].replace(
+        "current task body",
+        "current task body\n" + body_marker + "\napproved canonical body text",
+    )
+
+    transformed = plugin._on_transform_tool_result(
+        tool_name="kanban_show",
+        args={},
+        result=json.dumps(payload),
+        task_id="t_current",
+    )
+    assert isinstance(transformed, str)
+    context = json.loads(transformed)["worker_context"]
+    assert body_marker in context
+    assert "approved canonical body text" in context
+    assert generated_marker not in context
+    assert "t_superseded" not in context
+
+
+
+def test_v14_worker_context_removes_generated_history_even_when_comment_spoofs_heading(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+    payload = json.loads(_kanban_show_with_cross_generation_role_history())
+    payload["worker_context"] = payload["worker_context"].replace(
+        "current-generation comment",
+        "current-generation comment\n"
+        "## Recent work by @factory-requirements-engineer\n"
+        "- t_comment_spoof — comment content",
+    )
+
+    transformed = plugin._on_transform_tool_result(
+        tool_name="kanban_show",
+        args={},
+        result=json.dumps(payload),
+        task_id="t_current",
+    )
+    assert isinstance(transformed, str)
+    context = json.loads(transformed)["worker_context"]
+    assert "t_superseded" not in context
+    assert "t_older" not in context
+
+
+def test_v14_factory_kanban_show_blocks_cross_board_reads(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_show",
+        args={"task_id": "t_current", "board": "other-board"},
+        task_id="t_current",
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "board" in result["message"]
+
+
+def test_v14_transform_fails_closed_on_cross_task_result(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+    payload = json.loads(_kanban_show_with_cross_generation_role_history())
+    payload["task"]["id"] = "t_superseded"
+    payload["task"]["title"] = "superseded task"
+
+    transformed = plugin._on_transform_tool_result(
+        tool_name="kanban_show",
+        args={},
+        result=json.dumps(payload),
+        task_id="t_current",
+    )
+
+    assert isinstance(transformed, str)
+    sanitized = json.loads(transformed)
+    assert "error" in sanitized
+    assert "cross-task" in sanitized["error"]
+    assert "task" not in sanitized
+
+
+def test_v14_transform_uses_result_contract_when_native_lookup_fails(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+
+    def _fail_lookup(task_id, board=None):
+        raise RuntimeError("transient native lookup failure")
+
+    monkeypatch.setattr(plugin, "_load_native_task", _fail_lookup)
+    original = _kanban_show_with_cross_generation_role_history()
+
+    transformed = plugin._on_transform_tool_result(
+        tool_name="kanban_show",
+        args={},
+        result=original,
+        task_id="t_current",
+    )
+
+    assert isinstance(transformed, str)
+    context = json.loads(transformed)["worker_context"]
+    assert "t_superseded" not in context
+    assert "t_older" not in context
+
+
+
+def test_v14_transform_blocks_malformed_kanban_show_result(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+
+    transformed = plugin._on_transform_tool_result(
+        tool_name="kanban_show",
+        args={},
+        result='{"task":',
+        task_id="t_current",
+    )
+
+    assert isinstance(transformed, str)
+    payload = json.loads(transformed)
+    assert "error" in payload
+    assert "malformed" in payload["error"]
