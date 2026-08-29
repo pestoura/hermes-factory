@@ -32,7 +32,7 @@ def _operation() -> InstallOperation:
 
 def test_kanban_policy_preflight_is_structural_and_non_mutating() -> None:
     runner = FakeRunner([])
-    runtime = HermesJarvasInstallRuntime(command_runner=runner)
+    runtime = HermesJarvasInstallRuntime(command_runner=runner, python_executable="python")
 
     runtime.preflight((_operation(),))
 
@@ -41,7 +41,7 @@ def test_kanban_policy_preflight_is_structural_and_non_mutating() -> None:
 
 def test_kanban_policy_already_false_is_noop_and_preserves_existing_state() -> None:
     runner = FakeRunner([CommandResult(0, "false\n", "")])
-    runtime = HermesJarvasInstallRuntime(command_runner=runner)
+    runtime = HermesJarvasInstallRuntime(command_runner=runner, python_executable="python")
     operation = _operation()
 
     receipt = runtime.apply(operation)
@@ -71,7 +71,7 @@ def test_kanban_policy_true_is_set_false_verified_and_restored_on_rollback() -> 
             CommandResult(0, "true\n", ""),
         ]
     )
-    runtime = HermesJarvasInstallRuntime(command_runner=runner)
+    runtime = HermesJarvasInstallRuntime(command_runner=runner, python_executable="python")
     operation = _operation()
 
     receipt = runtime.apply(operation)
@@ -99,7 +99,7 @@ def test_kanban_policy_true_is_set_false_verified_and_restored_on_rollback() -> 
 
 def test_kanban_policy_rejects_non_boolean_resolved_value() -> None:
     runner = FakeRunner([CommandResult(0, '"false"\n', "")])
-    runtime = HermesJarvasInstallRuntime(command_runner=runner)
+    runtime = HermesJarvasInstallRuntime(command_runner=runner, python_executable="python")
 
     with pytest.raises(TypeError, match="boolean"):
         runtime.apply(_operation())
@@ -115,7 +115,7 @@ def test_kanban_policy_compensates_when_post_mutation_verification_fails() -> No
             CommandResult(0, "true\n", ""),
         ]
     )
-    runtime = HermesJarvasInstallRuntime(command_runner=runner)
+    runtime = HermesJarvasInstallRuntime(command_runner=runner, python_executable="python")
 
     with pytest.raises(RuntimeError, match="config read failed with exit code 2"):
         runtime.apply(_operation())
@@ -138,7 +138,7 @@ def test_kanban_policy_surfaces_unknown_state_when_compensation_fails() -> None:
             CommandResult(3, "", "restore failed"),
         ]
     )
-    runtime = HermesJarvasInstallRuntime(command_runner=runner)
+    runtime = HermesJarvasInstallRuntime(command_runner=runner, python_executable="python")
 
     with pytest.raises(RuntimeError, match="compensation failed.*state is unknown"):
         runtime.apply(_operation())
@@ -148,4 +148,17 @@ def test_kanban_policy_surfaces_unknown_state_when_compensation_fails() -> None:
         ("hermes", "config", "set", "kanban.auto_decompose", "false"),
         ("hermes", "config", "get", "kanban.auto_decompose", "--json"),
         ("hermes", "config", "set", "kanban.auto_decompose", "true"),
+    ]
+
+def test_kanban_policy_uses_hermes_executable_sibling_of_configured_python() -> None:
+    runner = FakeRunner([CommandResult(0, "false\n", "")])
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=runner,
+        python_executable="/opt/hermes/venv/bin/python",
+    )
+
+    runtime.apply(_operation())
+
+    assert runner.calls == [
+        ("/opt/hermes/venv/bin/hermes", "config", "get", "kanban.auto_decompose", "--json"),
     ]

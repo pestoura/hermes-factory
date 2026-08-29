@@ -1154,7 +1154,7 @@ class HermesJarvasInstallRuntime:
 
     def _read_kanban_auto_decompose(self) -> bool:
         result = self._run_checked(
-            ("hermes", "config", "get", _KANBAN_AUTO_DECOMPOSE_KEY, "--json"),
+            (self._hermes_executable, "config", "get", _KANBAN_AUTO_DECOMPOSE_KEY, "--json"),
             "Kanban high-assurance config read",
         )
         try:
@@ -1169,7 +1169,7 @@ class HermesJarvasInstallRuntime:
 
     def _restore_kanban_auto_decompose_true(self, *, label: str) -> None:
         self._run_checked(
-            ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "true"),
+            (self._hermes_executable, "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "true"),
             label,
         )
         if self._read_kanban_auto_decompose() is not True:
@@ -1333,7 +1333,7 @@ class HermesJarvasInstallRuntime:
         if changed:
             try:
                 self._run_checked(
-                    ("hermes", "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "false"),
+                    (self._hermes_executable, "config", "set", _KANBAN_AUTO_DECOMPOSE_KEY, "false"),
                     "Kanban high-assurance config apply",
                 )
                 if self._read_kanban_auto_decompose() is not False:
