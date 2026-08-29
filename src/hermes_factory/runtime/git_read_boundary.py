@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 
 class GitReadBoundaryError(RuntimeError):
@@ -219,8 +220,7 @@ def _guard_git_invocation(git_args: list[str], *, cwd: Path, workspace: Path) ->
             )
     if subcommand == "archive" and any(
         token in {"--remote", "--exec"}
-        or token.startswith("--remote=")
-        or token.startswith("--exec=")
+        or token.startswith(("--remote=", "--exec="))
         for token in sub_args
     ):
         raise GitReadBoundaryError(
