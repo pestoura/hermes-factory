@@ -24,6 +24,7 @@ RUNTIME_ACCEPTANCE_SCENARIOS = (
     "all_required_factory_skills_have_explicit_eval_state",
     "superseded_generation_retirement_preserves_history",
     "all_factory_workers_use_canonical_inference_identity",
+    "all_factory_workers_use_canonical_cli_toolsets",
 )
 
 

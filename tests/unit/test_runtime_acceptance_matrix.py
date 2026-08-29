@@ -14,17 +14,17 @@ def _acceptance_contract():
     return RuntimeAcceptanceEvidence, RuntimeAcceptanceMatrix
 
 
-def test_phase_q_matrix_contains_all_seventeen_required_scenarios_and_starts_not_run() -> None:
+def test_phase_q_matrix_contains_all_eighteen_required_scenarios_and_starts_not_run() -> None:
     _, matrix_type = _acceptance_contract()
     matrix = matrix_type(candidate_sha="a" * 40)
 
     assessment = matrix.assess(())
 
-    assert len(matrix.scenarios) == 17
+    assert len(matrix.scenarios) == 18
     assert "superseded_generation_retirement_preserves_history" in matrix.scenarios
     assert assessment.accepted_runtime is False
     assert set(assessment.scenario_states.values()) == {AdmissionEvidenceState.NOT_RUN}
-    assert len(assessment.blockers) == 17
+    assert len(assessment.blockers) == 18
     assert assessment.to_manifest()["candidate_sha"] == "a" * 40
     assert len(assessment.digest) == 64
 
@@ -43,7 +43,7 @@ def test_phase_q_requires_exact_candidate_sha_for_every_scenario() -> None:
         matrix.assess((evidence,))
 
 
-def test_phase_q_accepts_runtime_only_when_all_seventeen_scenarios_pass() -> None:
+def test_phase_q_accepts_runtime_only_when_all_eighteen_scenarios_pass() -> None:
     evidence_type, matrix_type = _acceptance_contract()
     matrix = matrix_type(candidate_sha="a" * 40)
     evidence = tuple(
@@ -117,4 +117,11 @@ def test_phase_q_requires_canonical_factory_inference_identity_scenario() -> Non
     matrix = matrix_type(candidate_sha="a" * 40)
 
     assert "all_factory_workers_use_canonical_inference_identity" in matrix.scenarios
-    assert len(matrix.scenarios) == 17
+    assert len(matrix.scenarios) == 18
+
+
+def test_phase_q_requires_canonical_factory_cli_toolset_scenario() -> None:
+    _, matrix_type = _acceptance_contract()
+    matrix = matrix_type(candidate_sha="a" * 40)
+    assert "all_factory_workers_use_canonical_cli_toolsets" in matrix.scenarios
+    assert len(matrix.scenarios) == 18

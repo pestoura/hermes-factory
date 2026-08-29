@@ -466,3 +466,65 @@ def test_runtime_profile_inference_verification_failure_compensates_before_raisi
         (*prefix, "unset", "model.provider"),
         (*prefix, "unset", "model.base_url"),
     ]
+
+
+def test_runtime_enforces_and_rolls_back_profile_cli_toolsets(tmp_path: Path) -> None:
+    from hermes_factory.governance.candidate_identity import digest_artifact
+
+    result_type, runtime_type = _contract()
+    hermes_home = tmp_path / "hermes-home"
+    profile_home = hermes_home / "profiles" / "factory-orchestrator"
+    profile_home.mkdir(parents=True)
+    (profile_home / "config.yaml").write_text("plugins:\n  enabled: [hermes-factory]\n", encoding="utf-8")
+    source = tmp_path / "profile-source"
+    source.mkdir()
+    (source / "config.yaml").write_text(
+        "toolsets: [terminal, file, web, todo, kanban]\n"
+        "platform_toolsets:\n"
+        "  cli: [terminal, file, web, todo, kanban, no_mcp]\n"
+        "known_builtin_toolsets:\n"
+        "  cli: [bfl]\n",
+        encoding="utf-8",
+    )
+    operation = InstallOperation(
+        component=RuntimeComponent.PROFILE_DISTRIBUTIONS,
+        action="ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS",
+        source=str(source),
+        source_digest=digest_artifact(source),
+        target="HERMES_HOME/profiles/factory-orchestrator",
+    )
+    runner = FakeRunner([
+        result_type(0, "set toolsets\n", ""),
+        result_type(0, "set platform toolsets\n", ""),
+        result_type(0, "set known builtins\n", ""),
+        result_type(0, '["terminal","file","web","todo","kanban"]\n', ""),
+        result_type(0, '["terminal","file","web","todo","kanban","no_mcp"]\n', ""),
+        result_type(0, '["bfl"]\n', ""),
+        result_type(0, '["file","kanban","terminal","todo","web"]\n', ""),
+        result_type(0, "unset toolsets\n", ""),
+        result_type(0, "unset platform toolsets\n", ""),
+        result_type(0, "unset known builtins\n", ""),
+    ])
+    runtime = runtime_type(
+        command_runner=runner,
+        hermes_home=hermes_home,
+        python_executable="/opt/hermes/venv/bin/python",
+    )
+
+    runtime.preflight((operation,))
+    receipt = runtime.apply(operation)
+    payload = json.loads(receipt)
+    assert payload["kind"] == "FACTORY_PROFILE_CLI_TOOLSETS"
+    assert payload["profile_id"] == "factory-orchestrator"
+    assert payload["effective_toolsets"] == ["file", "kanban", "terminal", "todo", "web"]
+    runtime.rollback(operation, receipt)
+    assert runner.calls[:3] == [
+        ("/opt/hermes/venv/bin/hermes", "-p", "factory-orchestrator", "config", "set", "toolsets", '["terminal","file","web","todo","kanban"]'),
+        ("/opt/hermes/venv/bin/hermes", "-p", "factory-orchestrator", "config", "set", "platform_toolsets.cli", '["terminal","file","web","todo","kanban","no_mcp"]'),
+        ("/opt/hermes/venv/bin/hermes", "-p", "factory-orchestrator", "config", "set", "known_builtin_toolsets.cli", '["bfl"]'),
+    ]
+    assert runner.calls[-3:] == [
+        ("/opt/hermes/venv/bin/hermes", "-p", "factory-orchestrator", "config", "unset", "toolsets"),
+        ("/opt/hermes/venv/bin/hermes", "-p", "factory-orchestrator", "config", "unset", "platform_toolsets.cli"),
+        ("/opt/hermes/venv/bin/hermes", "-p", "factory-orchestrator", "config", "unset", "known_builtin_toolsets.cli"),
+    ]

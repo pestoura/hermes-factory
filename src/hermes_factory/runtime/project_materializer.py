@@ -114,7 +114,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v16"
+_STAGE_CONTRACT_REVISION = "stage-contract-v17"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -312,6 +312,7 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             f"Factory inference model: {CANONICAL_FACTORY_INFERENCE_IDENTITY.model}",
             f"Factory inference provider: {CANONICAL_FACTORY_INFERENCE_IDENTITY.provider}",
             "Factory inference identity is pinned; ambient provider auto-selection is forbidden.",
+            "Factory worker CLI toolsets are pinned to the assigned Profile policy; broad/default Hermes CLI composites are forbidden.",
             "Execute only this approved stage and preserve canonical project truth.",
             "The assigned worktree is the only canonical local filesystem root for this stage.",
             "Do not search or read the parent repository root or sibling .worktrees.",

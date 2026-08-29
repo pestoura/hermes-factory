@@ -10,7 +10,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from time import sleep
-from typing import Protocol
+from typing import Protocol, cast
 from urllib.parse import unquote, urlparse
 
 import yaml
@@ -160,6 +160,7 @@ _SUPPORTED_ACTIONS = {
     "STAGE_FACTORY_SKILL_CATALOG",
     "INSTALL_NATIVE_PROFILE_DISTRIBUTION",
     "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY",
+    "ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS",
     "CREATE_NATIVE_PROFILE_CRON_DUTY",
     "APPLY_EMPTY_NATIVE_PROFILE_CRON_PLAN",
     "REGISTER_DASHBOARD_PLUGIN",
@@ -483,6 +484,185 @@ class HermesJarvasInstallRuntime:
                 "snapshot": snapshot,
             }
         )
+
+    def _factory_profile_cli_toolset_scope(
+        self, operation: InstallOperation, *, require_exists: bool
+    ) -> tuple[str, Path, Path, dict[str, list[str]]]:
+        if operation.component is not RuntimeComponent.PROFILE_DISTRIBUTIONS:
+            raise RuntimeError("Factory Profile CLI toolset operation has wrong component")
+        if operation.argv:
+            raise RuntimeError("Factory Profile CLI toolset operation must not contain argv")
+        if operation.source is None or operation.source_digest is None:
+            raise RuntimeError("Factory Profile CLI toolset operation requires source identity")
+        source = Path(operation.source)
+        if source.is_symlink() or not source.is_dir():
+            raise RuntimeError("Factory Profile CLI toolset source must be a regular directory")
+        if digest_artifact(source) != operation.source_digest:
+            raise RuntimeError("Factory Profile CLI toolset source digest drift")
+        config_path = source / "config.yaml"
+        if config_path.is_symlink() or not config_path.is_file():
+            raise RuntimeError("Factory Profile CLI toolset source config is unavailable")
+        try:
+            config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise RuntimeError("Factory Profile CLI toolset source config is invalid") from exc
+        if not isinstance(config, dict):
+            raise TypeError("Factory Profile CLI toolset source config must be a mapping")
+        toolsets = config.get("toolsets")
+        platform = config.get("platform_toolsets")
+        known = config.get("known_builtin_toolsets")
+        cli_toolsets = platform.get("cli") if isinstance(platform, dict) else None
+        known_cli = known.get("cli") if isinstance(known, dict) else None
+        for label, value in (("toolsets", toolsets), ("platform_toolsets.cli", cli_toolsets), ("known_builtin_toolsets.cli", known_cli)):
+            if not isinstance(value, list) or not value or any(not isinstance(item, str) or not item.strip() for item in value):
+                raise RuntimeError(f"Factory Profile {label} must be an explicit non-empty string list")
+            if len(value) != len(set(value)):
+                raise RuntimeError(f"Factory Profile {label} must not contain duplicates")
+        toolsets_list = cast(list[str], toolsets)
+        cli_toolsets_list = cast(list[str], cli_toolsets)
+        known_cli_list = cast(list[str], known_cli)
+        if cli_toolsets_list != [*toolsets_list, "no_mcp"]:
+            raise RuntimeError("Factory Profile CLI platform toolsets must equal toolsets plus no_mcp")
+        if known_cli_list != ["bfl"]:
+            raise RuntimeError("Factory Profile CLI known built-in declines are invalid")
+        prefix = "HERMES_HOME/profiles/"
+        target = operation.target or ""
+        if not target.startswith(prefix):
+            raise RuntimeError("Factory Profile CLI toolset target is invalid")
+        profile_id = target[len(prefix):]
+        if not _PROFILE_ID.fullmatch(profile_id):
+            raise RuntimeError("Factory Profile CLI toolset target Profile id is invalid")
+        if self._hermes_home is None:
+            raise RuntimeError("Hermes home is required for Factory Profile CLI toolset policy")
+        profile_home = self._hermes_home / "profiles" / profile_id
+        if require_exists:
+            if profile_home.is_symlink() or not profile_home.is_dir():
+                raise RuntimeError("Factory Profile CLI toolset target Profile is unavailable")
+        elif profile_home.exists() and (profile_home.is_symlink() or not profile_home.is_dir()):
+            raise RuntimeError("Factory Profile CLI toolset target Profile must be a regular directory")
+        return profile_id, profile_home, source, {
+            "toolsets": list(toolsets_list),
+            "platform_toolsets.cli": list(cli_toolsets_list),
+            "known_builtin_toolsets.cli": list(known_cli_list),
+        }
+
+    @staticmethod
+    def _raw_profile_cli_toolset_snapshot(profile_home: Path) -> dict[str, dict[str, object]]:
+        config_path = profile_home / "config.yaml"
+        if not config_path.exists():
+            config: dict[str, object] = {}
+        else:
+            if config_path.is_symlink() or not config_path.is_file():
+                raise RuntimeError("Factory Profile config must be a regular file")
+            try:
+                loaded = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise RuntimeError("Factory Profile config is invalid") from exc
+            if not isinstance(loaded, dict):
+                raise TypeError("Factory Profile config must contain a mapping")
+            config = loaded
+
+        def capture(mapping: object, key: str) -> dict[str, object]:
+            if not isinstance(mapping, dict) or key not in mapping:
+                return {"present": False, "value": None}
+            value = mapping[key]
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                raise TypeError(f"Factory Profile {key} config must be a string list")
+            return {"present": True, "value": list(value)}
+
+        return {
+            "toolsets": capture(config, "toolsets"),
+            "platform_toolsets.cli": capture(config.get("platform_toolsets"), "cli"),
+            "known_builtin_toolsets.cli": capture(config.get("known_builtin_toolsets"), "cli"),
+        }
+
+    def _read_profile_config_json(self, profile_id: str, key: str) -> object:
+        result = self._run_checked(
+            self._profile_inference_argv(profile_id, "get", key, "--json"),
+            f"Factory Profile config verification {key}",
+        )
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Factory Profile config verification returned invalid JSON") from exc
+
+    def _restore_profile_cli_toolset_snapshot(
+        self, profile_id: str, snapshot: Mapping[str, object], *, label: str
+    ) -> None:
+        for key in ("toolsets", "platform_toolsets.cli", "known_builtin_toolsets.cli"):
+            field = snapshot.get(key)
+            if not isinstance(field, dict) or field.get("present") not in {True, False}:
+                raise RuntimeError("Factory Profile CLI toolset receipt snapshot is invalid")
+            if field["present"] is True:
+                value = field.get("value")
+                if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                    raise RuntimeError("Factory Profile CLI toolset receipt value is invalid")
+                argv = self._profile_inference_argv(profile_id, "set", key, self._compact_json(value))
+            else:
+                argv = self._profile_inference_argv(profile_id, "unset", key)
+            self._run_checked(argv, label)
+
+    def _resolved_profile_cli_toolsets(self, profile_home: Path) -> list[str]:
+        hermes_runtime_root = Path(self._python_executable).parent.parent.parent
+        probe = (
+            'import json, os; '
+            f'os.chdir({json.dumps(str(hermes_runtime_root))}); '
+            'from hermes_cli.config import load_config; '
+            'from hermes_cli.tools_config import _get_platform_tools; '
+            'print(json.dumps(sorted(_get_platform_tools(load_config(), "cli"))))'
+        )
+        result = self._run_checked(
+            ("env", f"HERMES_HOME={profile_home}", self._python_executable, "-c", probe),
+            "Factory Profile effective CLI toolset verification",
+        )
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Factory Profile effective CLI toolset verification returned invalid JSON") from exc
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+            raise RuntimeError("Factory Profile effective CLI toolset verification returned invalid data")
+        return value
+
+    def _apply_factory_profile_cli_toolsets(self, operation: InstallOperation) -> str:
+        profile_id, profile_home, _, expected = self._factory_profile_cli_toolset_scope(
+            operation, require_exists=True
+        )
+        snapshot = self._raw_profile_cli_toolset_snapshot(profile_home)
+        try:
+            for key, value in expected.items():
+                field = snapshot[key]
+                if field["present"] is True and field["value"] == value:
+                    continue
+                self._run_checked(
+                    self._profile_inference_argv(profile_id, "set", key, self._compact_json(value)),
+                    f"Factory Profile CLI toolset apply {key}",
+                )
+            for key, value in expected.items():
+                if self._read_profile_config_json(profile_id, key) != value:
+                    raise RuntimeError(f"Factory Profile CLI toolset verification failed for {key}")
+            effective = self._resolved_profile_cli_toolsets(profile_home)
+            expected_effective = sorted(expected["toolsets"])
+            if effective != expected_effective:
+                raise RuntimeError(
+                    f"Factory Profile effective CLI toolsets drift: expected={expected_effective} observed={effective}"
+                )
+        except Exception:
+            try:
+                self._restore_profile_cli_toolset_snapshot(
+                    profile_id, snapshot, label="Factory Profile CLI toolset compensation"
+                )
+            except Exception as compensation_exc:
+                raise RuntimeError(
+                    "Factory Profile CLI toolset compensation failed; runtime state is unknown"
+                ) from compensation_exc
+            raise
+        return _receipt({
+            "effective_toolsets": effective,
+            "kind": "FACTORY_PROFILE_CLI_TOOLSETS",
+            "profile_id": profile_id,
+            "snapshot": snapshot,
+            "source_digest": operation.source_digest or "",
+        })
 
     @staticmethod
     def _cron_profile_id(operation: InstallOperation) -> str:
@@ -1012,6 +1192,9 @@ class HermesJarvasInstallRuntime:
         if operation.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY":
             self._factory_profile_inference_scope(operation, require_exists=False)
             return
+        if operation.action == "ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS":
+            self._factory_profile_cli_toolset_scope(operation, require_exists=False)
+            return
         if operation.action == "CREATE_NATIVE_PROFILE_CRON_DUTY":
             if operation.component is not RuntimeComponent.NATIVE_PROFILE_CRON:
                 raise RuntimeError("Profile cron operation has wrong component")
@@ -1213,6 +1396,12 @@ class HermesJarvasInstallRuntime:
                 )
                 if profile_home.exists():
                     self._raw_profile_inference_snapshot(profile_home)
+            elif operation.action == "ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS":
+                _, profile_home, _, _ = self._factory_profile_cli_toolset_scope(
+                    operation, require_exists=False
+                )
+                if profile_home.exists():
+                    self._raw_profile_cli_toolset_snapshot(profile_home)
             elif (
                 operation.action == "REGISTER_DASHBOARD_PLUGIN"
                 and self._dashboard_target_exists(operation)
@@ -1564,6 +1753,9 @@ class HermesJarvasInstallRuntime:
         if operation.action == "ENFORCE_FACTORY_PROFILE_INFERENCE_IDENTITY":
             return self._apply_factory_profile_inference_identity(operation)
 
+        if operation.action == "ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS":
+            return self._apply_factory_profile_cli_toolsets(operation)
+
         if operation.action == "CREATE_NATIVE_PROFILE_CRON_DUTY":
             profile_id = self._cron_profile_id(operation)
             result = self._run_checked(operation.argv, "native Profile cron create")
@@ -1740,6 +1932,24 @@ class HermesJarvasInstallRuntime:
                 )
             self._restore_profile_inference_snapshot(
                 profile_id, snapshot, label="Factory Profile inference rollback"
+            )
+            return
+
+        if operation.action == "ENFORCE_FACTORY_PROFILE_CLI_TOOLSETS":
+            profile_id, _, _, _ = self._factory_profile_cli_toolset_scope(
+                operation, require_exists=True
+            )
+            snapshot = payload.get("snapshot")
+            if (
+                payload.get("kind") != "FACTORY_PROFILE_CLI_TOOLSETS"
+                or payload.get("profile_id") != profile_id
+                or payload.get("source_digest") != (operation.source_digest or "")
+                or not isinstance(payload.get("effective_toolsets"), list)
+                or not isinstance(snapshot, dict)
+            ):
+                raise RuntimeError("Factory Profile CLI toolset rollback receipt does not match operation")
+            self._restore_profile_cli_toolset_snapshot(
+                profile_id, snapshot, label="Factory Profile CLI toolset rollback"
             )
             return
 
