@@ -111,7 +111,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v14"
+_STAGE_CONTRACT_REVISION = "stage-contract-v15"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -305,7 +305,7 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             f"Requirement: {wp.requirement_id}",
             f"Project model revision: {model.digest}",
             "Execute only this approved stage and preserve canonical project truth.",
-            "The assigned worktree is the only local project-truth root for this stage.",
+            "The assigned worktree is the only canonical local filesystem root for this stage.",
             "Do not search or read the parent repository root or sibling .worktrees.",
             "The canonical Git read boundary is current HEAD and its ancestors; do not enumerate or read refs, objects, reflogs, or superseded generations outside that reachable history.",
             "Use generation-scoped worker context only; generic cross-task role history from superseded Factory generations is non-canonical and must not be used.",

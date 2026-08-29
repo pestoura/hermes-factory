@@ -984,3 +984,153 @@ def test_v14_transform_blocks_malformed_kanban_show_result(monkeypatch) -> None:
     payload = json.loads(transformed)
     assert "error" in payload
     assert "malformed" in payload["error"]
+
+
+def _factory_v15_workspace_task(workspace: Path) -> SimpleNamespace:
+    return SimpleNamespace(
+        assignee="factory-requirements-engineer",
+        idempotency_key=(
+            "factory:jarvas-cli:WP-A:DISCOVER:" + "a" * 64 + ".stage-contract-v15"
+        ),
+        workspace_path=str(workspace),
+    )
+
+
+def _run_v15_workspace_guard(monkeypatch, workspace: Path, tool_name: str, args: dict):
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v15_workspace_task(workspace),
+    )
+    return plugin._on_pre_tool_call(tool_name=tool_name, args=args, task_id="t_current")
+
+
+def test_v15_terminal_blocks_parent_repository_read(monkeypatch, tmp_path: Path) -> None:
+    repo = tmp_path / "jarvas-cli"
+    workspace = repo / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+
+    result = _run_v15_workspace_guard(
+        monkeypatch,
+        workspace,
+        "terminal",
+        {"command": f"ls -la {repo}", "workdir": str(workspace)},
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "workspace read boundary" in result["message"]
+
+
+def test_v15_terminal_blocks_relative_workspace_escape(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v15_workspace_guard(
+        monkeypatch, workspace, "terminal", {"command": "cat ../../../secret.md"}
+    )
+    assert result is not None
+    assert result["action"] == "block"
+
+
+def test_v15_read_file_blocks_parent_repository(monkeypatch, tmp_path: Path) -> None:
+    repo = tmp_path / "jarvas-cli"
+    workspace = repo / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v15_workspace_guard(
+        monkeypatch, workspace, "read_file", {"path": str(repo / "docs" / "legacy.md")}
+    )
+    assert result is not None
+    assert result["action"] == "block"
+    assert "workspace read boundary" in result["message"]
+
+
+def test_v15_search_files_blocks_parent_repository(monkeypatch, tmp_path: Path) -> None:
+    repo = tmp_path / "jarvas-cli"
+    workspace = repo / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v15_workspace_guard(
+        monkeypatch, workspace, "search_files", {"pattern": "ADR", "path": str(repo)}
+    )
+    assert result is not None
+    assert result["action"] == "block"
+
+
+def test_v15_workspace_local_reads_remain_allowed(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    assert _run_v15_workspace_guard(
+        monkeypatch, workspace, "read_file", {"path": str(workspace / "README.md")}
+    ) is None
+    assert _run_v15_workspace_guard(
+        monkeypatch, workspace, "terminal", {"command": "cat README.md"}
+    ) is None
+
+
+def test_v14_workspace_read_boundary_is_backward_compatible(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-requirements-engineer",
+            idempotency_key="factory:p:WP-A:DISCOVER:" + "a" * 64 + ".stage-contract-v14",
+            workspace_path=str(workspace),
+        ),
+    )
+    assert plugin._on_pre_tool_call(
+        tool_name="read_file", args={"path": str(workspace.parent.parent)}, task_id="t_current"
+    ) is None
+
+
+def test_v15_terminal_blocks_cd_parent_escape(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v15_workspace_guard(
+        monkeypatch, workspace, "terminal", {"command": "cd .. && cat sibling.txt"}
+    )
+    assert result is not None
+    assert result["action"] == "block"
+
+
+def test_v15_read_file_blocks_symlink_escape(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    outside = tmp_path / "outside"
+    workspace.mkdir(parents=True)
+    outside.mkdir()
+    (workspace / "escape").symlink_to(outside, target_is_directory=True)
+    result = _run_v15_workspace_guard(
+        monkeypatch, workspace, "read_file", {"path": str(workspace / "escape" / "secret.md")}
+    )
+    assert result is not None
+    assert result["action"] == "block"
+
+
+def test_v15_terminal_blocks_embedded_absolute_path(monkeypatch, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    workspace = repo / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    target = repo / "secret.txt"
+    result = _run_v15_workspace_guard(
+        monkeypatch,
+        workspace,
+        "terminal",
+        {"command": f'''python -c "open('{target}').read()"'''},
+    )
+    assert result is not None
+    assert result["action"] == "block"
+
+
+def test_v15_terminal_blocks_home_expansion(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v15_workspace_guard(
+        monkeypatch, workspace, "terminal", {"command": "cat $HOME/.config/private"}
+    )
+    assert result is not None
+    assert result["action"] == "block"
