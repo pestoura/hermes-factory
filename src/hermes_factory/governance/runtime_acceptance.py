@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from hermes_factory.runtime.admission import AdmissionEvidenceState
 
+LIVE_FACTORY_PROFILE_SET_SCENARIO = "factory_profile_live_set_matches_canonical_catalog"
+
 RUNTIME_ACCEPTANCE_SCENARIOS = (
     "project_onboarding_compile",
     "dependency_driven_profile_handoff",
@@ -21,6 +23,7 @@ RUNTIME_ACCEPTANCE_SCENARIOS = (
     "dashboard_reflects_canonical_truth",
     "external_northbound_control_without_internal_ipc",
     "all_17_profile_runtime_projections_validate",
+    LIVE_FACTORY_PROFILE_SET_SCENARIO,
     "all_required_factory_skills_have_explicit_eval_state",
     "superseded_generation_retirement_preserves_history",
     "all_factory_workers_use_canonical_inference_identity",
