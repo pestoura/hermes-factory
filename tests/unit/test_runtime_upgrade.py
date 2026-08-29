@@ -427,3 +427,68 @@ def test_gateway_quiesce_rollback_reloads_previous_runtime() -> None:
         ("hermes", "gateway", "restart"),
         ("hermes", "gateway", "status"),
     ]
+
+
+def test_subprocess_package_probe_accepts_generic_evidence_directory(tmp_path: Path):
+    import json as json_module
+
+    from hermes_factory.runtime.hermes_install_runtime import (
+        CommandResult,
+        SubprocessFactoryPackageProbe,
+    )
+
+    candidate = _candidate(tmp_path / "factory-package", "4" * 40, b"installed")
+    manifest = candidate.wheel_path.parent / "factory-package.json"
+    manifest.write_text(json_module.dumps({
+        "schema": "hermes.factory/package-candidate/v2",
+        "candidate_sha": candidate.candidate_sha,
+        "filename": candidate.filename,
+        "artifact_digest": candidate.artifact_digest,
+        "content_sha256": candidate.content_sha256,
+        "size_bytes": candidate.size_bytes,
+    }))
+    direct_url = json_module.dumps({"url": candidate.wheel_path.as_uri()})
+    runner = FakeRunner([
+        CommandResult(0, "Name: hermes-factory\n", ""),
+        CommandResult(0, direct_url, ""),
+    ])
+    observed = SubprocessFactoryPackageProbe(runner, "python-hermes").current()
+    assert observed is not None
+    assert observed.candidate_sha == candidate.candidate_sha
+
+
+def test_package_upgrade_self_restores_if_post_install_verification_fails(tmp_path: Path):
+    from hermes_factory.runtime.hermes_install_runtime import (
+        CommandResult,
+        HermesJarvasInstallRuntime,
+    )
+
+    old = _candidate(tmp_path / "old", "1" * 40, b"old-wheel")
+    new = _candidate(tmp_path / "new", "2" * 40, b"new-wheel")
+    wrong = _candidate(tmp_path / "wrong", "3" * 40, b"wrong-wheel")
+    probe = FakePackageProbe(old, old, wrong, old)
+    runner = FakeRunner([
+        CommandResult(0, "upgraded\n", ""),
+        CommandResult(0, "restored\n", ""),
+    ])
+    runtime = HermesJarvasInstallRuntime(
+        command_runner=runner,
+        python_executable="python-hermes",
+        factory_package_probe=probe,
+    )
+    operation = _package_operation(new)
+
+    runtime.preflight((operation,))
+    with pytest.raises(RuntimeError, match="exact candidate verification failed"):
+        runtime.apply(operation)
+    assert runner.calls == [
+        (
+            "python-hermes", "-m", "pip", "install", "--force-reinstall",
+            "--no-deps", "--no-input", str(new.wheel_path),
+        ),
+        (
+            "python-hermes", "-m", "pip", "install", "--force-reinstall",
+            "--no-deps", "--no-input", str(old.wheel_path),
+        ),
+    ]
+    assert probe.calls == 4

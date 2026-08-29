@@ -91,14 +91,27 @@ class SubprocessFactoryPackageProbe:
         if parsed.scheme != "file":
             raise RuntimeError("installed Factory package source must be a local file URL")
         wheel = Path(unquote(parsed.path))
+        manifest_path = wheel.parent / "factory-package.json"
         match = _FACTORY_CANDIDATE_PATH.search(url)
-        if match is None:
-            raise RuntimeError("installed Factory package exact candidate SHA is unavailable")
+        expected_candidate_sha = match.group(1) if match is not None else None
+        if expected_candidate_sha is None:
+            try:
+                manifest_document = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise RuntimeError("installed Factory package exact candidate SHA is unavailable") from exc
+            manifest_sha = (
+                manifest_document.get("candidate_sha")
+                if isinstance(manifest_document, dict)
+                else None
+            )
+            if not isinstance(manifest_sha, str) or re.fullmatch(r"[0-9a-fA-F]{40}", manifest_sha) is None:
+                raise RuntimeError("installed Factory package exact candidate SHA is unavailable")
+            expected_candidate_sha = manifest_sha
         try:
             return load_package_candidate(
-                manifest_path=wheel.parent / "factory-package.json",
+                manifest_path=manifest_path,
                 wheel_path=wheel,
-                expected_candidate_sha=match.group(1),
+                expected_candidate_sha=expected_candidate_sha,
             )
         except PackageCandidateError as exc:
             raise RuntimeError(str(exc)) from exc
@@ -1218,9 +1231,28 @@ class HermesJarvasInstallRuntime:
             ),
             "Factory package upgrade",
         )
-        observed = self._current_factory_package()
-        if observed is None or observed.artifact_digest != operation.source_digest:
-            raise RuntimeError("Factory package upgrade exact candidate verification failed")
+        try:
+            observed = self._current_factory_package()
+            if observed is None or observed.artifact_digest != operation.source_digest:
+                raise RuntimeError("Factory package upgrade exact candidate verification failed")
+        except (RuntimeError, TypeError):
+            try:
+                self._run_checked(
+                    (
+                        self._python_executable, "-m", "pip", "install",
+                        "--force-reinstall", "--no-deps", "--no-input",
+                        str(current.wheel_path),
+                    ),
+                    "Factory package upgrade compensation",
+                )
+                restored = self._current_factory_package()
+                if not self._same_factory_candidate(current, restored):
+                    raise RuntimeError("Factory package compensation exact candidate verification failed")
+            except (RuntimeError, TypeError) as compensation_exc:
+                raise RuntimeError(
+                    "Factory package upgrade compensation failed; runtime state is unknown"
+                ) from compensation_exc
+            raise
         return _receipt(
             {
                 "distribution": _FACTORY_DISTRIBUTION,
