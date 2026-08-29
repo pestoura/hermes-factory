@@ -141,6 +141,19 @@ def _revision_operands(subcommand: str, args: list[str]) -> list[str]:
     return operands
 
 
+def _revision_is_resolvable(revision: str, *, repo_dir: Path) -> bool:
+    expression = revision.split(":", 1)[0].lstrip("^")
+    if not expression:
+        return False
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "rev-parse", "--verify", "--quiet", expression],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def _revision_atoms(expression: str) -> list[str]:
     expression = expression.split(":", 1)[0]
     expression = expression.lstrip("^")
@@ -230,8 +243,13 @@ def _guard_git_invocation(git_args: list[str], *, cwd: Path, workspace: Path) ->
                 raise GitReadBoundaryError(
                     "canonical Git read boundary forbids non-HEAD restore source"
                 )
+    ambiguous_path_commands = {"diff", "blame", "log", "grep"}
     for operand in _revision_operands(subcommand, sub_args):
         for revision in _revision_atoms(operand):
+            if subcommand in ambiguous_path_commands and not _revision_is_resolvable(
+                revision, repo_dir=repo_dir
+            ):
+                continue
             _assert_revision_reachable(revision, repo_dir=repo_dir)
 
 

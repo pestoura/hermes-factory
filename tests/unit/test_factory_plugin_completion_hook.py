@@ -699,3 +699,14 @@ def test_v13_factory_terminal_blocks_remote_archive(monkeypatch, tmp_path: Path)
     assert result is not None
     assert result["action"] == "block"
     assert "remote archive" in result["message"]
+
+def test_v13_factory_terminal_allows_plain_diff_path(monkeypatch, tmp_path: Path) -> None:
+    repo, _ = _make_diverged_history_repo(tmp_path)
+    result = _run_v13_terminal_guard(monkeypatch, repo, "git diff baseline.md")
+    assert result is None
+
+
+def test_v13_factory_terminal_allows_plain_blame_path(monkeypatch, tmp_path: Path) -> None:
+    repo, _ = _make_diverged_history_repo(tmp_path)
+    result = _run_v13_terminal_guard(monkeypatch, repo, "git blame baseline.md")
+    assert result is None
