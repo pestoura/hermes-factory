@@ -8,6 +8,11 @@ from hermes_factory.runtime.completion_handoff import (
     CompletionHandoffError,
     validate_factory_completion_metadata,
 )
+from hermes_factory.runtime.git_read_boundary import (
+    GitReadBoundaryError,
+    guard_factory_terminal_git_read,
+    is_canonical_git_boundary_revision,
+)
 from hermes_factory.runtime.installed_completion import (
     InstalledRuntimeBindingError,
     build_installed_completion_coordinator,
@@ -24,6 +29,7 @@ from hermes_factory.runtime.upstream_rework import (
 _SKILL_TOOLS = frozenset({"skills_list", "skill_view"})
 _FACTORY_COMPLETE_TOOL = "kanban_complete"
 _FACTORY_BLOCK_TOOL = "kanban_block"
+_TERMINAL_TOOL = "terminal"
 
 
 def _block(message: str) -> dict[str, str]:
@@ -54,11 +60,11 @@ def _on_pre_tool_call(
     task_id: str | None = None,
     **_: Any,
 ) -> dict[str, str] | None:
-    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL}:
+    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _TERMINAL_TOOL}:
         return None
 
     profile = _active_profile_name()
-    native_task_id = (os.getenv("HERMES_KANBAN_TASK") or "").strip()
+    native_task_id = (os.getenv("HERMES_KANBAN_TASK") or "").strip() or (task_id or "").strip()
     task = None
     if native_task_id:
         try:
@@ -75,6 +81,17 @@ def _on_pre_tool_call(
         or isinstance(task_assignee, str) and task_assignee.startswith("factory-")
     )
     factory_task = isinstance(task_key, str) and task_key.startswith("factory:")
+
+    if tool_name == _TERMINAL_TOOL:
+        if not factory_task or not is_canonical_git_boundary_revision(task_key):
+            return None
+        try:
+            guard_factory_terminal_git_read(
+                args=args, workspace_path=getattr(task, "workspace_path", None)
+            )
+        except GitReadBoundaryError as exc:
+            return _block(f"Factory canonical Git read boundary failed: {exc}")
+        return None
 
     if tool_name == _FACTORY_BLOCK_TOOL:
         if not factory_task or not isinstance(args, dict):
