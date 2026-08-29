@@ -338,6 +338,7 @@ def test_runtime_verifies_factory_plugin_callbacks_in_profile_scope(tmp_path: Pa
     assert f"os.chdir({json.dumps(str(expected_runtime_root))})" in argv[4]
     assert 'has_hook("pre_tool_call")' in argv[4]
     assert 'has_hook("post_tool_call")' in argv[4]
+    assert 'has_hook("transform_tool_result")' in argv[4]
     assert 'has_hook("kanban_task_completed")' in argv[4]
     assert 'list_plugins()' in argv[4]
     assert 'hermes-factory' in argv[4]

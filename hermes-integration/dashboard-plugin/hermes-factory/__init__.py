@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 from hermes_factory.runtime.completion_handoff import (
@@ -30,6 +31,8 @@ _SKILL_TOOLS = frozenset({"skills_list", "skill_view"})
 _FACTORY_COMPLETE_TOOL = "kanban_complete"
 _FACTORY_BLOCK_TOOL = "kanban_block"
 _TERMINAL_TOOL = "terminal"
+_KANBAN_SHOW_TOOL = "kanban_show"
+_STAGE_CONTRACT_PATTERN = re.compile(r"\.stage-contract-v(\d+)$")
 
 
 def _block(message: str) -> dict[str, str]:
@@ -60,7 +63,7 @@ def _on_pre_tool_call(
     task_id: str | None = None,
     **_: Any,
 ) -> dict[str, str] | None:
-    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _TERMINAL_TOOL}:
+    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _TERMINAL_TOOL, _KANBAN_SHOW_TOOL}:
         return None
 
     profile = _active_profile_name()
@@ -81,6 +84,28 @@ def _on_pre_tool_call(
         or isinstance(task_assignee, str) and task_assignee.startswith("factory-")
     )
     factory_task = isinstance(task_key, str) and task_key.startswith("factory:")
+
+    if tool_name == _KANBAN_SHOW_TOOL:
+        if not factory_task or not _is_generation_scoped_context_revision(task_key):
+            return None
+        if not isinstance(args, dict):
+            return _block("Factory generation-scoped kanban_show requires structured arguments")
+        requested_task = args.get("task_id")
+        if (
+            isinstance(requested_task, str)
+            and requested_task
+            and requested_task != native_task_id
+        ):
+            return _block("Factory generation-scoped worker context blocks cross-task kanban_show reads")
+        resolved_board = (os.getenv("HERMES_KANBAN_BOARD") or "").strip()
+        requested_board = args.get("board")
+        if (
+            isinstance(requested_board, str)
+            and requested_board.strip()
+            and requested_board.strip() != resolved_board
+        ):
+            return _block("Factory generation-scoped worker context blocks cross-board kanban_show reads")
+        return None
 
     if tool_name == _TERMINAL_TOOL:
         if not factory_task or not is_canonical_git_boundary_revision(task_key):
@@ -177,6 +202,111 @@ def _on_pre_tool_call(
     )
 
 
+def _is_generation_scoped_context_revision(task_key: object) -> bool:
+    if not isinstance(task_key, str) or not task_key.startswith("factory:"):
+        return False
+    match = _STAGE_CONTRACT_PATTERN.search(task_key)
+    return match is not None and int(match.group(1)) >= 14
+
+
+def _strip_cross_task_role_history(
+    worker_context: str, *, assignee: str | None
+) -> str:
+    target = f"## Recent work by @{assignee}" if assignee else None
+    lines = worker_context.splitlines(keepends=True)
+    sanitized: list[str] = []
+    skipping = False
+    for line in lines:
+        heading = line.rstrip("\r\n")
+        is_role_history = (
+            heading == target if target is not None else heading.startswith("## Recent work by @")
+        )
+        if is_role_history:
+            skipping = True
+            continue
+        if skipping and line.startswith("## "):
+            skipping = False
+        if not skipping:
+            sanitized.append(line)
+    return "".join(sanitized)
+
+
+def _result_declares_generation_scoped_context(payload: dict[str, Any]) -> bool:
+    task_payload = payload.get("task")
+    if not isinstance(task_payload, dict):
+        return False
+    body = task_payload.get("body")
+    return (
+        isinstance(body, str)
+        and "Use generation-scoped worker context only;" in body
+    )
+
+
+def _on_transform_tool_result(
+    tool_name: str = "",
+    result: Any = None,
+    task_id: str | None = None,
+    **_: Any,
+) -> str | None:
+    if tool_name != _KANBAN_SHOW_TOOL or not isinstance(result, str):
+        return None
+    native_task_id = (
+        (os.getenv("HERMES_KANBAN_TASK") or "").strip()
+        or (task_id or "").strip()
+    )
+    if not native_task_id:
+        return None
+    try:
+        payload = json.loads(result)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    native_task = None
+    try:
+        native_task = _load_native_task(native_task_id)
+    except Exception:
+        pass
+    native_v14 = _is_generation_scoped_context_revision(
+        getattr(native_task, "idempotency_key", None)
+    )
+    result_v14 = _result_declares_generation_scoped_context(payload)
+    if native_task is not None:
+        if not native_v14:
+            return None
+    elif not result_v14:
+        return None
+
+    task_payload = payload.get("task")
+    result_task_id = task_payload.get("id") if isinstance(task_payload, dict) else None
+    if result_task_id != native_task_id:
+        return json.dumps(
+            {"error": "Factory generation-scoped worker context blocks cross-task kanban_show result"},
+            ensure_ascii=False,
+        )
+
+    worker_context = payload.get("worker_context")
+    if not isinstance(worker_context, str):
+        return None
+    result_assignee = (
+        task_payload.get("assignee") if isinstance(task_payload, dict) else None
+    )
+    native_assignee = getattr(native_task, "assignee", None)
+    assignee = (
+        native_assignee
+        if isinstance(native_assignee, str) and native_assignee
+        else result_assignee if isinstance(result_assignee, str) and result_assignee else None
+    )
+    sanitized = _strip_cross_task_role_history(
+        worker_context, assignee=assignee
+    )
+    if sanitized == worker_context:
+        return None
+    payload["worker_context"] = sanitized
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def _on_post_tool_call(
     tool_name: str = "",
     args: Any = None,
@@ -215,6 +345,7 @@ def _on_post_tool_call(
 def register(ctx: Any) -> None:
     ctx.register_hook("pre_tool_call", _on_pre_tool_call)
     ctx.register_hook("post_tool_call", _on_post_tool_call)
+    ctx.register_hook("transform_tool_result", _on_transform_tool_result)
     ctx.register_hook("kanban_task_completed", _on_kanban_task_completed)
 
 def _record_handoff_blocked(*, board: str, task_id: str, error: Exception) -> None:
