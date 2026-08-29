@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-import yaml
 import pytest
+import yaml
 
 from hermes_factory.runtime.admission import AdmissionEvidenceState
 
