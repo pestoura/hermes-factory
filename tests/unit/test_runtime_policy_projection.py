@@ -16,6 +16,12 @@ def _policies():
     return {
         "status": "approved_for_implementation",
         "implementation_authority": "GRANTED",
+        "factory_model_policy": {
+            "default": "tencent/hy3:free",
+            "provider": "nous",
+            "base_url": "https://inference-api.nousresearch.com/v1",
+            "ambient_fallback": "forbidden",
+        },
         "model_classes": {
             "reasoning-high": {"selection": "factory-model-policy"},
         },
@@ -51,13 +57,17 @@ def test_runtime_policy_projects_only_native_hermes_config() -> None:
     )
 
     assert config == {
+        "model": {
+            "default": "tencent/hy3:free",
+            "provider": "nous",
+            "base_url": "https://inference-api.nousresearch.com/v1",
+        },
         "toolsets": ["terminal", "file", "web", "skills", "todo", "kanban"],
         "terminal": {"home_mode": "profile"},
     }
     assert "model_class" not in config
     assert "tool_policy_class" not in config
     assert "factory_agent_id" not in config
-    assert "model" not in config
 
 
 def test_runtime_policy_requires_approved_implementation_authority() -> None:
@@ -117,6 +127,52 @@ def test_runtime_policy_rejects_skills_toolset_when_worker_self_expansion_is_for
     policies["skill_authorization"] = {"worker_self_expansion": "forbidden"}
 
     with pytest.raises(error_type, match="worker self-expansion"):
+        project(
+            {"model_class": "reasoning-high", "tool_policy_class": "review"},
+            policies,
+        )
+
+
+def test_runtime_policy_projects_canonical_factory_inference_identity() -> None:
+    _, project = _projection_contract()
+    policies = _policies()
+    policies["factory_model_policy"] = {
+        "default": "tencent/hy3:free",
+        "provider": "nous",
+        "base_url": "https://inference-api.nousresearch.com/v1",
+        "ambient_fallback": "forbidden",
+    }
+
+    config = project(
+        {"model_class": "reasoning-high", "tool_policy_class": "review"},
+        policies,
+    )
+
+    assert config["model"] == {
+        "default": "tencent/hy3:free",
+        "provider": "nous",
+        "base_url": "https://inference-api.nousresearch.com/v1",
+    }
+
+
+def test_runtime_policy_rejects_missing_or_ambient_factory_inference_identity() -> None:
+    error_type, project = _projection_contract()
+    missing = _policies()
+    missing.pop("factory_model_policy")
+    with pytest.raises(error_type, match="Factory model policy"):
+        project(
+            {"model_class": "reasoning-high", "tool_policy_class": "review"},
+            missing,
+        )
+
+    policies = _policies()
+    policies["factory_model_policy"] = {
+        "default": "tencent/hy3:free",
+        "provider": "auto",
+        "base_url": "https://inference-api.nousresearch.com/v1",
+        "ambient_fallback": "allowed",
+    }
+    with pytest.raises(error_type, match="deterministic"):
         project(
             {"model_class": "reasoning-high", "tool_policy_class": "review"},
             policies,

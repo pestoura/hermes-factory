@@ -66,6 +66,10 @@ class StaticProfileEvaluator:
             (distribution / "config.yaml").read_text(encoding="utf-8")
         )
         tool_policy_pass = actual_config == expected_config
+        canonical_inference_pass = (
+            isinstance(actual_config, dict)
+            and actual_config.get("model") == expected_config.get("model")
+        )
 
         registry = skill_registry.get("registry", {})
         aliases_value = (
@@ -109,6 +113,7 @@ class StaticProfileEvaluator:
 
         checks = (
             ("tool_policy_projection", tool_policy_pass),
+            ("canonical_inference_identity", canonical_inference_pass),
             ("skill_allowlist", skill_allowlist_pass),
             ("no_internal_mcp_dependency", no_internal_mcp_pass),
         )

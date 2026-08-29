@@ -111,7 +111,7 @@ def test_materializes_stage_graph_on_product_board_and_authorizes_only_roots() -
     assert len(adapter.specs) == 12
     assert {spec.board for spec in adapter.specs} == {"jarvas-cli"}
     assert {spec.project_id for spec in adapter.specs} == {"jarvas-cli"}
-    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v15"}
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v16"}
     assert {spec.workspace_kind for spec in adapter.specs} == {"worktree"}
 
     a_discover = _spec_by(adapter, "WP-A", "DISCOVER")
@@ -242,7 +242,7 @@ def test_stage_contract_revision_versions_materialization_identity() -> None:
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     spec = _spec_by(adapter, "WP-A", "DISCOVER")
-    expected = "d" * 64 + ".stage-contract-v15"
+    expected = "d" * 64 + ".stage-contract-v16"
     assert spec.revision == expected
     assert spec.idempotency_key.endswith(":" + expected)
     assert "Project model revision: " + "d" * 64 in spec.body
@@ -258,7 +258,7 @@ def test_candidate_branch_isolated_by_stage_contract_revision() -> None:
     a_implement = _spec_by(adapter, "WP-A", "IMPLEMENT")
     assert a_discover.branch_name == a_implement.branch_name
     assert a_discover.branch_name is not None
-    assert a_discover.branch_name.endswith("-stage-contract-v15")
+    assert a_discover.branch_name.endswith("-stage-contract-v16")
 
 
 def test_stage_contract_requires_handoff_ready_completion() -> None:
@@ -268,9 +268,9 @@ def test_stage_contract_requires_handoff_ready_completion() -> None:
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     spec = _spec_by(adapter, "WP-A", "DISCOVER")
-    assert spec.revision.endswith(".stage-contract-v15")
+    assert spec.revision.endswith(".stage-contract-v16")
     assert spec.branch_name is not None
-    assert spec.branch_name.endswith("-stage-contract-v15")
+    assert spec.branch_name.endswith("-stage-contract-v16")
     assert "stage_outcome must be exactly PASS, BLOCKED, UNKNOWN, or NOT_RUN" in spec.body
     assert "exactly one state for each evidence_refs entry" in spec.body
     assert "OPEN only for a real blocker that must prevent handoff" in spec.body
@@ -308,7 +308,7 @@ def test_materialization_retires_superseded_generations_before_root_dispatch() -
         _model(), project_key="jarvas-cli", board="jarvas-cli",
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
-    revision = "d" * 64 + ".stage-contract-v15"
+    revision = "d" * 64 + ".stage-contract-v16"
     assert adapter.retirements == [{
         "board": "jarvas-cli",
         "project_key": "jarvas-cli",
@@ -349,7 +349,7 @@ def test_v14_stage_contract_preserves_owned_artifact_namespace() -> None:
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
     specify = _spec_by(adapter, "WP-A", "SPECIFY")
 
-    assert discover.revision.endswith(".stage-contract-v15")
+    assert discover.revision.endswith(".stage-contract-v16")
     assert "stage_artifact_root=docs/factory/WP-A/DISCOVER" in discover.body
     assert "stage_artifact_root=docs/factory/WP-A/SPECIFY" in specify.body
     assert "never pre-create another stage's artifacts" in discover.body
@@ -363,7 +363,7 @@ def test_v14_stage_contract_preserves_runtime_only_handoff_metadata() -> None:
     )
     specify = _spec_by(adapter, "WP-A", "SPECIFY")
 
-    assert specify.revision.endswith(".stage-contract-v15")
+    assert specify.revision.endswith(".stage-contract-v16")
     assert "factory_handoff metadata is runtime-only" in specify.body
     assert "never persist candidate_identity" in specify.body
     assert "do not modify the repository again" in specify.body
@@ -376,7 +376,7 @@ def test_v14_stage_contract_declares_canonical_git_read_boundary() -> None:
     )
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
 
-    assert discover.revision.endswith(".stage-contract-v15")
+    assert discover.revision.endswith(".stage-contract-v16")
     assert "canonical Git read boundary" in discover.body
     assert "superseded generations" in discover.body
     assert "current HEAD and its ancestors" in discover.body
@@ -391,12 +391,12 @@ def test_v14_stage_contract_declares_generation_scoped_worker_context() -> None:
     )
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
 
-    assert discover.revision.endswith(".stage-contract-v15")
+    assert discover.revision.endswith(".stage-contract-v16")
     assert "generation-scoped worker context" in discover.body
     assert "cross-task role history" in discover.body
 
 
-def test_v15_contract_declares_assigned_worktree_read_boundary() -> None:
+def test_v16_contract_declares_assigned_worktree_read_boundary() -> None:
     adapter = FakeKanbanAdapter()
     ProjectMaterializer(adapter).materialize(
         _model(),
@@ -406,5 +406,21 @@ def test_v15_contract_declares_assigned_worktree_read_boundary() -> None:
         default_workdir="/srv/jarvas-cli",
     )
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
-    assert discover.revision.endswith(".stage-contract-v15")
+    assert discover.revision.endswith(".stage-contract-v16")
     assert "assigned worktree is the only canonical local filesystem root" in discover.body
+
+
+def test_materialized_factory_tasks_use_v16_and_canonical_inference_overrides() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(),
+        project_key="jarvas-cli",
+        board="jarvas-cli",
+        project_id="jarvas-cli",
+        default_workdir="/srv/jarvas-cli",
+    )
+
+    assert adapter.specs
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v16"}
+    assert {spec.model_override for spec in adapter.specs} == {"tencent/hy3:free"}
+    assert {spec.provider_override for spec in adapter.specs} == {"nous"}

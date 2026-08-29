@@ -57,8 +57,8 @@ def test_static_profile_batch_executes_51_checks_without_fabricating_behavioral_
     )
 
     assert report.candidate_count == 17
-    assert report.evidence_count == 51
-    assert report.passed_count == 51
+    assert report.evidence_count == 68
+    assert report.passed_count == 68
     assert report.failed_count == 0
     assert report.state == "PASS"
 

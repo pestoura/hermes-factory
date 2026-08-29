@@ -23,6 +23,7 @@ RUNTIME_ACCEPTANCE_SCENARIOS = (
     "all_17_profile_runtime_projections_validate",
     "all_required_factory_skills_have_explicit_eval_state",
     "superseded_generation_retirement_preserves_history",
+    "all_factory_workers_use_canonical_inference_identity",
 )
 
 

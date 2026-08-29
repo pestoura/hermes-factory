@@ -11,6 +11,12 @@ def _runtime_policies() -> dict[str, object]:
     return {
         "status": "approved_for_implementation",
         "implementation_authority": "GRANTED",
+        "factory_model_policy": {
+            "default": "tencent/hy3:free",
+            "provider": "nous",
+            "base_url": "https://inference-api.nousresearch.com/v1",
+            "ambient_fallback": "forbidden",
+        },
         "model_classes": {
             "coding-high": {"selection": "factory-model-policy"},
         },
@@ -87,6 +93,7 @@ def test_static_profile_evaluator_only_passes_mechanically_proven_dimensions(tmp
 
     assert {item.dimension for item in evidence} == {
         "tool_policy_projection",
+        "canonical_inference_identity",
         "skill_allowlist",
         "no_internal_mcp_dependency",
     }
@@ -94,3 +101,25 @@ def test_static_profile_evaluator_only_passes_mechanically_proven_dimensions(tmp
     assert {item.evaluator for item in evidence} == {
         "factory-static-profile-evaluator/v1"
     }
+
+
+def test_static_profile_evaluator_fails_canonical_inference_dimension_on_provider_drift(tmp_path) -> None:
+    from hermes_factory.governance.static_profile_evals import StaticProfileEvaluator
+
+    distribution = tmp_path / "profile"
+    _write_distribution(distribution)
+    config_path = distribution / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["model"]["provider"] = "auto"
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+
+    evidence = StaticProfileEvaluator().evaluate(
+        agent_document=_agent_document(),
+        profile_digest="sha256:candidate",
+        distribution=distribution,
+        skill_registry=_skill_registry(),
+        runtime_policies=_runtime_policies(),
+        evidence_ref="ci:test-static-profile-evals-drift",
+    )
+    states = {item.dimension: item.state for item in evidence}
+    assert states["canonical_inference_identity"] is ProfileEvalState.FAIL

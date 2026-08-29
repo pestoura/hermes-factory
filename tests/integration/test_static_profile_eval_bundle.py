@@ -19,8 +19,8 @@ def test_static_profile_eval_bundle_persists_exact_head_ci_evidence(tmp_path):
     )
 
     assert bundle.report.candidate_count == 17
-    assert bundle.report.evidence_count == 51
-    assert bundle.report.passed_count == 51
+    assert bundle.report.evidence_count == 68
+    assert bundle.report.passed_count == 68
     assert bundle.report.failed_count == 0
     assert bundle.report.state == "PASS"
     assert bundle.remaining_work_items == 247
@@ -31,7 +31,7 @@ def test_static_profile_eval_bundle_persists_exact_head_ci_evidence(tmp_path):
     assert manifest["schema"] == "hermes.factory/static-profile-eval-bundle/v1"
     assert manifest["candidate_sha"] == candidate_sha
     assert manifest["evidence_ref"] == f"ci:{candidate_sha}:static-profile-evals"
-    assert manifest["report"]["evidence_count"] == 51
+    assert manifest["report"]["evidence_count"] == 68
     assert manifest["remaining_work_items"] == 247
     assert len(manifest["profiles"]) == 17
     assert {
@@ -42,6 +42,6 @@ def test_static_profile_eval_bundle_persists_exact_head_ci_evidence(tmp_path):
 
     registry = SemanticRegistry(bundle.registry_path)
     evidence = registry.list_evidence()
-    assert len(evidence) == 51
+    assert len(evidence) == 68
     assert {item["state"] for item in evidence} == {"PASS"}
     assert all(item["candidate"].startswith("profile:") for item in evidence)

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from hermes_factory.contracts.inference_identity import (
+    CANONICAL_FACTORY_INFERENCE_IDENTITY,
+)
+
 
 class RuntimePolicyProjectionError(ValueError):
     pass
@@ -32,6 +36,21 @@ def project_native_profile_config(
     if model_policy.get("selection") != "factory-model-policy":
         raise RuntimePolicyProjectionError(
             f"model class {model_class} does not delegate selection to factory-model-policy"
+        )
+
+    factory_model_policy = runtime_policies.get("factory_model_policy")
+    if not isinstance(factory_model_policy, dict):
+        raise RuntimePolicyProjectionError("Factory model policy is required")
+    identity = CANONICAL_FACTORY_INFERENCE_IDENTITY
+    expected_identity = {
+        "default": identity.model,
+        "provider": identity.provider,
+        "base_url": identity.base_url,
+        "ambient_fallback": "forbidden",
+    }
+    if factory_model_policy != expected_identity:
+        raise RuntimePolicyProjectionError(
+            "Factory model policy must pin the deterministic canonical inference identity"
         )
 
     tool_policy_class = agent.get("tool_policy_class")
@@ -108,6 +127,11 @@ def project_native_profile_config(
             )
 
     return {
+        "model": {
+            "default": identity.model,
+            "provider": identity.provider,
+            "base_url": identity.base_url,
+        },
         "toolsets": list(toolsets),
         "terminal": {"home_mode": home_mode},
     }

@@ -21,6 +21,12 @@ def _runtime_policies() -> dict:
     return {
         "status": "approved_for_implementation",
         "implementation_authority": "GRANTED",
+        "factory_model_policy": {
+            "default": "tencent/hy3:free",
+            "provider": "nous",
+            "base_url": "https://inference-api.nousresearch.com/v1",
+            "ambient_fallback": "forbidden",
+        },
         "model_classes": {
             "reasoning-high": {"selection": "factory-model-policy"},
         },
@@ -97,6 +103,11 @@ def test_agent_compiles_to_native_hermes_distribution_without_internal_mcp(tmp_p
     assert json.loads((out / "mcp.json").read_text()) == {}
     config = yaml.safe_load((out / "config.yaml").read_text())
     assert config == {
+        "model": {
+            "default": "tencent/hy3:free",
+            "provider": "nous",
+            "base_url": "https://inference-api.nousresearch.com/v1",
+        },
         "toolsets": ["terminal", "file", "web", "skills", "todo", "kanban"],
         "terminal": {"home_mode": "profile"},
     }
