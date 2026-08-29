@@ -14,6 +14,11 @@ from hermes_factory.runtime.git_read_boundary import (
     guard_factory_terminal_git_read,
     is_canonical_git_boundary_revision,
 )
+from hermes_factory.runtime.workspace_read_boundary import (
+    WorkspaceReadBoundaryError,
+    guard_factory_workspace_access,
+    is_workspace_read_boundary_revision,
+)
 from hermes_factory.runtime.installed_completion import (
     InstalledRuntimeBindingError,
     build_installed_completion_coordinator,
@@ -32,6 +37,7 @@ _FACTORY_COMPLETE_TOOL = "kanban_complete"
 _FACTORY_BLOCK_TOOL = "kanban_block"
 _TERMINAL_TOOL = "terminal"
 _KANBAN_SHOW_TOOL = "kanban_show"
+_WORKSPACE_FILE_TOOLS = frozenset({"read_file", "write_file", "patch", "search_files"})
 _STAGE_CONTRACT_PATTERN = re.compile(r"\.stage-contract-v(\d+)$")
 
 
@@ -63,7 +69,7 @@ def _on_pre_tool_call(
     task_id: str | None = None,
     **_: Any,
 ) -> dict[str, str] | None:
-    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _TERMINAL_TOOL, _KANBAN_SHOW_TOOL}:
+    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _TERMINAL_TOOL, _KANBAN_SHOW_TOOL} and tool_name not in _WORKSPACE_FILE_TOOLS:
         return None
 
     profile = _active_profile_name()
@@ -84,6 +90,18 @@ def _on_pre_tool_call(
         or isinstance(task_assignee, str) and task_assignee.startswith("factory-")
     )
     factory_task = isinstance(task_key, str) and task_key.startswith("factory:")
+
+    if tool_name in _WORKSPACE_FILE_TOOLS:
+        if factory_task and is_workspace_read_boundary_revision(task_key):
+            try:
+                guard_factory_workspace_access(
+                    tool_name=tool_name,
+                    args=args,
+                    workspace_path=getattr(task, "workspace_path", None),
+                )
+            except WorkspaceReadBoundaryError as exc:
+                return _block(f"Factory workspace read boundary failed: {exc}")
+        return None
 
     if tool_name == _KANBAN_SHOW_TOOL:
         if not factory_task or not _is_generation_scoped_context_revision(task_key):
@@ -108,7 +126,18 @@ def _on_pre_tool_call(
         return None
 
     if tool_name == _TERMINAL_TOOL:
-        if not factory_task or not is_canonical_git_boundary_revision(task_key):
+        if not factory_task:
+            return None
+        if is_workspace_read_boundary_revision(task_key):
+            try:
+                guard_factory_workspace_access(
+                    tool_name=tool_name,
+                    args=args,
+                    workspace_path=getattr(task, "workspace_path", None),
+                )
+            except WorkspaceReadBoundaryError as exc:
+                return _block(f"Factory workspace read boundary failed: {exc}")
+        if not is_canonical_git_boundary_revision(task_key):
             return None
         try:
             guard_factory_terminal_git_read(
