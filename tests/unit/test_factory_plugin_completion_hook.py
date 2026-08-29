@@ -961,3 +961,26 @@ def test_v14_transform_uses_result_contract_when_native_lookup_fails(monkeypatch
     context = json.loads(transformed)["worker_context"]
     assert "t_superseded" not in context
     assert "t_older" not in context
+
+
+
+def test_v14_transform_blocks_malformed_kanban_show_result(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v14_context_task(),
+    )
+
+    transformed = plugin._on_transform_tool_result(
+        tool_name="kanban_show",
+        args={},
+        result='{"task":',
+        task_id="t_current",
+    )
+
+    assert isinstance(transformed, str)
+    payload = json.loads(transformed)
+    assert "error" in payload
+    assert "malformed" in payload["error"]

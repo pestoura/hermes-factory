@@ -256,13 +256,6 @@ def _on_transform_tool_result(
     )
     if not native_task_id:
         return None
-    try:
-        payload = json.loads(result)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-
     native_task = None
     try:
         native_task = _load_native_task(native_task_id)
@@ -271,6 +264,24 @@ def _on_transform_tool_result(
     native_v14 = _is_generation_scoped_context_revision(
         getattr(native_task, "idempotency_key", None)
     )
+
+    try:
+        payload = json.loads(result)
+    except (json.JSONDecodeError, TypeError):
+        if native_v14:
+            return json.dumps(
+                {"error": "Factory generation-scoped worker context blocked malformed kanban_show result"},
+                ensure_ascii=False,
+            )
+        return None
+    if not isinstance(payload, dict):
+        if native_v14:
+            return json.dumps(
+                {"error": "Factory generation-scoped worker context blocked malformed kanban_show result"},
+                ensure_ascii=False,
+            )
+        return None
+
     result_v14 = _result_declares_generation_scoped_context(payload)
     if native_task is not None:
         if not native_v14:
