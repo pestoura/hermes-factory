@@ -26,6 +26,10 @@ from hermes_factory.runtime.installed_completion import (
     validate_factory_repository_precompletion,
 )
 from hermes_factory.runtime.skill_tool_guard import guard_factory_skill_tool_call
+from hermes_factory.runtime.stage_artifact_write import (
+    StageArtifactWriteBoundaryError,
+    guard_factory_stage_artifact_write,
+)
 from hermes_factory.runtime.upstream_rework import (
     UpstreamReworkError,
     is_upstream_rework_task_key,
@@ -101,6 +105,13 @@ def _on_pre_tool_call(
                 )
             except WorkspaceReadBoundaryError as exc:
                 return _block(f"Factory workspace read boundary failed: {exc}")
+        if factory_task:
+            try:
+                guard_factory_stage_artifact_write(
+                    tool_name=tool_name, args=args, task_key=task_key
+                )
+            except StageArtifactWriteBoundaryError as exc:
+                return _block(f"Factory stage artifact write boundary failed: {exc}")
         return None
 
     if tool_name == _KANBAN_SHOW_TOOL:

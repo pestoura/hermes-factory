@@ -10,6 +10,9 @@ from hermes_factory.compiler.project import ProjectModel, WorkPackageModel
 from hermes_factory.contracts.inference_identity import (
     CANONICAL_FACTORY_INFERENCE_IDENTITY,
 )
+from hermes_factory.runtime.stage_artifact_write import (
+    STAGE_ARTIFACT_WRITE_BUDGET_CHARS,
+)
 
 
 class KanbanProjectionAdapter(Protocol):
@@ -114,7 +117,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v17"
+_STAGE_CONTRACT_REVISION = "stage-contract-v18"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -343,6 +346,11 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             _stage_mutation_instruction(stage),
             f"stage_artifact_root={stage_artifact_root(wp.work_package_id, stage)}",
             "All stage-produced engineering/evidence documentation must be written only under stage_artifact_root; never pre-create another stage's artifacts.",
+            f"stage_artifact_write_budget_chars={STAGE_ARTIFACT_WRITE_BUDGET_CHARS}",
+            "Keep every write_file content payload and patch edit payload at or below stage_artifact_write_budget_chars.",
+            "For longer text, split it into bounded stage-owned files or create a bounded initial file and append bounded sections with patch; never emit the entire long artifact in one tool call.",
+            "After any truncated or failed write, inspect the target path, preserve verified content, and continue only the missing bounded section; never retry the same oversized payload.",
+            "Keep evidence/handoff documents concise and limited to evidence required by this stage; structured factory_handoff remains runtime-only.",
             "Engineering documentation completion requires at least one stage-owned repository artifact.",
             "candidate_identity_required=True",
             f"independent_review_required={stage in _REVIEW_STAGES}",
