@@ -117,7 +117,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v18"
+_STAGE_CONTRACT_REVISION = "stage-contract-v19"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -142,6 +142,18 @@ def _stage_mutation_instruction(stage: str) -> str:
     if policy == "tests_and_docs_only":
         return "This stage may commit tests/fixtures and engineering documentation only; production source changes are prohibited."
     return "This stage may commit production implementation and engineering documentation; test changes are prohibited so prior RED evidence is not rewritten."
+
+
+def _stage_artifact_completion_instruction(stage: str) -> str:
+    policy = stage_mutation_policy(stage)
+    if policy == "engineering_docs_only":
+        return "Engineering documentation completion requires at least one stage-owned repository artifact."
+    if policy == "evidence_docs_only":
+        return (
+            "Evidence-only completion may reuse authoritative existing evidence without repository changes; "
+            "do not create a stage artifact solely to satisfy completion."
+        )
+    return "Stage-produced repository artifacts are required only when this stage actually changes the repository."
 
 
 class ProjectMaterializer:
@@ -351,7 +363,7 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "For longer text, split it into bounded stage-owned files or create a bounded initial file and append bounded sections with patch; never emit the entire long artifact in one tool call.",
             "After any truncated or failed write, inspect the target path, preserve verified content, and continue only the missing bounded section; never retry the same oversized payload.",
             "Keep evidence/handoff documents concise and limited to evidence required by this stage; structured factory_handoff remains runtime-only.",
-            "Engineering documentation completion requires at least one stage-owned repository artifact.",
+            _stage_artifact_completion_instruction(stage),
             "candidate_identity_required=True",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",

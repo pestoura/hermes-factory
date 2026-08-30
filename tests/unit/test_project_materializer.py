@@ -111,7 +111,7 @@ def test_materializes_stage_graph_on_product_board_and_authorizes_only_roots() -
     assert len(adapter.specs) == 12
     assert {spec.board for spec in adapter.specs} == {"jarvas-cli"}
     assert {spec.project_id for spec in adapter.specs} == {"jarvas-cli"}
-    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v18"}
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v19"}
     assert {spec.workspace_kind for spec in adapter.specs} == {"worktree"}
 
     a_discover = _spec_by(adapter, "WP-A", "DISCOVER")
@@ -242,7 +242,7 @@ def test_stage_contract_revision_versions_materialization_identity() -> None:
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     spec = _spec_by(adapter, "WP-A", "DISCOVER")
-    expected = "d" * 64 + ".stage-contract-v18"
+    expected = "d" * 64 + ".stage-contract-v19"
     assert spec.revision == expected
     assert spec.idempotency_key.endswith(":" + expected)
     assert "Project model revision: " + "d" * 64 in spec.body
@@ -258,7 +258,7 @@ def test_candidate_branch_isolated_by_stage_contract_revision() -> None:
     a_implement = _spec_by(adapter, "WP-A", "IMPLEMENT")
     assert a_discover.branch_name == a_implement.branch_name
     assert a_discover.branch_name is not None
-    assert a_discover.branch_name.endswith("-stage-contract-v18")
+    assert a_discover.branch_name.endswith("-stage-contract-v19")
 
 
 def test_stage_contract_requires_handoff_ready_completion() -> None:
@@ -268,9 +268,9 @@ def test_stage_contract_requires_handoff_ready_completion() -> None:
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     spec = _spec_by(adapter, "WP-A", "DISCOVER")
-    assert spec.revision.endswith(".stage-contract-v18")
+    assert spec.revision.endswith(".stage-contract-v19")
     assert spec.branch_name is not None
-    assert spec.branch_name.endswith("-stage-contract-v18")
+    assert spec.branch_name.endswith("-stage-contract-v19")
     assert "stage_outcome must be exactly PASS, BLOCKED, UNKNOWN, or NOT_RUN" in spec.body
     assert "exactly one state for each evidence_refs entry" in spec.body
     assert "OPEN only for a real blocker that must prevent handoff" in spec.body
@@ -302,13 +302,41 @@ def test_stage_contract_declares_mutation_policy_by_lifecycle_phase() -> None:
     assert "test changes are prohibited" in _spec_by(adapter, "WP-A", "IMPLEMENT").body
 
 
+def test_v19_evidence_only_stage_can_complete_without_repository_artifact() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(), project_key="jarvas-cli", board="jarvas-cli",
+        project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+    )
+    exact_sha = _spec_by(adapter, "WP-A", "EXACT_SHA")
+
+    assert exact_sha.revision.endswith(".stage-contract-v19")
+    assert exact_sha.assignee == "factory-release-manager"
+    assert "repository_mutation_policy=evidence_docs_only" in exact_sha.body
+    assert "Evidence-only completion may reuse authoritative existing evidence without repository changes" in exact_sha.body
+    assert "do not create a stage artifact solely to satisfy completion" in exact_sha.body
+    assert "Engineering documentation completion requires at least one stage-owned repository artifact" not in exact_sha.body
+
+
+def test_v19_engineering_docs_stage_still_requires_owned_artifact() -> None:
+    adapter = FakeKanbanAdapter()
+    ProjectMaterializer(adapter).materialize(
+        _model(), project_key="jarvas-cli", board="jarvas-cli",
+        project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
+    )
+    discover = _spec_by(adapter, "WP-A", "DISCOVER")
+
+    assert "repository_mutation_policy=engineering_docs_only" in discover.body
+    assert "Engineering documentation completion requires at least one stage-owned repository artifact" in discover.body
+
+
 def test_materialization_retires_superseded_generations_before_root_dispatch() -> None:
     adapter = FakeKanbanAdapter()
     ProjectMaterializer(adapter).materialize(
         _model(), project_key="jarvas-cli", board="jarvas-cli",
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
-    revision = "d" * 64 + ".stage-contract-v18"
+    revision = "d" * 64 + ".stage-contract-v19"
     assert adapter.retirements == [{
         "board": "jarvas-cli",
         "project_key": "jarvas-cli",
@@ -349,7 +377,7 @@ def test_v14_stage_contract_preserves_owned_artifact_namespace() -> None:
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
     specify = _spec_by(adapter, "WP-A", "SPECIFY")
 
-    assert discover.revision.endswith(".stage-contract-v18")
+    assert discover.revision.endswith(".stage-contract-v19")
     assert "stage_artifact_root=docs/factory/WP-A/DISCOVER" in discover.body
     assert "stage_artifact_root=docs/factory/WP-A/SPECIFY" in specify.body
     assert "never pre-create another stage's artifacts" in discover.body
@@ -363,7 +391,7 @@ def test_v14_stage_contract_preserves_runtime_only_handoff_metadata() -> None:
     )
     specify = _spec_by(adapter, "WP-A", "SPECIFY")
 
-    assert specify.revision.endswith(".stage-contract-v18")
+    assert specify.revision.endswith(".stage-contract-v19")
     assert "factory_handoff metadata is runtime-only" in specify.body
     assert "never persist candidate_identity" in specify.body
     assert "do not modify the repository again" in specify.body
@@ -376,7 +404,7 @@ def test_v14_stage_contract_declares_canonical_git_read_boundary() -> None:
     )
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
 
-    assert discover.revision.endswith(".stage-contract-v18")
+    assert discover.revision.endswith(".stage-contract-v19")
     assert "canonical Git read boundary" in discover.body
     assert "superseded generations" in discover.body
     assert "current HEAD and its ancestors" in discover.body
@@ -391,7 +419,7 @@ def test_v14_stage_contract_declares_generation_scoped_worker_context() -> None:
     )
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
 
-    assert discover.revision.endswith(".stage-contract-v18")
+    assert discover.revision.endswith(".stage-contract-v19")
     assert "generation-scoped worker context" in discover.body
     assert "cross-task role history" in discover.body
 
@@ -406,7 +434,7 @@ def test_v16_contract_declares_assigned_worktree_read_boundary() -> None:
         default_workdir="/srv/jarvas-cli",
     )
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
-    assert discover.revision.endswith(".stage-contract-v18")
+    assert discover.revision.endswith(".stage-contract-v19")
     assert "assigned worktree is the only canonical local filesystem root" in discover.body
 
 
@@ -421,7 +449,7 @@ def test_materialized_factory_tasks_use_v16_and_canonical_inference_overrides() 
     )
 
     assert adapter.specs
-    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v18"}
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v19"}
     assert {spec.model_override for spec in adapter.specs} == {"tencent/hy3:free"}
     assert {spec.provider_override for spec in adapter.specs} == {"nous"}
 
@@ -432,7 +460,7 @@ def test_materialized_factory_tasks_use_v17_toolset_pinned_contract() -> None:
         _model(), project_key="jarvas-cli", board="jarvas-cli",
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
-    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v18"}
+    assert {spec.revision for spec in adapter.specs} == {"d" * 64 + ".stage-contract-v19"}
     discover = _spec_by(adapter, "WP-A", "DISCOVER")
     assert "broad/default Hermes CLI composites are forbidden" in discover.body
 
@@ -444,7 +472,7 @@ def test_v18_stage_contract_requires_bounded_retry_safe_artifact_writes() -> Non
         project_id="jarvas-cli", default_workdir="/srv/jarvas-cli",
     )
     design = _spec_by(adapter, "WP-A", "DESIGN")
-    assert design.revision.endswith(".stage-contract-v18")
+    assert design.revision.endswith(".stage-contract-v19")
     assert "stage_artifact_write_budget_chars=8000" in design.body
     assert "write_file content payload" in design.body
     assert "append bounded sections with patch" in design.body
