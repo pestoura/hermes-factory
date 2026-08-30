@@ -117,7 +117,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v19"
+_STAGE_CONTRACT_REVISION = "stage-contract-v20"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -142,6 +142,17 @@ def _stage_mutation_instruction(stage: str) -> str:
     if policy == "tests_and_docs_only":
         return "This stage may commit tests/fixtures and engineering documentation only; production source changes are prohibited."
     return "This stage may commit production implementation and engineering documentation; test changes are prohibited so prior RED evidence is not rewritten."
+
+
+def _stage_review_instruction(stage: str) -> str:
+    if stage not in _REVIEW_STAGES:
+        return "This stage does not carry an independent review verdict."
+    return (
+        "For this Factory review stage, the assigned Profile is already the independent reviewer "
+        "relative to the upstream candidate-producing stage. On a PASS verdict, complete with "
+        "kanban_complete and set factory_handoff.independent_review_state=PASS. "
+        "Do not call kanban_request_review; do not request a native Kanban review from yourself."
+    )
 
 
 def _stage_artifact_completion_instruction(stage: str) -> str:
@@ -364,6 +375,7 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "After any truncated or failed write, inspect the target path, preserve verified content, and continue only the missing bounded section; never retry the same oversized payload.",
             "Keep evidence/handoff documents concise and limited to evidence required by this stage; structured factory_handoff remains runtime-only.",
             _stage_artifact_completion_instruction(stage),
+            _stage_review_instruction(stage),
             "candidate_identity_required=True",
             f"independent_review_required={stage in _REVIEW_STAGES}",
             "Worker completion prose alone is not Factory handoff proof.",

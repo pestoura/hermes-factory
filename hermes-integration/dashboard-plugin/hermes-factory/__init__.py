@@ -39,10 +39,12 @@ from hermes_factory.runtime.upstream_rework import (
 _SKILL_TOOLS = frozenset({"skills_list", "skill_view"})
 _FACTORY_COMPLETE_TOOL = "kanban_complete"
 _FACTORY_BLOCK_TOOL = "kanban_block"
+_FACTORY_REVIEW_REQUEST_TOOL = "kanban_request_review"
 _TERMINAL_TOOL = "terminal"
 _KANBAN_SHOW_TOOL = "kanban_show"
 _WORKSPACE_FILE_TOOLS = frozenset({"read_file", "write_file", "patch", "search_files"})
 _STAGE_CONTRACT_PATTERN = re.compile(r"\.stage-contract-v(\d+)$")
+_FACTORY_REVIEW_STAGES = frozenset({"CODE_REVIEW", "SECURITY_REVIEW", "ADVERSARIAL_REVIEW"})
 
 
 def _block(message: str) -> dict[str, str]:
@@ -73,7 +75,7 @@ def _on_pre_tool_call(
     task_id: str | None = None,
     **_: Any,
 ) -> dict[str, str] | None:
-    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _TERMINAL_TOOL, _KANBAN_SHOW_TOOL} and tool_name not in _WORKSPACE_FILE_TOOLS:
+    if tool_name not in _SKILL_TOOLS and tool_name not in {_FACTORY_COMPLETE_TOOL, _FACTORY_BLOCK_TOOL, _FACTORY_REVIEW_REQUEST_TOOL, _TERMINAL_TOOL, _KANBAN_SHOW_TOOL} and tool_name not in _WORKSPACE_FILE_TOOLS:
         return None
 
     profile = _active_profile_name()
@@ -94,6 +96,22 @@ def _on_pre_tool_call(
         or isinstance(task_assignee, str) and task_assignee.startswith("factory-")
     )
     factory_task = isinstance(task_key, str) and task_key.startswith("factory:")
+
+    if tool_name == _FACTORY_REVIEW_REQUEST_TOOL:
+        if not factory_task or not isinstance(task_key, str):
+            return None
+        match = _STAGE_CONTRACT_PATTERN.search(task_key)
+        if match is None or int(match.group(1)) < 20:
+            return None
+        parts = task_key.split(":", 4)
+        stage = parts[3] if len(parts) >= 4 else ""
+        if stage not in _FACTORY_REVIEW_STAGES:
+            return None
+        return _block(
+            "Factory review stage assigned Profile is already the independent reviewer; "
+            "do not call kanban_request_review. Complete with kanban_complete and "
+            "independent_review_state=PASS for a PASS verdict."
+        )
 
     if tool_name in _WORKSPACE_FILE_TOOLS:
         if factory_task and is_workspace_read_boundary_revision(task_key):
