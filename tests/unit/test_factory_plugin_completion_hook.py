@@ -1245,3 +1245,69 @@ def test_v17_write_file_remains_backward_compatible(monkeypatch, tmp_path: Path)
         args={"path": str(workspace / "docs" / "legacy.md"), "content": "x" * 8001},
         task_id="t_current",
     ) is None
+
+
+def _review_guard_task(*, stage: str, version: int):
+    revision = "b" * 64
+    return SimpleNamespace(
+        assignee="factory-code-reviewer",
+        idempotency_key=(
+            f"factory:jarvas-cli:WP-A:{stage}:{revision}.stage-contract-v{version}"
+        ),
+    )
+
+
+def test_v20_factory_review_stage_blocks_native_review_request(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin, "_load_native_task",
+        lambda task_id, board=None: _review_guard_task(stage="CODE_REVIEW", version=20),
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_request_review",
+        args={"task_id": "t_current", "summary": "review complete"},
+        task_id="t_current",
+    )
+
+    assert result is not None
+    assert result["action"] == "block"
+    assert "already the independent reviewer" in result["message"]
+    assert "kanban_complete" in result["message"]
+    assert "independent_review_state=PASS" in result["message"]
+
+
+def test_v20_non_review_factory_stage_keeps_native_review_request_behavior(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin, "_load_native_task",
+        lambda task_id, board=None: _review_guard_task(stage="IMPLEMENT", version=20),
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_request_review",
+        args={"task_id": "t_current", "summary": "manual review workflow"},
+        task_id="t_current",
+    )
+
+    assert result is None
+
+
+def test_v19_review_stage_remains_backward_compatible_for_native_review_request(monkeypatch) -> None:
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setattr(
+        plugin, "_load_native_task",
+        lambda task_id, board=None: _review_guard_task(stage="CODE_REVIEW", version=19),
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_request_review",
+        args={"task_id": "t_current", "summary": "legacy behavior"},
+        task_id="t_current",
+    )
+
+    assert result is None
