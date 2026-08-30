@@ -1134,3 +1134,114 @@ def test_v15_terminal_blocks_home_expansion(monkeypatch, tmp_path: Path) -> None
     )
     assert result is not None
     assert result["action"] == "block"
+
+
+def _factory_v18_workspace_task(workspace: Path) -> SimpleNamespace:
+    return SimpleNamespace(
+        assignee="factory-software-architect",
+        idempotency_key=(
+            "factory:jarvas-cli:WP-A:DESIGN:" + "a" * 64 + ".stage-contract-v18"
+        ),
+        workspace_path=str(workspace),
+    )
+
+
+def _run_v18_stage_write_guard(monkeypatch, workspace: Path, tool_name: str, args: dict):
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: _factory_v18_workspace_task(workspace),
+    )
+    return plugin._on_pre_tool_call(tool_name=tool_name, args=args, task_id="t_current")
+
+
+def test_v18_write_file_blocks_oversized_stage_payload(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v18_stage_write_guard(
+        monkeypatch,
+        workspace,
+        "write_file",
+        {"path": str(workspace / "docs" / "evidence.md"), "content": "x" * 8001},
+    )
+    assert result is not None
+    assert result["action"] == "block"
+    assert "8000" in result["message"]
+    assert "bounded" in result["message"]
+
+
+def test_v18_write_file_allows_bounded_stage_payload(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v18_stage_write_guard(
+        monkeypatch,
+        workspace,
+        "write_file",
+        {"path": str(workspace / "docs" / "evidence.md"), "content": "x" * 8000},
+    )
+    assert result is None
+
+
+def test_v18_patch_blocks_aggregate_oversized_stage_payload(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v18_stage_write_guard(
+        monkeypatch,
+        workspace,
+        "patch",
+        {
+            "mode": "replace",
+            "path": str(workspace / "docs" / "evidence.md"),
+            "old_string": "x" * 4001,
+            "new_string": "y" * 4000,
+        },
+    )
+    assert result is not None
+    assert result["action"] == "block"
+    assert "8000" in result["message"]
+
+
+def test_v18_patch_blocks_oversized_stage_payload(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    result = _run_v18_stage_write_guard(
+        monkeypatch,
+        workspace,
+        "patch",
+        {
+            "mode": "replace",
+            "path": str(workspace / "docs" / "evidence.md"),
+            "old_string": "tail",
+            "new_string": "tail" + "x" * 8001,
+        },
+    )
+    assert result is not None
+    assert result["action"] == "block"
+    assert "8000" in result["message"]
+
+
+def test_v17_write_file_remains_backward_compatible(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "repo" / ".worktrees" / "t_current"
+    workspace.mkdir(parents=True)
+    plugin = _load_plugin()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_current")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin,
+        "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-software-architect",
+            idempotency_key=(
+                "factory:jarvas-cli:WP-A:DESIGN:" + "a" * 64 + ".stage-contract-v17"
+            ),
+            workspace_path=str(workspace),
+        ),
+    )
+    assert plugin._on_pre_tool_call(
+        tool_name="write_file",
+        args={"path": str(workspace / "docs" / "legacy.md"), "content": "x" * 8001},
+        task_id="t_current",
+    ) is None
