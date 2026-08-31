@@ -20,6 +20,7 @@ class UpstreamReworkRequest:
     producer_stage: str
     finding: str
     evidence_refs: tuple[str, ...]
+    repair_stage: str | None = None
 
 
 class CandidateObserver(Protocol):
@@ -73,6 +74,7 @@ def parse_upstream_rework_request(reason: str) -> UpstreamReworkRequest | None:
     if not isinstance(payload, dict):
         raise UpstreamReworkError("upstream rework request must be an object")
     stage = payload.get("producer_stage")
+    repair_stage = payload.get("repair_stage")
     finding = payload.get("finding")
     evidence = payload.get("evidence_refs")
     if not isinstance(stage, str) or not stage.strip():
@@ -82,6 +84,17 @@ def parse_upstream_rework_request(reason: str) -> UpstreamReworkRequest | None:
         stage_mutation_policy(stage)
     except ValueError as exc:
         raise UpstreamReworkError(f"unknown producer stage {stage}") from exc
+    normalized_repair_stage: str | None = None
+    if repair_stage is not None:
+        if not isinstance(repair_stage, str) or not repair_stage.strip():
+            raise UpstreamReworkError("repair_stage must be a non-empty stage when supplied")
+        normalized_repair_stage = repair_stage.strip().upper()
+        try:
+            stage_mutation_policy(normalized_repair_stage)
+        except ValueError as exc:
+            raise UpstreamReworkError(
+                f"unknown repair stage {normalized_repair_stage}"
+            ) from exc
     if not isinstance(finding, str) or not finding.strip():
         raise UpstreamReworkError("finding is required")
     if (
@@ -94,6 +107,7 @@ def parse_upstream_rework_request(reason: str) -> UpstreamReworkRequest | None:
         producer_stage=stage,
         finding=finding.strip(),
         evidence_refs=tuple(item.strip() for item in evidence),
+        repair_stage=normalized_repair_stage,
     )
 
 
@@ -124,22 +138,30 @@ def _candidate_from_run(run: object | None) -> str:
 
 
 def _request_digest(request: UpstreamReworkRequest) -> str:
+    fields: dict[str, object] = {
+        "producer_stage": request.producer_stage,
+        "finding": request.finding,
+        "evidence_refs": list(request.evidence_refs),
+    }
+    if request.repair_stage is not None:
+        fields["repair_stage"] = request.repair_stage
     payload = json.dumps(
-        {
-            "producer_stage": request.producer_stage,
-            "finding": request.finding,
-            "evidence_refs": list(request.evidence_refs),
-        },
+        fields,
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
     return hashlib.sha256(payload).hexdigest()[:12]
 
 
+def _repair_stage(request: UpstreamReworkRequest) -> str:
+    return request.repair_stage or request.producer_stage
+
+
 def _rework_body(
     *, request: UpstreamReworkRequest, context: str, consumer_task_id: str
 ) -> str:
-    policy = stage_mutation_policy(request.producer_stage)
+    repair_stage = _repair_stage(request)
+    policy = stage_mutation_policy(repair_stage)
     handoff = {
         "schema": "hermes.factory/handoff-completion/v1",
         "stage_outcome": "PASS",
@@ -155,6 +177,7 @@ def _rework_body(
         (
             f"Factory upstream rework for consumer: {consumer_task_id}",
             f"Producer stage: {request.producer_stage}",
+            f"Repair stage: {repair_stage}",
             f"Finding: {request.finding}",
             "Evidence refs: " + ", ".join(request.evidence_refs),
             "Fix only the upstream artifact defect described above; do not expand scope.",
@@ -166,6 +189,48 @@ def _rework_body(
             "candidate_identity must equal the clean worktree HEAD.",
         )
     )
+
+
+def _unique_ancestor_stage(
+    native: NativeReworkRuntime,
+    conn: object,
+    *,
+    producer_id: str,
+    project: str,
+    wp: str,
+    context: str,
+    materialization: str,
+    repair_stage: str,
+) -> tuple[str, object]:
+    matches: list[tuple[str, object]] = []
+    pending = list(native.parent_ids(conn, producer_id))
+    visited: set[str] = set()
+    while pending:
+        task_id = pending.pop()
+        if task_id in visited:
+            continue
+        visited.add(task_id)
+        task = native.get_task(conn, task_id)
+        if task is None:
+            continue
+        try:
+            p_project, p_wp, p_stage, p_context, p_materialization = _identity(task)
+        except UpstreamReworkError:
+            continue
+        if (
+            p_project == project
+            and p_wp == wp
+            and p_context == context
+            and p_materialization == materialization
+        ):
+            if p_stage == repair_stage:
+                matches.append((task_id, task))
+            pending.extend(native.parent_ids(conn, task_id))
+    if len(matches) != 1:
+        raise UpstreamReworkError(
+            "repair_stage must identify exactly one earlier ancestor stage"
+        )
+    return matches[0]
 
 
 class UpstreamReworkCoordinator:
@@ -224,6 +289,20 @@ class UpstreamReworkCoordinator:
             producer_sha = _candidate_from_run(
                 self._native.latest_run(conn, producer_id)
             )
+            repair_stage = _repair_stage(request)
+            if repair_stage == request.producer_stage:
+                repair_authority = producer
+            else:
+                _, repair_authority = _unique_ancestor_stage(
+                    self._native,
+                    conn,
+                    producer_id=producer_id,
+                    project=project,
+                    wp=wp,
+                    context=context,
+                    materialization=materialization,
+                    repair_stage=repair_stage,
+                )
 
         observed = self._candidate_observer.observe(board=board, task=consumer)
         if not isinstance(observed, str) or observed.strip().lower() != producer_sha:
@@ -235,19 +314,22 @@ class UpstreamReworkCoordinator:
         rework_wp = (
             f"{wp}~rework-{request.producer_stage.lower()}-r{run_id}-{digest}"
         )
-        skills = getattr(producer, "skills", ())
+        skills = getattr(repair_authority, "skills", ())
         if not isinstance(skills, (tuple, list)):
             raise UpstreamReworkError("producer task Skills are unavailable")
         spec = KanbanTaskProjection(
             project_key=project,
             work_package_id=rework_wp,
-            stage=request.producer_stage,
+            stage=repair_stage,
             revision=materialization,
-            title=f"{wp}/{request.producer_stage} rework: {request.finding[:120]}",
+            title=(
+                f"{wp}/{repair_stage} rework via {request.producer_stage} checkpoint: "
+                f"{request.finding[:120]}"
+            ),
             body=_rework_body(
                 request=request, context=context, consumer_task_id=consumer_task_id
             ),
-            assignee=str(getattr(producer, "assignee", "")),
+            assignee=str(getattr(repair_authority, "assignee", "")),
             approved_skills=tuple(skills),
             board=board,
             parent_task_ids=(producer_id,),
@@ -284,6 +366,7 @@ class UpstreamReworkCoordinator:
                     "consumer must be in dependency wait before rework activation"
                 )
             project, wp, _, context, materialization = _identity(consumer)
+            repair_stage = _repair_stage(request)
             matching: list[tuple[str, object]] = []
             for parent_id in self._native.parent_ids(conn, consumer_task_id):
                 parent = self._native.get_task(conn, parent_id)
@@ -296,7 +379,7 @@ class UpstreamReworkCoordinator:
                 if (
                     active
                     and p_project == project
-                    and p_stage == request.producer_stage
+                    and p_stage == repair_stage
                     and p_context == context
                     and p_materialization == materialization
                     and p_wp.startswith(
