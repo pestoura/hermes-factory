@@ -138,6 +138,37 @@ def _setup() -> tuple[FakeNative, FakeAdapter, UpstreamReworkCoordinator]:
     return native, adapter, coordinator
 
 
+
+
+def _setup_review_with_ancestor_repair() -> tuple[FakeNative, FakeAdapter, UpstreamReworkCoordinator]:
+    native = FakeNative()
+    implement = FakeTask(
+        "t_implement", "factory-software-engineer", "done",
+        f"factory:jarvas-cli:WP-A:IMPLEMENT:{MATERIALIZATION}",
+        skills=("factory-implementing-minimal-green",), current_run_id=None,
+    )
+    unit = FakeTask(
+        "t_unit", "factory-software-engineer", "done",
+        f"factory:jarvas-cli:WP-A:UNIT:{MATERIALIZATION}",
+        skills=("factory-producing-evidence-handoffs",), current_run_id=None,
+    )
+    review = FakeTask(
+        "t_review", "factory-code-reviewer", "running",
+        f"factory:jarvas-cli:WP-A:CODE_REVIEW:{MATERIALIZATION}",
+    )
+    native.tasks.update({implement.id: implement, unit.id: unit, review.id: review})
+    native.parents[unit.id] = (implement.id,)
+    native.parents[review.id] = (unit.id,)
+    native.runs[implement.id] = FakeRun("completed", _handoff("b" * 40))
+    native.runs[unit.id] = FakeRun("completed", _handoff(PRODUCER_SHA))
+    adapter = FakeAdapter(native)
+    coordinator = UpstreamReworkCoordinator(
+        native=native,
+        adapter=adapter,
+        candidate_observer=FakeCandidateObserver(PRODUCER_SHA),
+    )
+    return native, adapter, coordinator
+
 def test_parse_structured_upstream_rework_request() -> None:
     reason = (
         '[factory:upstream-rework/v1] '
@@ -151,6 +182,103 @@ def test_parse_structured_upstream_rework_request() -> None:
         evidence_refs=("tests/test_cli_core.py",),
     )
 
+
+
+
+def test_parse_upstream_rework_request_accepts_distinct_repair_stage() -> None:
+    reason = (
+        '[factory:upstream-rework/v1] '
+        '{"producer_stage":"UNIT","repair_stage":"IMPLEMENT",'
+        '"finding":"production defect behind unit checkpoint",'
+        '"evidence_refs":["jarvas_cli/cli.py"]}'
+    )
+    request = parse_upstream_rework_request(reason)
+    assert request == UpstreamReworkRequest(
+        producer_stage="UNIT",
+        finding="production defect behind unit checkpoint",
+        evidence_refs=("jarvas_cli/cli.py",),
+        repair_stage="IMPLEMENT",
+    )
+
+
+def test_parse_upstream_rework_request_rejects_unknown_repair_stage() -> None:
+    reason = (
+        '[factory:upstream-rework/v1] '
+        '{"producer_stage":"UNIT","repair_stage":"NOT_A_STAGE",'
+        '"finding":"bad routing","evidence_refs":["jarvas_cli/cli.py"]}'
+    )
+    with pytest.raises(UpstreamReworkError, match="unknown repair stage"):
+        parse_upstream_rework_request(reason)
+
+
+def test_schedule_rework_uses_ancestor_repair_stage_authority_on_direct_parent_candidate() -> None:
+    native, adapter, coordinator = _setup_review_with_ancestor_repair()
+    request = UpstreamReworkRequest(
+        producer_stage="UNIT",
+        finding="production defect behind unit checkpoint",
+        evidence_refs=("jarvas_cli/cli.py",),
+        repair_stage="IMPLEMENT",
+    )
+
+    task_id = coordinator.schedule(
+        board="jarvas-cli", consumer_task_id="t_review", request=request
+    )
+
+    assert task_id == "t_rework"
+    assert native.links == [("t_rework", "t_review")]
+    spec = adapter.projected[0]
+    assert spec.stage == "IMPLEMENT"
+    assert spec.title.startswith("WP-A/IMPLEMENT rework via UNIT checkpoint:")
+    assert spec.assignee == "factory-software-engineer"
+    assert spec.approved_skills == ("factory-implementing-minimal-green",)
+    assert spec.parent_task_ids == ("t_unit",)
+    assert "~rework-unit-r7-" in spec.work_package_id
+    assert "Producer stage: UNIT" in spec.body
+    assert "Repair stage: IMPLEMENT" in spec.body
+    assert "repository_mutation_policy=implementation_no_tests" in spec.body
+
+
+def test_schedule_rework_rejects_repair_stage_that_is_not_an_ancestor() -> None:
+    _, adapter, coordinator = _setup_review_with_ancestor_repair()
+    request = UpstreamReworkRequest(
+        producer_stage="UNIT",
+        finding="invalid repair authority",
+        evidence_refs=("jarvas_cli/cli.py",),
+        repair_stage="DESIGN",
+    )
+
+    with pytest.raises(UpstreamReworkError, match="repair_stage.*ancestor"):
+        coordinator.schedule(
+            board="jarvas-cli", consumer_task_id="t_review", request=request
+        )
+    assert adapter.projected == []
+
+
+def test_activate_pending_rework_with_distinct_repair_stage_authorizes_rework() -> None:
+    native, adapter, coordinator = _setup_review_with_ancestor_repair()
+    request = UpstreamReworkRequest(
+        producer_stage="UNIT",
+        finding="production defect behind unit checkpoint",
+        evidence_refs=("jarvas_cli/cli.py",),
+        repair_stage="IMPLEMENT",
+    )
+    coordinator.schedule(
+        board="jarvas-cli", consumer_task_id="t_review", request=request
+    )
+    native.tasks["t_review"].status = "todo"
+    native.tasks["t_review"].current_run_id = None
+
+    task_id = coordinator.activate_pending(
+        board="jarvas-cli", consumer_task_id="t_review", request=request
+    )
+
+    assert task_id == "t_rework"
+    assert adapter.authorized == [{
+        "board": "jarvas-cli",
+        "task_id": "t_rework",
+        "actor": "factory-orchestrator",
+        "source": "factory-upstream-rework",
+    }]
 
 def test_non_rework_reason_is_not_claimed_by_factory() -> None:
     assert parse_upstream_rework_request("provider temporarily unavailable") is None

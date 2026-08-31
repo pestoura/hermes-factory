@@ -117,7 +117,7 @@ _STAGE_MUTATION_POLICIES = {
     "OBSERVE": "evidence_docs_only",
     "ACCEPT": "evidence_docs_only",
 }
-_STAGE_CONTRACT_REVISION = "stage-contract-v20"
+_STAGE_CONTRACT_REVISION = "stage-contract-v21"
 
 
 def stage_mutation_policy(stage: str) -> str:
@@ -354,9 +354,12 @@ def _task_body(model: ProjectModel, wp: WorkPackageModel, stage: str) -> str:
             "Use finding_state=OPEN only for a real blocker that must prevent handoff; ordinary details assigned to the next approved stage are not OPEN findings.",
             "kanban_complete is permitted only for a handoff-ready PASS with finding_state NONE or RESOLVED and every evidence_state PASS.",
             "If a real blocker remains, do not complete the stage; use kanban_block with exact blocker evidence instead.",
-            "If the blocker is a defect in the direct parent stage artifact, first restore the worktree to the last accepted candidate by removing only uncommitted changes created by this current stage.",
-            "Then call kanban_block with kind=dependency and reason exactly: [factory:upstream-rework/v1] {\"producer_stage\":\"PARENT_STAGE\",\"finding\":\"bounded defect\",\"evidence_refs\":[\"repo/path\"]}.",
-            "Do not use the upstream-rework protocol for external input, credentials, transient providers, or defects outside the direct parent stage.",
+            "If the blocker is a defect in the cumulative candidate inherited from the direct parent, first restore the worktree to the last accepted candidate, which is the exact direct-parent candidate checkpoint, by removing only uncommitted changes created by this current stage.",
+            "In upstream-rework, producer_stage always names the exact direct-parent candidate checkpoint. If the defect requires mutation authority from an earlier ancestor stage, add repair_stage naming that exact earlier ancestor; otherwise omit repair_stage and it defaults to producer_stage.",
+            "For example, CODE_REVIEW after UNIT may route production-source rework as producer_stage=UNIT and repair_stage=IMPLEMENT; never mislabel the direct-parent checkpoint merely to obtain broader mutation authority.",
+            "Then call kanban_block with kind=dependency and reason exactly: [factory:upstream-rework/v1] {\"producer_stage\":\"PARENT_STAGE\",\"repair_stage\":\"OPTIONAL_EARLIER_ANCESTOR_STAGE\",\"finding\":\"bounded defect\",\"evidence_refs\":[\"repo/path\"]}. Omit repair_stage when it equals producer_stage.",
+            "repair_stage must identify exactly one earlier ancestor in the same project/work-package/context/materialization lineage and may only be used for the authority needed to repair the bounded finding.",
+            "Do not use the upstream-rework protocol for external input, credentials, transient providers, or defects outside the inherited candidate lineage.",
             "Before kanban_complete, commit stage-produced repository artifacts on the assigned branch using a bounded stage-specific commit; do not amend or rewrite prior commits.",
             "The worktree must be clean before kanban_complete; do not stage or commit unrelated pre-existing changes.",
             "If pre-existing unrelated changes make a clean stage checkpoint impossible, block the task rather than absorbing them.",

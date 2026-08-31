@@ -246,6 +246,44 @@ def test_factory_dependency_block_schedules_upstream_rework_before_native_block(
     assert coordinator.calls[0][1]["request"].producer_stage == "TDD_RED"
 
 
+def test_factory_dependency_block_preserves_distinct_repair_stage(monkeypatch) -> None:
+    plugin = _load_plugin()
+    coordinator = FakeReworkCoordinator()
+    revision = "d" * 64
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_review")
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "jarvas-cli")
+    monkeypatch.setattr(
+        plugin, "_load_native_task",
+        lambda task_id, board=None: SimpleNamespace(
+            assignee="factory-code-reviewer",
+            idempotency_key=(
+                f"factory:jarvas-cli:WP-A:CODE_REVIEW:{revision}.stage-contract-v21"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        plugin, "build_installed_upstream_rework_coordinator", lambda: coordinator,
+        raising=False,
+    )
+    reason = (
+        '[factory:upstream-rework/v1] '
+        '{"producer_stage":"UNIT","repair_stage":"IMPLEMENT",'
+        '"finding":"production defect","evidence_refs":["jarvas_cli/cli.py"]}'
+    )
+
+    result = plugin._on_pre_tool_call(
+        tool_name="kanban_block",
+        args={"task_id": "t_review", "kind": "dependency", "reason": reason},
+        task_id="t_review",
+    )
+
+    assert result is None
+    assert coordinator.calls[0][0] == "schedule"
+    request = coordinator.calls[0][1]["request"]
+    assert request.producer_stage == "UNIT"
+    assert request.repair_stage == "IMPLEMENT"
+
+
 def test_factory_upstream_rework_requires_dependency_block_kind(monkeypatch) -> None:
     plugin = _load_plugin()
     coordinator = FakeReworkCoordinator()
